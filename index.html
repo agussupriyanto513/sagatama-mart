@@ -2366,22 +2366,27 @@
         }
         
         async function loadSGTBalance() {
-            if (!currentUser) return;
-            
-            try {
-                // Simulate API call
-                const response = await fetch(`/api/sgt/balance/${currentUser.uid}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    sgtBalance = data.balance || 0;
-                }
-            } catch (error) {
-                // Fallback
-                sgtBalance = parseInt(localStorage.getItem('sgt_balance_' + currentUser.uid)) || 0;
-            }
-            
-            updateSGTUI();
+    if (!currentUser) return;
+    
+    try {
+        const response = await fetch(`/api/sgt/balance/${currentUser.uid}`);
+        if (response.ok) {
+            const data = await response.json();
+            sgtBalance = data.balance || 0;
         }
+    } catch (error) {
+        // Fallback ke localStorage
+        const savedBalance = localStorage.getItem('sgt_balance_' + currentUser.uid);
+        const savedTx = localStorage.getItem('sgt_transactions_' + currentUser.uid);
+        
+        sgtBalance = savedBalance ? parseInt(savedBalance) : 0;
+        sgtTransactions = savedTx ? JSON.parse(savedTx) : [];
+        
+        debugLog('SGT loaded: ' + sgtBalance + ' SGT');
+    }
+    updateSGTUI();
+	saveSGTData();
+}
         
         async function loadOrders() {
             if (!currentUser) return;
@@ -3061,6 +3066,7 @@
                                 userId: currentUser.uid
                             });
                             updateSGTUI();
+							saveSGTData();
                         }
                     }
                     
@@ -3320,6 +3326,7 @@
                 saveCart();
                 updateCartUI();
                 updateSGTUI();
+				saveSGTData();
                 
                 // Update stock
                 order.items.forEach(item => {
@@ -3409,6 +3416,7 @@
                 
                 updateSGTUI();
                 closeModal('sgtTransferModal');
+				saveSGTData();
                 showToast(`Berhasil transfer ${amount} SGT`, 'success');
                 debugLog('SGT transfer: ' + amount + ' to ' + targetUser);
             } catch (error) {
@@ -3457,6 +3465,7 @@
                 
                 updateSGTUI();
                 closeModal('sgtRedeemModal');
+				saveSGTData();
                 showToast(`Berhasil! Kode: ${code}`, 'success');
                 debugLog('SGT redeemed: ' + type);
             } catch (error) {
@@ -3666,6 +3675,20 @@
                 // navigator.serviceWorker.register('/sw.js');
             });
         }
+		
+		// ==================== SGT PERSISTENCE ====================
+function saveSGTData() {
+    if (!currentUser || !currentUser.uid) return;
+    
+    try {
+        localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
+        localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
+        localStorage.setItem('sgt_apps_' + currentUser.uid, JSON.stringify(connectedApps));
+        debugLog('SGT saved: ' + sgtBalance + ' SGT');
+    } catch (error) {
+        debugLog('SGT save error: ' + error.message);
+    }
+}
         
         // ==================== EXPORT FUNCTIONS FOR DEBUGGING ====================
         window.sagatamaDebug = {
@@ -3697,6 +3720,10 @@
         };
         
         debugLog('Sagatama Mart v2.0 loaded successfully');
+		
+		setInterval(() => {
+    if (currentUser && currentUser.uid) saveSGTData();
+}, 30000);
     </script>
 </body>
 </html>
