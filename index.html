@@ -1912,59 +1912,6 @@ async function syncSGTAcrossApps(uid) {
 }
 
 // ============================================
-// SGT INITIALIZATION FIX
-// ============================================
-
-async function initializeSGTSystem() {
-    logDebug("Initializing SGT system...");
-    
-    try {
-        // 1. Cek dan buat SGT config jika belum ada
-        const configRef = doc(db, 'sgt_config', 'global');
-        const configDoc = await getDoc(configRef);
-        
-        if (!configDoc.exists()) {
-            logDebug("SGT config not found, creating default...");
-            await setDoc(configRef, {
-                rate: 100,
-                totalSupply: 0,
-                totalBurned: 0,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-                apps: {
-                    'sagatama-mart': { 
-                        name: 'Sagatama Mart', 
-                        url: 'sagatama-mart.vercel.app',
-                        icon: 'fa-store'
-                    },
-                    'hidayatulamin': { 
-                        name: 'Yayasan Hidayatullah Amin', 
-                        url: 'hidayatulamin.vercel.app',
-                        icon: 'fa-mosque'
-                    }
-                }
-            });
-            logDebug("SGT config created successfully");
-        } else {
-            logDebug("SGT config exists: " + JSON.stringify(configDoc.data()));
-        }
-        
-        // 2. Load config ke memory
-        await loadSGTConfig();
-        
-        // 3. Jika user login, load SGT balance
-        if (currentUser?.uid) {
-            await loadUserProfile();
-        }
-        
-        return true;
-    } catch (err) {
-        logDebug("SGT init error: " + err.message);
-        return false;
-    }
-}
-
-// ============================================
 // IMPROVED PAYMENT WITH SGT REWARD
 // ============================================
 
