@@ -1177,32 +1177,7 @@
             }
         }
         
-        // ==================== PI SDK INITIALIZATION ====================
-        function initPiSDK() {
-    try {
-        if (typeof Pi !== 'undefined') {
-            Pi.init({ 
-                version: "2.0", 
-                sandbox: true 
-            });
-            piSdkReady = true;
-            debugLog('Pi SDK initialized - sandbox mode');
-            
-            // Cek apakah berjalan di Pi Browser
-            if (Pi.isPiBrowser) {
-                debugLog('Running inside Pi Browser');
-            } else {
-                debugLog('Not in Pi Browser - payments will use fallback');
-            }
-        } else {
-            debugLog('Pi SDK not loaded - fallback mode active');
-            piSdkReady = false;
-        }
-    } catch (error) {
-        debugLog('Pi SDK init error: ' + error.message);
-        piSdkReady = false;
-    }
-}
+        
         
         // ==================== DEBUG UTILITIES ====================
         function debugLog(message) {
@@ -1291,63 +1266,86 @@
         }
         
         // ==================== AUTHENTICATION ====================
-        async function authenticatePi() {
-            showLoading(true);
-            try {
-                if (!piSdkReady || typeof Pi === 'undefined') {
-                    // Fallback mode - simulate Pi login for testing
-                    debugLog('Pi SDK not ready, using fallback auth');
-                    
-                    // Simulate successful auth for demo
-                    currentUser = {
-                        uid: 'pi_user_' + Date.now(),
-                        username: 'Pioneer_' + Math.floor(Math.random() * 10000),
-                        role: 'user'
-                    };
-                    currentUserRole = 'user';
-                    
-                    await loadUserData();
-                    updateUserUI();
-                    closeModal('loginOptionsModal');
-                    showToast('Login berhasil! (Mode Demo)', 'success');
-                    showSGTElements(true);
-                    
-                    debugLog('Fallback auth success: ' + currentUser.username);
-                    showLoading(false);
-                    return;
-                }
-                
-                const scopes = ['payments', 'username'];
-                const auth = await Pi.authenticate(scopes, onIncompletePaymentFound);
-                
-                currentUser = {
-                    uid: auth.user.uid,
-                    username: auth.user.username,
-                    role: 'user'
-                };
-                currentUserRole = 'user';
-                
-                await loadUserData();
-                updateUserUI();
-                closeModal('loginOptionsModal');
-                showToast('Login Pi berhasil!', 'success');
-                showSGTElements(true);
-                
-                debugLog('Pi auth success: ' + auth.user.username);
-            } catch (error) {
-                debugLog('Pi auth error: ' + error.message);
-                showToast('Gagal login Pi: ' + error.message, 'error');
-            } finally {
-                showLoading(false);
-            }
+        // ==================== PI SDK INITIALIZATION ====================
+function initPiSDK() {
+    try {
+        if (typeof Pi !== 'undefined') {
+            Pi.init({ 
+                version: "2.0", 
+                sandbox: true 
+            });
+            piSdkReady = true;
+            debugLog('Pi SDK initialized');
+        } else {
+            debugLog('Pi SDK not available');
+            piSdkReady = false;
         }
+    } catch (error) {
+        debugLog('Pi SDK init error: ' + error.message);
+        piSdkReady = false;
+    }
+}
+
+// ==================== AUTHENTICATION (FIXED SCOPE) ====================
+async function authenticatePi() {
+    showLoading(true);
+    try {
+        if (!piSdkReady || typeof Pi === 'undefined') {
+            debugLog('Pi SDK not ready, using fallback');
+            simulatePiLogin();
+            return;
+        }
+
+        // SCOPE WAJIB: 'payments' dan 'username'
+        const scopes = ['payments', 'username'];
+        
+        const auth = await Pi.authenticate(scopes, onIncompletePaymentFound);
+        
+        currentUser = {
+            uid: auth.user.uid,
+            username: auth.user.username,
+            accessToken: auth.accessToken, // Simpan untuk API calls
+            role: 'user'
+        };
+        currentUserRole = 'user';
+        
+        await loadUserData();
+        updateUserUI();
+        closeModal('loginOptionsModal');
+        showToast('Login Pi berhasil!', 'success');
+        showSGTElements(true);
+        
+        debugLog('Pi auth success: ' + auth.user.username);
+        
+    } catch (error) {
+        debugLog('Pi auth error: ' + error.message);
+        showToast('Gagal login Pi: ' + error.message, 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function simulatePiLogin() {
+    currentUser = {
+        uid: 'pi_user_' + Date.now(),
+        username: 'Pioneer_' + Math.floor(Math.random() * 10000),
+        accessToken: null,
+        role: 'user'
+    };
+    currentUserRole = 'user';
+    
+    loadUserData();
+    updateUserUI();
+    closeModal('loginOptionsModal');
+    showToast('Login berhasil! (Mode Demo)', 'success');
+    showSGTElements(true);
+    showLoading(false);
+}
         
         function onIncompletePaymentFound(payment) {
-    debugLog('Incomplete payment found: ' + (payment?.identifier || 'unknown'));
+    debugLog('Incomplete payment: ' + (payment?.identifier || 'unknown'));
     
-    // Lengkapi payment yang tertinggal
     if (payment?.identifier && payment?.transaction?.txid) {
-        // Kirim ke backend untuk completion
         fetch('/api/payments/complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1356,11 +1354,7 @@
                 txid: payment.transaction.txid,
                 incomplete: true
             })
-        }).then(() => {
-            debugLog('Incomplete payment completed');
-        }).catch(err => {
-            debugLog('Incomplete payment completion failed: ' + err.message);
-        });
+        }).catch(err => debugLog('Incomplete completion error: ' + err.message));
     }
     
     return { status: 'completed' };
@@ -1463,29 +1457,44 @@
         
         // ==================== USER UI UPDATES ====================
         function updateUserUI() {
-            const badge = document.getElementById('userBadge');
-            
-            if (currentUser) {
-                badge.style.display = 'inline-flex';
-                badge.textContent = currentUser.username || currentUserRole;
-                
-                if (currentUserRole === 'admin') {
-                    badge.style.background = 'linear-gradient(135deg, #F59E0B, #D97706)';
-                    badge.style.color = 'white';
-                } else {
-                    badge.style.background = '#F5F3FF';
-                    badge.style.color = '#8B5CF6';
-                }
-                
-                document.getElementById('welcomeBanner').style.display = 'block';
-                document.getElementById('welcomeName').textContent = currentUser.username || 'Pioneer';
-                
-                saveSession();
-            } else {
-                badge.style.display = 'none';
-                document.getElementById('welcomeBanner').style.display = 'none';
-            }
+    const badge = document.getElementById('userBadge');
+    
+    if (currentUser) {
+        badge.style.display = 'inline-flex';
+        badge.textContent = currentUser.username || currentUserRole;
+        
+        if (currentUserRole === 'admin') {
+            badge.style.background = 'linear-gradient(135deg, #F59E0B, #D97706)';
+            badge.style.color = 'white';
+        } else {
+            badge.style.background = '#F5F3FF';
+            badge.style.color = '#8B5CF6';
         }
+        
+        document.getElementById('welcomeBanner').style.display = 'block';
+        document.getElementById('welcomeName').textContent = currentUser.username || 'Pioneer';
+        
+        saveSession();
+    } else {
+        badge.style.display = 'none';
+        document.getElementById('welcomeBanner').style.display = 'none';
+    }
+}
+
+function saveSession() {
+    if (currentUser) {
+        const session = {
+            user: {
+                uid: currentUser.uid,
+                username: currentUser.username,
+                role: currentUserRole,
+                accessToken: currentUser.accessToken || null
+            },
+            expires: Date.now() + (7 * 24 * 60 * 60 * 1000)
+        };
+        localStorage.setItem('sagatama_session', JSON.stringify(session));
+    }
+}
         
         function showSGTElements(show) {
             const display = show ? 'flex' : 'none';
@@ -2493,6 +2502,11 @@
                 openModal('loginOptionsModal');
                 return;
             }
+			
+			// PERBAIKAN: Cek apakah Pi SDK tersedia, jika tidak beri tahu user
+    if (!piSdkReady && currentUserRole === 'user') {
+        showToast('Mode demo aktif - Pi Browser diperlukan untuk pembayaran asli', 'info');
+    }
             
             const container = document.getElementById('paymentItems');
             let subtotal = 0;
@@ -2534,6 +2548,7 @@
         }
         
         // ==================== PAYMENT PROCESSING (FIXED) ====================
+// ==================== PAYMENT PROCESSING (FIXED) ====================
 async function processPiPayment() {
     const address = document.getElementById('shippingAddress').value.trim();
     if (!address) {
@@ -2542,130 +2557,170 @@ async function processPiPayment() {
         return;
     }
     
+    // Cek apakah user punya scope payments
+    if (!currentUser) {
+        openModal('loginOptionsModal');
+        return;
+    }
+    
     const payButton = document.getElementById('payButton');
     payButton.disabled = true;
-    payButton.innerHTML = '<div class="loading-spinner" style="width:20px; height:20px; border-width:2px;"></div> Memproses...';
+    payButton.innerHTML = '<div class="loading-spinner" style="width:20px; height:20px; border-width:2px; display:inline-block; vertical-align:middle; margin-right:8px;"></div> Memproses...';
     
     try {
         const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         const fee = subtotal * 0.02;
         const total = subtotal + fee;
         const sgtReward = Math.floor(subtotal * sgtRatePerPi);
-        
-        // Simpan alamat
-        if (currentUser) {
-            localStorage.setItem('sagatama_address_' + currentUser.uid, address);
-        }
-        
-        // Buat order ID untuk tracking
         const orderId = 'ORD' + Date.now();
         
-        // Coba Pi Payment jika SDK ready
+        localStorage.setItem('sagatama_address_' + currentUser.uid, address);
+        
+        // Coba Pi Payment hanya jika SDK ready dan di Pi Browser
         if (piSdkReady && typeof Pi !== 'undefined' && Pi.createPayment) {
-            debugLog('Starting Pi payment flow...');
+            debugLog('Starting Pi payment...');
             
-            const paymentData = {
-                amount: total,
-                memo: `Sagatama Mart - ${cart.length} item`,
-                metadata: { 
-                    orderId: orderId,
-                    store: 'sagatama-mart',
-                    items: cart.map(i => ({ id: i.id, qty: i.quantity })),
-                    shippingAddress: address
-                }
-            };
-            
-            const paymentResult = await new Promise((resolve, reject) => {
-                const paymentCallbacks = {
+            try {
+                const paymentData = {
+                    amount: total,
+                    memo: "Sagatama Mart - " + cart.length + " item",
+                    metadata: { 
+                        orderId: orderId,
+                        items: cart.map(i => ({ id: i.id, qty: i.quantity }))
+                    }
+                };
+                
+                const payment = await Pi.createPayment(paymentData, {
                     onReadyForServerApproval: async (paymentId) => {
-                        debugLog('Payment ready for approval: ' + paymentId);
+                        debugLog('Ready for approval: ' + paymentId);
                         try {
-                            // KIRIM KE BACKEND UNTUK APPROVAL
-                            const response = await fetch('/api/payments/approve', {
+                            await fetch('/api/payments/approve', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     paymentId: paymentId,
                                     orderId: orderId,
-                                    amount: total,
-                                    userId: currentUser?.uid,
-                                    accessToken: currentUser?.accessToken
+                                    accessToken: currentUser.accessToken
                                 })
                             });
-                            
-                            if (!response.ok) {
-                                throw new Error('Server approval failed: ' + response.status);
-                            }
-                            debugLog('Server approval sent successfully');
-                        } catch (err) {
-                            debugLog('Approval error: ' + err.message);
-                            // Jangan reject di sini, biarkan SDK retry
+                        } catch (e) {
+                            debugLog('Approval error: ' + e.message);
                         }
                     },
                     
                     onReadyForServerCompletion: async (paymentId, txid) => {
-                        debugLog('Payment ready for completion: ' + paymentId + ' txid: ' + txid);
+                        debugLog('Ready for completion: ' + paymentId + ' txid: ' + txid);
                         try {
-                            // KIRIM KE BACKEND UNTUK COMPLETION
-                            const response = await fetch('/api/payments/complete', {
+                            await fetch('/api/payments/complete', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     paymentId: paymentId,
                                     txid: txid,
-                                    orderId: orderId,
-                                    userId: currentUser?.uid
+                                    orderId: orderId
                                 })
                             });
-                            
-                            if (!response.ok) {
-                                throw new Error('Server completion failed: ' + response.status);
-                            }
-                            debugLog('Server completion sent successfully');
-                            resolve({ paymentId, txid, status: 'completed' });
-                        } catch (err) {
-                            debugLog('Completion error: ' + err.message);
-                            // SDK akan retry setiap ~10 detik
+                        } catch (e) {
+                            debugLog('Completion error: ' + e.message);
                         }
                     },
                     
                     onCancel: (paymentId) => {
                         debugLog('Payment cancelled: ' + paymentId);
-                        reject(new Error('Pembayaran dibatalkan oleh pengguna'));
+                        throw new Error('Dibatalkan');
                     },
                     
-                    onError: (error, payment) => {
+                    onError: (error) => {
                         debugLog('Payment error: ' + error.message);
-                        reject(new Error('Pembayaran gagal: ' + error.message));
+                        throw new Error(error.message);
                     }
-                };
+                });
                 
-                Pi.createPayment(paymentData, paymentCallbacks)
-                    .then(payment => {
-                        debugLog('Payment created: ' + payment?.identifier);
-                    })
-                    .catch(error => {
-                        reject(error);
-                    });
-            });
-            
-            debugLog('Pi payment completed: ' + JSON.stringify(paymentResult));
+                debugLog('Payment success: ' + payment?.identifier);
+                
+            } catch (piError) {
+                // Jika error scope atau Pi tidak tersedia, fallback ke demo
+                if (piError.message.includes('scope') || piError.message.includes('payments')) {
+                    debugLog('Scope error - using fallback payment');
+                    showToast('Pi payment memerlukan scope payments. Menggunakan mode demo.', 'warning');
+                    await demoPayment(orderId, total);
+                } else {
+                    throw piError;
+                }
+            }
         } else {
-            // Fallback mode untuk testing/demo
-            debugLog('Pi SDK tidak tersedia, menggunakan mode demo');
-            await simulatePayment(orderId, total);
+            // Fallback mode
+            debugLog('Pi SDK unavailable - demo mode');
+            await demoPayment(orderId, total);
         }
         
-        // Buat order (sukses atau demo mode)
-        await finalizeOrder(orderId, total, subtotal, fee, address, sgtReward);
+        // Finalisasi order
+        await createOrder(orderId, total, subtotal, fee, address, sgtReward);
         
     } catch (error) {
         showToast('Pembayaran gagal: ' + error.message, 'error');
-        debugLog('Payment error: ' + error.message);
+        debugLog('Payment failed: ' + error.message);
     } finally {
         payButton.disabled = false;
-        payButton.innerHTML = '<i class="fas fa-lock"></i><span>Bayar dengan Pi</span>';
+        payButton.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Bayar dengan Pi';
     }
+}
+
+// Demo payment untuk testing
+async function demoPayment(orderId, amount) {
+    debugLog('Demo payment for: ' + orderId);
+    await new Promise(r => setTimeout(r, 1500));
+    return { status: 'completed', txid: 'DEMO_' + Date.now() };
+}
+
+// Buat order dan update data
+async function createOrder(orderId, total, subtotal, fee, address, sgtReward) {
+    const order = {
+        id: orderId,
+        userId: currentUser.uid,
+        username: currentUser.username,
+        items: [...cart],
+        total: total,
+        subtotal: subtotal,
+        fee: fee,
+        status: 'paid',
+        paymentMethod: 'pi',
+        shippingAddress: address,
+        sgtEarned: sgtReward,
+        createdAt: new Date().toISOString()
+    };
+    
+    orders.unshift(order);
+    
+    // Update SGT
+    sgtBalance += sgtReward;
+    sgtTransactions.push({
+        type: 'earn',
+        amount: sgtReward,
+        description: 'Reward ' + orderId,
+        date: new Date().toISOString(),
+        userId: currentUser.uid
+    });
+    
+    // Update stock & clear cart
+    cart.forEach(item => {
+        const p = products.find(prod => prod.id === item.id);
+        if (p) p.stock -= item.quantity;
+    });
+    cart = [];
+    saveCart();
+    updateCartUI();
+    updateSGTUI();
+    saveSGTData();
+    
+    // Tampilkan sukses
+    document.getElementById('successOrderId').textContent = orderId;
+    document.getElementById('successSGTReceived').textContent = '+' + sgtReward + ' SGT';
+    
+    closeModal('paymentModal');
+    openModal('paymentSuccessModal');
+    showToast('Pembayaran berhasil! +' + sgtReward + ' SGT', 'success');
+    debugLog('Order created: ' + orderId);
 }
 
 // Simulasi payment untuk testing
