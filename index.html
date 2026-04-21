@@ -2738,66 +2738,6 @@ async function processPiPayment() {
     }
 }
 
-
-
-// Buat order dan update data
-async function createOrder(orderId, total, subtotal, fee, address, sgtReward) {
-    const order = {
-        id: orderId,
-        userId: currentUser.uid,
-        username: currentUser.username,
-        items: [...cart],
-        total: total,
-        subtotal: subtotal,
-        fee: fee,
-        status: 'paid',
-        paymentMethod: 'pi',
-        shippingAddress: address,
-        sgtEarned: sgtReward,
-        createdAt: new Date().toISOString()
-    };
-    
-    orders.unshift(order);
-    
-    // Update SGT
-    sgtBalance += sgtReward;
-    sgtTransactions.push({
-        type: 'earn',
-        amount: sgtReward,
-        description: 'Reward ' + orderId,
-        date: new Date().toISOString(),
-        userId: currentUser.uid
-    });
-    
-    // Update stock & clear cart
-    cart.forEach(item => {
-        const p = products.find(prod => prod.id === item.id);
-        if (p) p.stock -= item.quantity;
-    });
-    cart = [];
-    saveCart();
-    updateCartUI();
-    updateSGTUI();
-    saveSGTData();
-    
-    // Tampilkan sukses
-    document.getElementById('successOrderId').textContent = orderId;
-    document.getElementById('successSGTReceived').textContent = '+' + sgtReward + ' SGT';
-    
-    closeModal('paymentModal');
-    openModal('paymentSuccessModal');
-    showToast('Pembayaran berhasil! +' + sgtReward + ' SGT', 'success');
-    debugLog('Order created: ' + orderId);
-}
-
-// Simulasi payment untuk testing
-async function simulatePayment(orderId, amount) {
-    debugLog('Simulating payment for order: ' + orderId);
-    // Tunggu 2 detik untuk simulasi
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    return { status: 'completed', txid: 'demo_' + Date.now() };
-}
-
 // Finalisasi order setelah pembayaran
 async function finalizeOrder(orderId, total, subtotal, fee, address, sgtReward) {
     try {
