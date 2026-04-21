@@ -1551,16 +1551,34 @@ function saveSession() {
                 icon.classList.add('fa-eye');
             }
         }
+		
+		// Simpan produk ke localStorage
+function saveProductsToStorage() {
+    localStorage.setItem('sagatama_products', JSON.stringify(products));
+    debugLog('Products saved to storage: ' + products.length);
+}
+
+// Load produk dari localStorage
+function loadProductsFromStorage() {
+    const saved = localStorage.getItem('sagatama_products');
+    if (saved) {
+        products = JSON.parse(saved);
+        debugLog('Products loaded from storage: ' + products.length);
+        return true;
+    }
+    return false;
+}
         
         // ==================== DATA LOADING ====================
         async function loadProducts() {
-            try {
-                const response = await fetch('/api/products');
-                if (!response.ok) throw new Error('Failed to load');
-                products = await response.json();
-            } catch (error) {
-                // Rich demo data
-                products = [
+    try {
+        const response = await fetch('/api/products');
+        if (!response.ok) throw new Error('Failed to load');
+        products = await response.json();
+        debugLog('Products loaded from API: ' + products.length);
+    } catch (error) {
+        // Fallback: Produk asli Sagatama Mart + demo
+        products = [
                     {
                         id: '1',
                         name: 'Madu Herbal Alami',
