@@ -1475,16 +1475,7 @@ function simulatePiLogin() {
             }
         }
         
-        function saveSession() {
-            if (currentUser) {
-                const session = {
-                    user: currentUser,
-                    expires: Date.now() + (7 * 24 * 60 * 60 * 1000)
-                };
-                localStorage.setItem('sagatama_session', JSON.stringify(session));
-            }
-        }
-        
+                
         // ==================== USER UI UPDATES ====================
         function updateUserUI() {
     const badge = document.getElementById('userBadge');
@@ -2747,70 +2738,6 @@ async function processPiPayment() {
     }
 }
 
-// Finalisasi order setelah pembayaran berhasil
-async function finalizeOrder(orderId, total, subtotal, fee, address, sgtReward, txid) {
-    try {
-        const order = {
-            id: orderId,
-            userId: currentUser.uid,
-            username: currentUser.username,
-            items: [...cart],
-            total: total,
-            subtotal: subtotal,
-            fee: fee,
-            status: 'paid',
-            paymentMethod: 'pi',
-            txid: txid || null,
-            shippingAddress: address,
-            sgtEarned: sgtReward,
-            createdAt: new Date().toISOString()
-        };
-        
-        // Simpan order
-        orders.unshift(order);
-        
-        // Update SGT
-        sgtBalance += sgtReward;
-        sgtTransactions.push({
-            type: 'earn',
-            amount: sgtReward,
-            description: 'Reward dari pembelian ' + orderId,
-            date: new Date().toISOString(),
-            userId: currentUser.uid,
-            txid: txid
-        });
-        
-        // Update stock
-        cart.forEach(item => {
-            const product = products.find(p => p.id === item.id);
-            if (product) {
-                product.stock -= item.quantity;
-                if (product.stock < 0) product.stock = 0;
-            }
-        });
-        
-        // Clear cart
-        cart = [];
-        saveCart();
-        updateCartUI();
-        updateSGTUI();
-        saveSGTData();
-        
-        // Tampilkan sukses
-        document.getElementById('successOrderId').textContent = orderId;
-        document.getElementById('successSGTReceived').textContent = '+' + sgtReward + ' SGT';
-        
-        closeModal('paymentModal');
-        openModal('paymentSuccessModal');
-        
-        showToast('Pembayaran Pi berhasil! +' + sgtReward + ' SGT', 'success');
-        debugLog('Order finalized: ' + orderId + ' txid: ' + txid);
-        
-    } catch (error) {
-        debugLog('Finalize error: ' + error.message);
-        showToast('Error finalisasi order: ' + error.message, 'error');
-    }
-}
 
 
 // Buat order dan update data
@@ -3267,14 +3194,7 @@ async function finalizeOrder(orderId, total, subtotal, fee, address, sgtReward) 
             if (currentUser && currentUser.uid) saveSGTData();
         }, 30000);
 		
-		catch (err) {
-  showToast('Server error: ' + err.message, 'error');
-}
-
-setTimeout(() => {
-   showToast('Server lambat, coba lagi', 'warning');
-}, 10000);
-        
+		        
         // ==================== EXPORT FUNCTIONS ====================
         window.sagatamaDebug = {
             getState: () => ({
