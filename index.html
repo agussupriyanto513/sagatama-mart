@@ -9,11 +9,10 @@
     <!-- Pi SDK -->
     <script src="https://sdk.minepi.com/pi-sdk.js"></script>
     
-    <!-- Firebase SDK (Firestore + Storage) -->
+    <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-        import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+        import { getFirestore, collection, doc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, query, orderBy, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDNWOochfAyHjBYUNyq2IAYhA9p7Ie834M",
@@ -26,15 +25,14 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const storage = getStorage(app);
 
+        // Expose ke window agar bisa dipakai di script biasa
         window._db = db;
-        window._storage = storage;
-        window._fsUtils = { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, query, where, serverTimestamp };
-        window._storageUtils = { ref, uploadBytesResumable, getDownloadURL, deleteObject };
+        window._fsUtils = { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, query, orderBy, where, serverTimestamp };
         window._firebaseReady = true;
+        console.log('[Firebase] Firestore connected: portal-sagatama');
 
-        console.log('[Firebase] Firestore + Storage ready: portal-sagatama');
+        // Trigger event agar app tahu Firebase sudah siap
         window.dispatchEvent(new Event('firebaseReady'));
     </script>
     
@@ -1088,32 +1086,8 @@
                     <textarea id="productDesc" class="form-input" rows="3"></textarea>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Foto Produk</label>
-                    <!-- Area upload foto -->
-                    <div id="imageUploadArea" onclick="document.getElementById('productImageFile').click()" style="border:2px dashed #8B5CF6; border-radius:12px; padding:20px; text-align:center; cursor:pointer; background:#F5F3FF; transition:all 0.2s; position:relative;">
-                        <div id="imageUploadPlaceholder">
-                            <i class="fas fa-camera" style="font-size:32px; color:#8B5CF6; margin-bottom:8px; display:block;"></i>
-                            <p style="color:#8B5CF6; font-weight:700; font-size:14px; margin:0;">Tap untuk pilih foto</p>
-                            <p style="color:#9CA3AF; font-size:12px; margin:4px 0 0;">JPG, PNG, WebP (maks 5MB)</p>
-                        </div>
-                        <img id="imagePreview" src="" alt="Preview" style="display:none; width:100%; max-height:200px; object-fit:cover; border-radius:8px;">
-                        <div id="uploadProgress" style="display:none; margin-top:12px;">
-                            <div style="background:#E5E7EB; border-radius:4px; height:6px; overflow:hidden;">
-                                <div id="uploadProgressBar" style="height:100%; background:linear-gradient(90deg,#8B5CF6,#7C3AED); width:0%; transition:width 0.3s; border-radius:4px;"></div>
-                            </div>
-                            <p id="uploadProgressText" style="font-size:12px; color:#6B7280; margin-top:6px; font-weight:600;">Mengupload... 0%</p>
-                        </div>
-                    </div>
-                    <input type="file" id="productImageFile" accept="image/*" style="display:none;" onchange="previewProductImage(event)">
-                    <!-- Hidden field untuk URL final (dari Storage atau URL manual) -->
-                    <input type="hidden" id="productImage" value="">
-                    <!-- Opsi URL manual sebagai alternatif -->
-                    <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
-                        <div style="flex:1; height:1px; background:#E5E7EB;"></div>
-                        <span style="font-size:11px; color:#9CA3AF; white-space:nowrap;">atau pakai URL</span>
-                        <div style="flex:1; height:1px; background:#E5E7EB;"></div>
-                    </div>
-                    <input type="url" id="productImageUrl" class="form-input" placeholder="https://..." style="margin-top:8px;" oninput="syncImageUrl(this.value)">
+                    <label class="form-label">URL Gambar</label>
+                    <input type="url" id="productImage" class="form-input" placeholder="https://...">
                 </div>
                 <div class="form-group">
                     <label class="form-label">
@@ -1205,6 +1179,7 @@
         async function initApp() {
             showLoading(true);
             try {
+                // Initialize Pi SDK
                 initPiSDK();
 
                 // Tunggu Firebase siap (max 5 detik)
@@ -1213,12 +1188,26 @@
                     const timeout = setTimeout(resolve, 5000);
                     window.addEventListener('firebaseReady', () => { clearTimeout(timeout); resolve(); }, { once: true });
                 });
-                debugLog(window._firebaseReady ? 'Firebase ready ✅' : 'Firebase timeout - fallback mode');
 
-                await Promise.all([loadProducts(), loadCategories()]);
+                if (window._firebaseReady) {
+                    debugLog('Firebase Firestore ready');
+                } else {
+                    debugLog('Firebase timeout - pakai localStorage fallback');
+                }
+                
+                // Load data
+                await Promise.all([
+                    loadProducts(),
+                    loadCategories()
+                ]);
+                
+                // Check existing session
                 checkSession();
+                
+                // Update UI
                 updateCartUI();
                 renderHome();
+                
                 debugLog('App initialized successfully');
             } catch (error) {
                 debugLog('Init error: ' + error.message);
@@ -1307,7 +1296,7 @@
                 case 'orders': renderOrders(); break;
                 case 'account': renderAccount(); break;
                 case 'wallet': renderWallet(); break;
-                case 'admin-dashboard': renderAdminDashboard(); break;
+                case 'admin-dashboard': renderAdminDashboard(); break; // async
                 case 'admin-products': renderAdminProducts(); break;
                 case 'admin-orders': renderAdminOrders(); break;
                 case 'admin-analytics': renderAdminAnalytics(); break;
@@ -1613,38 +1602,43 @@ function loadProductsFromStorage() {
         
         // ==================== DATA LOADING ====================
         async function loadProducts() {
+            // 1. Coba dari Firestore
             if (window._firebaseReady && window._db) {
                 try {
-                    const { collection, getDocs } = window._fsUtils;
-                    const snapshot = await getDocs(collection(window._db, 'products'));
+                    const { collection, getDocs, query, orderBy } = window._fsUtils;
+                    const db = window._db;
+                    const q = query(collection(db, 'products'));
+                    const snapshot = await getDocs(q);
                     if (!snapshot.empty) {
                         products = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                        debugLog('Products loaded from Firestore: ' + products.length);
+                        // Sync ke localStorage sebagai cache
                         localStorage.setItem('sagatama_products', JSON.stringify(products));
-                        debugLog('Products from Firestore: ' + products.length);
                         return;
                     }
-                    debugLog('Firestore products kosong');
-                } catch(e) { debugLog('Firestore load error: ' + e.message); }
+                    debugLog('Firestore products collection kosong');
+                } catch (err) {
+                    debugLog('Firestore load error: ' + err.message);
+                }
             }
-            // Fallback localStorage
+            // 2. Fallback ke localStorage cache
             const saved = localStorage.getItem('sagatama_products');
             if (saved) {
                 try {
                     const cached = JSON.parse(saved);
                     if (cached && cached.length > 0) {
                         products = cached;
-                        debugLog('Products from localStorage: ' + products.length);
+                        debugLog('Products loaded from localStorage cache: ' + products.length);
                         return;
                     }
                 } catch(e) {}
             }
-            // Demo products
+            // 3. Produk demo (hanya jika benar-benar kosong)
             products = [
                 { id: 'demo_1', name: 'Madu Herbal Alami', category: 'Herbal', price: 0.5, stock: 10, image: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=400', description: 'Madu murni dari peternakan lokal.', active: true },
                 { id: 'demo_2', name: 'Beras Organik 5kg', category: 'Sembako', price: 0.8, stock: 20, image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400', description: 'Beras organik premium tanpa pestisida.', active: true }
             ];
-            localStorage.setItem('sagatama_products', JSON.stringify(products));
-            debugLog('Using demo products');
+            debugLog('Menggunakan produk demo (Firestore kosong)');
         }
         async function loadCategories() {
             categories = [
@@ -1707,18 +1701,24 @@ function loadProductsFromStorage() {
             if (!currentUser) return;
             try {
                 if (window._firebaseReady && window._db) {
-                    const { collection, query, where, getDocs } = window._fsUtils;
-                    const q = query(collection(window._db, 'orders'), where('userId', '==', currentUser.uid));
+                    const { collection, query, where, orderBy, getDocs } = window._fsUtils;
+                    const db = window._db;
+                    const q = query(
+                        collection(db, 'orders'),
+                        where('userId', '==', currentUser.uid)
+                    );
                     const snapshot = await getDocs(q);
                     orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    // Sort by createdAt descending (client-side)
                     orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                    debugLog('Orders from Firestore: ' + orders.length);
+                    debugLog('Orders loaded from Firestore: ' + orders.length);
                 } else {
+                    // Fallback localStorage
                     const saved = localStorage.getItem('sagatama_orders');
                     orders = saved ? JSON.parse(saved) : [];
                 }
-            } catch(e) {
-                debugLog('loadOrders error: ' + e.message);
+            } catch (error) {
+                debugLog('loadOrders error: ' + error.message);
                 const saved = localStorage.getItem('sagatama_orders');
                 orders = saved ? JSON.parse(saved) : [];
             }
@@ -2108,13 +2108,31 @@ function loadProductsFromStorage() {
         }
         
         // ==================== ADMIN RENDER FUNCTIONS ====================
+        async function loadAllOrders() {
+            // Admin load semua orders dari Firestore
+            if (window._firebaseReady && window._db) {
+                try {
+                    const { collection, getDocs, query } = window._fsUtils;
+                    const snapshot = await getDocs(collection(window._db, 'orders'));
+                    orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                    debugLog('All orders loaded from Firestore: ' + orders.length);
+                } catch(e) {
+                    debugLog('loadAllOrders error: ' + e.message);
+                }
+            }
+        }
+
         async function renderAdminDashboard() {
             if (currentUserRole !== 'admin') {
                 showToast('Akses ditolak', 'error');
                 switchView('home');
                 return;
             }
+
+            // Admin: load semua orders dari Firestore
             await loadAllOrders();
+            
             document.getElementById('statTotalProducts').textContent = products.length;
             document.getElementById('statPendingOrders').textContent = orders.filter(o => o.status === 'pending').length;
             document.getElementById('statCompletedOrders').textContent = orders.filter(o => o.status === 'completed').length;
@@ -2288,138 +2306,11 @@ function loadProductsFromStorage() {
             `).join('');
         }
         
-        // ==================== IMAGE UPLOAD (Firebase Storage) ====================
-        function previewProductImage(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            // Validasi ukuran (maks 5MB)
-            if (file.size > 5 * 1024 * 1024) {
-                showToast('Ukuran foto maksimal 5MB', 'error');
-                event.target.value = '';
-                return;
-            }
-
-            // Validasi tipe
-            if (!file.type.startsWith('image/')) {
-                showToast('File harus berupa gambar', 'error');
-                return;
-            }
-
-            // Tampilkan preview lokal dulu
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const preview = document.getElementById('imagePreview');
-                const placeholder = document.getElementById('imageUploadPlaceholder');
-                preview.src = e.target.result;
-                preview.style.display = 'block';
-                placeholder.style.display = 'none';
-            };
-            reader.readAsDataURL(file);
-
-            // Upload ke Firebase Storage
-            uploadImageToStorage(file);
-        }
-
-        async function uploadImageToStorage(file) {
-            if (!window._firebaseReady || !window._storage) {
-                // Fallback: simpan sebagai base64 di hidden field
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    document.getElementById('productImage').value = e.target.result;
-                    showToast('Foto siap (mode offline)', 'info');
-                };
-                reader.readAsDataURL(file);
-                return;
-            }
-
-            const { ref, uploadBytesResumable, getDownloadURL } = window._storageUtils;
-            const storage = window._storage;
-
-            // Nama file unik
-            const ext = file.name.split('.').pop();
-            const fileName = 'products/' + Date.now() + '_' + Math.random().toString(36).substr(2, 8) + '.' + ext;
-            const storageRef = ref(storage, fileName);
-
-            // Tampilkan progress bar
-            const progressDiv = document.getElementById('uploadProgress');
-            const progressBar = document.getElementById('uploadProgressBar');
-            const progressText = document.getElementById('uploadProgressText');
-            progressDiv.style.display = 'block';
-
-            const uploadTask = uploadBytesResumable(storageRef, file);
-
-            uploadTask.on('state_changed',
-                (snapshot) => {
-                    const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                    progressBar.style.width = pct + '%';
-                    progressText.textContent = 'Mengupload... ' + pct + '%';
-                },
-                (error) => {
-                    progressDiv.style.display = 'none';
-                    showToast('Upload gagal: ' + error.message, 'error');
-                    debugLog('Storage upload error: ' + error.message);
-                },
-                async () => {
-                    // Upload selesai - ambil URL
-                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    document.getElementById('productImage').value = downloadURL;
-                    document.getElementById('productImageUrl').value = downloadURL;
-                    // Simpan path untuk keperluan hapus nanti
-                    document.getElementById('productImage').dataset.storagePath = fileName;
-
-                    progressBar.style.width = '100%';
-                    progressText.textContent = '✅ Upload selesai!';
-                    setTimeout(() => { progressDiv.style.display = 'none'; }, 2000);
-
-                    showToast('Foto berhasil diupload ✅', 'success');
-                    debugLog('Image uploaded: ' + fileName);
-                }
-            );
-        }
-
-        function syncImageUrl(url) {
-            // Sinkronkan input URL manual ke hidden field
-            document.getElementById('productImage').value = url;
-            if (url) {
-                const preview = document.getElementById('imagePreview');
-                const placeholder = document.getElementById('imageUploadPlaceholder');
-                preview.src = url;
-                preview.style.display = 'block';
-                placeholder.style.display = 'none';
-            }
-        }
-
-        function resetImageUpload() {
-            document.getElementById('productImageFile').value = '';
-            document.getElementById('productImage').value = '';
-            document.getElementById('productImageUrl').value = '';
-            document.getElementById('imagePreview').style.display = 'none';
-            document.getElementById('imageUploadPlaceholder').style.display = 'block';
-            document.getElementById('uploadProgress').style.display = 'none';
-        }
-
-        // ==================== ADMIN ALL ORDERS ====================
-        async function loadAllOrders() {
-            if (window._firebaseReady && window._db) {
-                try {
-                    const { collection, getDocs } = window._fsUtils;
-                    const snapshot = await getDocs(collection(window._db, 'orders'));
-                    orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                    debugLog('All orders from Firestore: ' + orders.length);
-                } catch(e) { debugLog('loadAllOrders error: ' + e.message); }
-            }
-        }
-
-                // ==================== PRODUCT MANAGEMENT ====================
+        // ==================== PRODUCT MANAGEMENT ====================
         function openProductModal(productId = null) {
             const modal = document.getElementById('productFormModal');
             const title = document.getElementById('productFormTitle');
             const form = document.getElementById('productForm');
-
-            // Reset area upload foto dulu
-            resetImageUpload();
             
             if (productId) {
                 const product = products.find(p => p.id === productId);
@@ -2432,16 +2323,8 @@ function loadProductsFromStorage() {
                 document.getElementById('productPrice').value = product.price;
                 document.getElementById('productStock').value = product.stock;
                 document.getElementById('productDesc').value = product.description || '';
+                document.getElementById('productImage').value = product.image || '';
                 document.getElementById('productActive').checked = product.active;
-                // Tampilkan foto yang sudah ada
-                if (product.image) {
-                    document.getElementById('productImage').value = product.image;
-                    document.getElementById('productImageUrl').value = product.image;
-                    const preview = document.getElementById('imagePreview');
-                    preview.src = product.image;
-                    preview.style.display = 'block';
-                    document.getElementById('imageUploadPlaceholder').style.display = 'none';
-                }
             } else {
                 title.textContent = 'Tambah Produk';
                 form.reset();
@@ -2455,57 +2338,60 @@ function loadProductsFromStorage() {
         async function saveProduct(event) {
             event.preventDefault();
             showLoading(true);
-
+            
             try {
                 const id = document.getElementById('productId').value;
-                // Ambil URL gambar (sudah diisi oleh upload atau URL manual)
-                let imageUrl = document.getElementById('productImage').value
-                            || document.getElementById('productImageUrl').value
-                            || 'https://via.placeholder.com/400x300?text=No+Image';
-
                 const productData = {
                     name: document.getElementById('productName').value,
                     category: document.getElementById('productCategory').value,
                     price: parseFloat(document.getElementById('productPrice').value),
                     stock: parseInt(document.getElementById('productStock').value),
                     description: document.getElementById('productDesc').value,
-                    image: imageUrl,
+                    image: document.getElementById('productImage').value || 'https://via.placeholder.com/400x300?text=No+Image',
                     active: document.getElementById('productActive').checked,
                     updatedAt: new Date().toISOString()
                 };
 
                 let savedId = id;
 
+                // Simpan ke Firestore
                 if (window._firebaseReady && window._db) {
-                    const { collection, doc, setDoc, addDoc } = window._fsUtils;
+                    const { collection, doc, setDoc, addDoc, serverTimestamp } = window._fsUtils;
                     const db = window._db;
                     if (id) {
+                        // Update existing
                         await setDoc(doc(db, 'products', id), productData, { merge: true });
                         savedId = id;
+                        debugLog('Firestore product updated: ' + id);
                     } else {
+                        // Add new
                         productData.createdAt = new Date().toISOString();
                         const ref = await addDoc(collection(db, 'products'), productData);
                         savedId = ref.id;
+                        debugLog('Firestore product added: ' + ref.id);
                     }
-                    debugLog('Product saved to Firestore: ' + savedId);
                 }
 
+                // Update array lokal
                 const fullData = { id: savedId, ...productData };
                 if (id) {
-                    const idx = products.findIndex(p => p.id === id);
-                    if (idx !== -1) products[idx] = fullData; else products.push(fullData);
+                    const index = products.findIndex(p => p.id === id);
+                    if (index !== -1) products[index] = fullData;
+                    else products.push(fullData);
                 } else {
                     products.push(fullData);
                 }
+
+                // Sync localStorage
                 localStorage.setItem('sagatama_products', JSON.stringify(products));
 
                 closeModal('productFormModal');
                 renderAdminProducts();
                 renderHome();
-                showToast('Produk berhasil disimpan ✅', 'success');
+                showToast('Produk berhasil disimpan ke Firestore ✅', 'success');
                 debugLog('Product saved: ' + productData.name + ' | Total: ' + products.length);
             } catch (error) {
-                showToast('Gagal menyimpan: ' + error.message, 'error');
+                showToast('Gagal menyimpan produk: ' + error.message, 'error');
                 debugLog('Save product error: ' + error.message);
             } finally {
                 showLoading(false);
@@ -2520,11 +2406,13 @@ function loadProductsFromStorage() {
             const product = products.find(p => p.id === productId);
             if (product) {
                 product.active = !product.active;
+                // Update Firestore
                 if (window._firebaseReady && window._db) {
                     try {
                         const { doc, updateDoc } = window._fsUtils;
                         await updateDoc(doc(window._db, 'products', productId), { active: product.active });
-                    } catch(e) { debugLog('Toggle error: ' + e.message); }
+                        debugLog('Firestore product status toggled: ' + productId);
+                    } catch(e) { debugLog('Firestore toggle error: ' + e.message); }
                 }
                 localStorage.setItem('sagatama_products', JSON.stringify(products));
                 renderAdminProducts();
@@ -2542,15 +2430,6 @@ function loadProductsFromStorage() {
                     const { doc, deleteDoc } = window._fsUtils;
                     await deleteDoc(doc(window._db, 'products', productId));
                     debugLog('Firestore product deleted: ' + productId);
-                    // Coba hapus gambar dari Storage juga (jika ada)
-                    const product = products.find(p => p.id === productId);
-                    if (product && product.storagePath && window._storage) {
-                        try {
-                            const { ref, deleteObject } = window._storageUtils;
-                            await deleteObject(ref(window._storage, product.storagePath));
-                            debugLog('Storage image deleted');
-                        } catch(e) { debugLog('Storage delete error (ok): ' + e.message); }
-                    }
                 }
                 products = products.filter(p => p.id !== productId);
                 localStorage.setItem('sagatama_products', JSON.stringify(products));
@@ -2559,6 +2438,7 @@ function loadProductsFromStorage() {
                 showToast('Produk berhasil dihapus', 'success');
             } catch(e) {
                 showToast('Gagal menghapus: ' + e.message, 'error');
+                debugLog('Delete error: ' + e.message);
             } finally {
                 showLoading(false);
             }
@@ -2946,9 +2826,12 @@ async function finalizeOrder(orderId, total, subtotal, fee, address, sgtReward) 
                 const { id, ...orderData } = order;
                 await setDoc(doc(window._db, 'orders', orderId), orderData);
                 debugLog('Order saved to Firestore: ' + orderId);
-            } catch(e) { debugLog('Firestore order error: ' + e.message); }
+            } catch(e) {
+                debugLog('Firestore order save error: ' + e.message);
+            }
         }
-
+        
+        // Simpan ke localStorage juga sebagai cache
         orders.unshift(order);
         localStorage.setItem('sagatama_orders', JSON.stringify(orders));
         
