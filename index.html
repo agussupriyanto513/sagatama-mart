@@ -1542,6 +1542,19 @@
 
     <!-- ============================= JAVASCRIPT ============================= -->
     <script>
+	
+	// ============================================
+    // CONFIG & STATE
+    // ============================================
+    const firebaseConfig = {
+        apiKey: "AIzaSyDNWOochfAyHjBYUNyq2IAYhA9p7Ie834M",
+        authDomain: "portal-sagatama.firebaseapp.com",
+        projectId: "portal-sagatama",
+        storageBucket: "portal-sagatama.firebasestorage.app",
+        messagingSenderId: "372845954028",
+        appId: "1:372845954028:web:189f2a3127ea8189b9f6c9"
+    };
+	
     // ==================== STATE ====================
     let currentUser = null;
     let currentUserRole = 'guest';
@@ -2110,156 +2123,164 @@
     }
 
     // ==================== PAYMENT (Pi Network) ====================
-    function openPayment() {
-        if (!cart.length) { showToast('Keranjang masih kosong', 'warning'); return; }
-        if (!currentUser) { openModal('loginOptionsModal'); return; }
+function openPayment() {
+    if (!cart.length) { showToast('Keranjang masih kosong', 'warning'); return; }
+    if (!currentUser) { openModal('loginOptionsModal'); return; }
 
-        let subtotal = 0, totalSGT = 0;
-        const items = cart.map(item => {
-            const sub = item.price * item.quantity;
-            subtotal += sub;
-            totalSGT += Math.floor(sub * sgtRatePerPi);
-            return `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; background:#F8FAFC; border-radius:10px; margin-bottom:8px;">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <img src="${item.image||'https://via.placeholder.com/50'}" style="width:38px; height:38px; object-fit:cover; border-radius:8px;" onerror="this.src='https://via.placeholder.com/50'">
-                        <div>
-                            <p style="font-size:13px; font-weight:700; color:#1E293B;">${item.name}</p>
-                            <p style="font-size:11px; color:#64748B;">${item.quantity} x π ${item.price.toFixed(4)}</p>
-                        </div>
+    let subtotal = 0;
+    let totalSGT = 0;
+    
+    const itemsHTML = cart.map(item => {
+        const sub = item.price * item.quantity;
+        subtotal += sub;
+        // Pastikan sgtRatePerPi sudah terdefinisi secara global
+        totalSGT += Math.floor(sub * (window.sgtRatePerPi || 0)); 
+        return `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; background:#F8FAFC; border-radius:10px; margin-bottom:8px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <img src="${item.image || 'https://via.placeholder.com/50'}" style="width:38px; height:38px; object-fit:cover; border-radius:8px;" onerror="this.src='https://via.placeholder.com/50'">
+                    <div>
+                        <p style="font-size:13px; font-weight:700; color:#1E293B;">${item.name}</p>
+                        <p style="font-size:11px; color:#64748B;">${item.quantity} x π ${item.price.toFixed(4)}</p>
                     </div>
-                    <p style="font-size:13px; font-weight:800; color:#1E293B;">π ${(item.price*item.quantity).toFixed(4)}</p>
                 </div>
-            `;
-        });
+                <p style="font-size:13px; font-weight:800; color:#1E293B;">π ${(item.price * item.quantity).toFixed(4)}</p>
+            </div>
+        `;
+    });
 
-        document.getElementById('paymentItems').innerHTML = items.join('');
-        const fee = subtotal * 0.02;
-        const total = subtotal + fee;
-        document.getElementById('paymentSubtotal').textContent = 'π ' + subtotal.toFixed(4);
-        document.getElementById('paymentFee').textContent = 'π ' + fee.toFixed(4);
-        document.getElementById('paymentTotal').textContent = 'π ' + total.toFixed(4);
-        document.getElementById('paymentSGTReward').textContent = '+' + totalSGT + ' SGT';
+    document.getElementById('paymentItems').innerHTML = itemsHTML.join('');
+    const fee = subtotal * 0.02;
+    const total = subtotal + fee;
+    
+    document.getElementById('paymentSubtotal').textContent = 'π ' + subtotal.toFixed(4);
+    document.getElementById('paymentFee').textContent = 'π ' + fee.toFixed(4);
+    document.getElementById('paymentTotal').textContent = 'π ' + total.toFixed(4);
+    document.getElementById('paymentSGTReward').textContent = '+' + totalSGT + ' SGT';
 
-        const saved = localStorage.getItem('sagatama_address_' + currentUser.uid);
-        if (saved) document.getElementById('shippingAddress').value = saved;
+    const saved = localStorage.getItem('sagatama_address_' + currentUser.uid);
+    if (saved) document.getElementById('shippingAddress').value = saved;
 
-        openModal('paymentModal');
+    openModal('paymentModal');
+}
+
+async function processPiPayment() {
+    const address = document.getElementById('shippingAddress').value.trim();
+    if (!address) { 
+        showToast('Mohon isi alamat pengiriman', 'error'); 
+        document.getElementById('shippingAddress').focus(); 
+        return; 
     }
 
-    async function processPiPayment() {
-        const address = document.getElementById('shippingAddress').value.trim();
-        if (!address) { showToast('Mohon isi alamat pengiriman', 'error'); document.getElementById('shippingAddress').focus(); return; }
+    const btn = document.getElementById('payButton');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner" style="width:18px; height:18px; border-width:2px;"></div> Memproses...';
 
-        const btn = document.getElementById('payButton');
-        btn.disabled = true;
-        btn.innerHTML = '<div class="spinner" style="width:18px; height:18px; border-width:2px;"></div> Memproses...';
+    const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+    const fee = subtotal * 0.02;
+    const total = parseFloat((subtotal + fee).toFixed(4));
+    const sgtReward = Math.floor(subtotal * (window.sgtRatePerPi || 0));
 
+    localStorage.setItem('sagatama_address_' + currentUser.uid, address);
+
+    // --- PEMBAYARAN REAL PI SDK ---
+    if (typeof Pi !== 'undefined' && Pi.createPayment) {
         try {
-            const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
-            const fee = subtotal * 0.02;
-            const total = subtotal + fee;
-            const sgtReward = Math.floor(subtotal * sgtRatePerPi);
+            Pi.createPayment({
+                amount: total,
+                memo: `Sagatama Mart - ${cart.length} item`,
+                metadata: { orderId: 'ORD' + Date.now(), sgtReward: sgtReward }
+            }, {
+                onReadyForServerApproval: (paymentId) => {
+                    debugLog('Payment ready for approval: ' + paymentId);
+                    // Kirim paymentId ke backend Anda di sini jika ada
+                    // return axios.post('/approve', {paymentId}); 
+                },
+                onReadyForServerCompletion: (paymentId, txid) => {
+                    debugLog('Payment completed. txid: ' + txid);
+                    // EKSEKUSI PENYELESAIAN PESANAN HANYA DI SINI
+                    finalizeOrder(address, subtotal, fee, total, sgtReward);
+                },
+                onCancel: (paymentId) => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-lock"></i> Bayar dengan Pi Network';
+                    showToast('Pembayaran dibatalkan', 'info');
+                },
+                onError: (error, payment) => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-lock"></i> Bayar dengan Pi Network';
+                    showToast('Error Pi: ' + error.message, 'error');
+                }
+            });
+        } catch (err) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-lock"></i> Bayar dengan Pi Network';
+            showToast('Gagal inisiasi pembayaran', 'error');
+        }
+    } else {
+        // --- MODE DEMO / SANDBOX ---
+        debugLog('Pi SDK tidak ditemukan, menjalankan simulasi...');
+        setTimeout(() => {
+            finalizeOrder(address, subtotal, fee, total, sgtReward);
+        }, 2000);
+    }
+}
 
-            localStorage.setItem('sagatama_address_' + currentUser.uid, address);
+// Fungsi terpisah untuk mencatat pesanan ke database/localstorage setelah bayar
+function finalizeOrder(address, subtotal, fee, total, sgtReward) {
+    try {
+        const order = {
+            id: 'ORD' + Date.now(),
+            userId: currentUser.uid,
+            username: currentUser.username,
+            items: [...cart],
+            subtotal, fee, total,
+            status: 'paid',
+            paymentMethod: 'pi',
+            shippingAddress: address,
+            sgtEarned: sgtReward,
+            createdAt: new Date().toISOString()
+        };
 
-            // Pi SDK Payment
-            if (typeof Pi !== 'undefined' && Pi.createPayment) {
-                debugLog('Initiating Pi payment: π ' + total.toFixed(4));
-                let paymentCompleted = false;
-
-                await Pi.createPayment(
-                    {
-                        amount: parseFloat(total.toFixed(7)),
-                        memo: 'Sagatama Mart - ' + cart.length + ' item(s)',
-                        metadata: {
-                            orderId: 'ORD' + Date.now(),
-                            items: cart.map(i => ({ id: i.id, name: i.name, qty: i.quantity })),
-                            sgtReward: sgtReward
-                        }
-                    },
-                    {
-                        onReadyForServerApproval: (paymentId) => {
-                            debugLog('Payment ready for approval: ' + paymentId);
-                            // In production: call your backend to approve
-                            // await fetch('/api/payments/approve', { method:'POST', body: JSON.stringify({paymentId}) })
-                        },
-                        onReadyForServerCompletion: (paymentId, txid) => {
-                            debugLog('Payment completed. txid: ' + txid);
-                            paymentCompleted = true;
-                            // In production: call your backend to complete
-                            // await fetch('/api/payments/complete', { method:'POST', body: JSON.stringify({paymentId, txid}) })
-                        },
-                        onCancel: (paymentId) => {
-                            debugLog('Payment cancelled: ' + paymentId);
-                            throw new Error('Pembayaran dibatalkan oleh pengguna');
-                        },
-                        onError: (error, payment) => {
-                            debugLog('Pi payment error: ' + error.message);
-                            throw new Error(error.message || 'Pi payment failed');
-                        }
-                    }
-                );
-            } else {
-                // Sandbox / demo mode
-                debugLog('Pi SDK not available — using demo payment flow');
-                await new Promise(r => setTimeout(r, 1200)); // Simulate payment
-            }
-
-            // Create order record
-            const order = {
-                id: 'ORD' + Date.now(),
-                userId: currentUser.uid,
-                username: currentUser.username,
-                items: [...cart],
-                subtotal, fee, total,
-                status: 'paid',
-                paymentMethod: 'pi',
-                shippingAddress: address,
-                sgtEarned: sgtReward,
-                createdAt: new Date().toISOString()
-            };
+        // 1. Simpan ke daftar Order
+        if (typeof orders !== 'undefined') {
             orders.unshift(order);
-            saveOrders();
+            if (typeof saveOrders === 'function') saveOrders();
+        }
 
-            // Award SGT
-            sgtBalance += sgtReward;
+        // 2. Berikan Reward SGT
+        if (typeof sgtBalance !== 'undefined') {
+            window.sgtBalance += sgtReward;
             sgtTransactions.unshift({
                 type: 'earn', amount: sgtReward,
                 description: 'Reward dari pembelian ' + order.id,
                 date: new Date().toISOString(), userId: currentUser.uid
             });
-            saveSGTData();
-
-            // Deduct stock
-            order.items.forEach(item => {
-                const p = products.find(x => x.id === item.id);
-                if (p) p.stock = Math.max(0, p.stock - item.quantity);
-            });
-
-            // Clear cart
-            cart = [];
-            saveCart();
-            updateCartUI();
-            updateSGTUI();
-
-            // Show success
-            document.getElementById('successOrderId').textContent = order.id;
-            document.getElementById('successSGTReceived').textContent = '+' + sgtReward + ' SGT';
-            closeModal('paymentModal');
-            openModal('paymentSuccessModal');
-            debugLog('Payment success: ' + order.id + ' | SGT +' + sgtReward);
-
-        } catch (e) {
-            showToast('Pembayaran gagal: ' + e.message, 'error');
-            debugLog('Payment error: ' + e.message);
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-lock"></i> Bayar dengan Pi Network';
+            if (typeof saveSGTData === 'function') saveSGTData();
         }
-    }
 
-    function closePaymentSuccess() { closeModal('paymentSuccessModal'); switchView('orders'); }
+        // 3. Potong Stok
+        order.items.forEach(item => {
+            const p = products.find(x => x.id === item.id);
+            if (p) p.stock = Math.max(0, p.stock - item.quantity);
+        });
+
+        // 4. Bersihkan Keranjang
+        cart = [];
+        if (typeof saveCart === 'function') saveCart();
+        if (typeof updateCartUI === 'function') updateCartUI();
+        if (typeof updateSGTUI === 'function') updateSGTUI();
+
+        // 5. Tampilkan Modal Sukses
+        document.getElementById('successOrderId').textContent = order.id;
+        document.getElementById('successSGTReceived').textContent = '+' + sgtReward + ' SGT';
+        closeModal('paymentModal');
+        openModal('paymentSuccessModal');
+
+    } catch (e) {
+        showToast('Gagal memproses data pesanan: ' + e.message, 'error');
+    }
+}
 
     // ==================== ORDERS ====================
     function renderOrders() {
