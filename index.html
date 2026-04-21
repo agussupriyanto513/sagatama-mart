@@ -9,33 +9,6 @@
     <!-- Pi SDK -->
     <script src="https://sdk.minepi.com/pi-sdk.js"></script>
     
-    <!-- Firebase SDK -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, query, orderBy, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyDNWOochfAyHjBYUNyq2IAYhA9p7Ie834M",
-            authDomain: "portal-sagatama.firebaseapp.com",
-            projectId: "portal-sagatama",
-            storageBucket: "portal-sagatama.firebasestorage.app",
-            messagingSenderId: "372845954028",
-            appId: "1:372845954028:web:189f2a3127ea8189b9f6c9"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
-        // Expose ke window agar bisa dipakai di script biasa
-        window._db = db;
-        window._fsUtils = { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, query, orderBy, where, serverTimestamp };
-        window._firebaseReady = true;
-        console.log('[Firebase] Firestore connected: portal-sagatama');
-
-        // Trigger event agar app tahu Firebase sudah siap
-        window.dispatchEvent(new Event('firebaseReady'));
-    </script>
-    
     <!-- External Libraries -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -1181,19 +1154,6 @@
             try {
                 // Initialize Pi SDK
                 initPiSDK();
-
-                // Tunggu Firebase siap (max 5 detik)
-                await new Promise((resolve) => {
-                    if (window._firebaseReady) return resolve();
-                    const timeout = setTimeout(resolve, 5000);
-                    window.addEventListener('firebaseReady', () => { clearTimeout(timeout); resolve(); }, { once: true });
-                });
-
-                if (window._firebaseReady) {
-                    debugLog('Firebase Firestore ready');
-                } else {
-                    debugLog('Firebase timeout - pakai localStorage fallback');
-                }
                 
                 // Load data
                 await Promise.all([
@@ -1296,7 +1256,7 @@
                 case 'orders': renderOrders(); break;
                 case 'account': renderAccount(); break;
                 case 'wallet': renderWallet(); break;
-                case 'admin-dashboard': renderAdminDashboard(); break; // async
+                case 'admin-dashboard': renderAdminDashboard(); break;
                 case 'admin-products': renderAdminProducts(); break;
                 case 'admin-orders': renderAdminOrders(); break;
                 case 'admin-analytics': renderAdminAnalytics(); break;
@@ -1602,44 +1562,99 @@ function loadProductsFromStorage() {
         
         // ==================== DATA LOADING ====================
         async function loadProducts() {
-            // 1. Coba dari Firestore
-            if (window._firebaseReady && window._db) {
-                try {
-                    const { collection, getDocs, query, orderBy } = window._fsUtils;
-                    const db = window._db;
-                    const q = query(collection(db, 'products'));
-                    const snapshot = await getDocs(q);
-                    if (!snapshot.empty) {
-                        products = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                        debugLog('Products loaded from Firestore: ' + products.length);
-                        // Sync ke localStorage sebagai cache
-                        localStorage.setItem('sagatama_products', JSON.stringify(products));
-                        return;
+    try {
+        const response = await fetch('/api/products');
+        if (!response.ok) throw new Error('Failed to load');
+        products = await response.json();
+        debugLog('Products loaded from API: ' + products.length);
+    } catch (error) {
+        // Fallback: Produk asli Sagatama Mart + demo
+        products = [
+                    {
+                        id: '1',
+                        name: 'Madu Herbal Alami',
+                        category: 'Herbal',
+                        price: 0.5,
+                        stock: 10,
+                        image: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=400',
+                        description: 'Madu murni dari peternakan lokal, kaya akan antioksidan dan nutrisi alami.',
+                        active: true
+                    },
+                    {
+                        id: '2',
+                        name: 'Beras Organik 5kg',
+                        category: 'Sembako',
+                        price: 0.8,
+                        stock: 20,
+                        image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400',
+                        description: 'Beras organik premium tanpa pestisida, ditanam dengan metode tradisional.',
+                        active: true
+                    },
+                    {
+                        id: '3',
+                        name: 'Buku Islami',
+                        category: 'Literasi',
+                        price: 0.3,
+                        stock: 15,
+                        image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400',
+                        description: 'Buku pelajaran agama Islam untuk semua usia.',
+                        active: true
+                    },
+                    {
+                        id: '4',
+                        name: 'Kemeja Batik Modern',
+                        category: 'Busana',
+                        price: 1.2,
+                        stock: 8,
+                        image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=400',
+                        description: 'Kemeja batik dengan desain modern dan bahan berkualitas.',
+                        active: true
+                    },
+                    {
+                        id: '5',
+                        name: 'Minyak Zaitun Extra Virgin',
+                        category: 'Kesehatan',
+                        price: 0.6,
+                        stock: 12,
+                        image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=400',
+                        description: 'Minyak zaitun asli untuk kesehatan jantung dan kulit.',
+                        active: true
+                    },
+                    {
+                        id: '6',
+                        name: 'Kopi Arabika Gayo',
+                        category: 'Kuliner',
+                        price: 0.4,
+                        stock: 25,
+                        image: 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=400',
+                        description: 'Kopi arabika premium dari dataran tinggi Gayo.',
+                        active: true
+                    },
+                    {
+                        id: '7',
+                        name: 'Power Bank 20000mAh',
+                        category: 'Elektronik',
+                        price: 2.5,
+                        stock: 5,
+                        image: 'https://images.unsplash.com/photo-1609592424308-64674c46465a?w=400',
+                        description: 'Power bank kapasitas besar dengan fast charging.',
+                        active: true
+                    },
+                    {
+                        id: '8',
+                        name: 'Tas Etnik Handmade',
+                        category: 'Lainnya',
+                        price: 0.9,
+                        stock: 7,
+                        image: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=400',
+                        description: 'Tas etnik handmade dengan bahan ramah lingkungan.',
+                        active: true
                     }
-                    debugLog('Firestore products collection kosong');
-                } catch (err) {
-                    debugLog('Firestore load error: ' + err.message);
-                }
+                ];
+                debugLog('Using demo products (' + products.length + ' items)');
             }
-            // 2. Fallback ke localStorage cache
-            const saved = localStorage.getItem('sagatama_products');
-            if (saved) {
-                try {
-                    const cached = JSON.parse(saved);
-                    if (cached && cached.length > 0) {
-                        products = cached;
-                        debugLog('Products loaded from localStorage cache: ' + products.length);
-                        return;
-                    }
-                } catch(e) {}
-            }
-            // 3. Produk demo (hanya jika benar-benar kosong)
-            products = [
-                { id: 'demo_1', name: 'Madu Herbal Alami', category: 'Herbal', price: 0.5, stock: 10, image: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=400', description: 'Madu murni dari peternakan lokal.', active: true },
-                { id: 'demo_2', name: 'Beras Organik 5kg', category: 'Sembako', price: 0.8, stock: 20, image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400', description: 'Beras organik premium tanpa pestisida.', active: true }
-            ];
-            debugLog('Menggunakan produk demo (Firestore kosong)');
         }
+        
         async function loadCategories() {
             categories = [
                 { id: 'Herbal', name: 'Herbal', icon: 'fa-leaf' },
@@ -1699,28 +1714,16 @@ function loadProductsFromStorage() {
         
         async function loadOrders() {
             if (!currentUser) return;
+            
             try {
-                if (window._firebaseReady && window._db) {
-                    const { collection, query, where, orderBy, getDocs } = window._fsUtils;
-                    const db = window._db;
-                    const q = query(
-                        collection(db, 'orders'),
-                        where('userId', '==', currentUser.uid)
-                    );
-                    const snapshot = await getDocs(q);
-                    orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    // Sort by createdAt descending (client-side)
-                    orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                    debugLog('Orders loaded from Firestore: ' + orders.length);
+                const response = await fetch(`/api/orders/${currentUser.uid}`);
+                if (response.ok) {
+                    orders = await response.json();
                 } else {
-                    // Fallback localStorage
-                    const saved = localStorage.getItem('sagatama_orders');
-                    orders = saved ? JSON.parse(saved) : [];
+                    orders = [];
                 }
             } catch (error) {
-                debugLog('loadOrders error: ' + error.message);
-                const saved = localStorage.getItem('sagatama_orders');
-                orders = saved ? JSON.parse(saved) : [];
+                orders = [];
             }
         }
         
@@ -2108,30 +2111,12 @@ function loadProductsFromStorage() {
         }
         
         // ==================== ADMIN RENDER FUNCTIONS ====================
-        async function loadAllOrders() {
-            // Admin load semua orders dari Firestore
-            if (window._firebaseReady && window._db) {
-                try {
-                    const { collection, getDocs, query } = window._fsUtils;
-                    const snapshot = await getDocs(collection(window._db, 'orders'));
-                    orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                    debugLog('All orders loaded from Firestore: ' + orders.length);
-                } catch(e) {
-                    debugLog('loadAllOrders error: ' + e.message);
-                }
-            }
-        }
-
-        async function renderAdminDashboard() {
+        function renderAdminDashboard() {
             if (currentUserRole !== 'admin') {
                 showToast('Akses ditolak', 'error');
                 switchView('home');
                 return;
             }
-
-            // Admin: load semua orders dari Firestore
-            await loadAllOrders();
             
             document.getElementById('statTotalProducts').textContent = products.length;
             document.getElementById('statPendingOrders').textContent = orders.filter(o => o.status === 'pending').length;
@@ -2342,56 +2327,30 @@ function loadProductsFromStorage() {
             try {
                 const id = document.getElementById('productId').value;
                 const productData = {
+                    id: id || 'prod_' + Date.now(),
                     name: document.getElementById('productName').value,
                     category: document.getElementById('productCategory').value,
                     price: parseFloat(document.getElementById('productPrice').value),
                     stock: parseInt(document.getElementById('productStock').value),
                     description: document.getElementById('productDesc').value,
                     image: document.getElementById('productImage').value || 'https://via.placeholder.com/400x300?text=No+Image',
-                    active: document.getElementById('productActive').checked,
-                    updatedAt: new Date().toISOString()
+                    active: document.getElementById('productActive').checked
                 };
-
-                let savedId = id;
-
-                // Simpan ke Firestore
-                if (window._firebaseReady && window._db) {
-                    const { collection, doc, setDoc, addDoc, serverTimestamp } = window._fsUtils;
-                    const db = window._db;
-                    if (id) {
-                        // Update existing
-                        await setDoc(doc(db, 'products', id), productData, { merge: true });
-                        savedId = id;
-                        debugLog('Firestore product updated: ' + id);
-                    } else {
-                        // Add new
-                        productData.createdAt = new Date().toISOString();
-                        const ref = await addDoc(collection(db, 'products'), productData);
-                        savedId = ref.id;
-                        debugLog('Firestore product added: ' + ref.id);
-                    }
-                }
-
-                // Update array lokal
-                const fullData = { id: savedId, ...productData };
+                
                 if (id) {
                     const index = products.findIndex(p => p.id === id);
-                    if (index !== -1) products[index] = fullData;
-                    else products.push(fullData);
+                    if (index !== -1) products[index] = productData;
                 } else {
-                    products.push(fullData);
+                    products.push(productData);
                 }
-
-                // Sync localStorage
-                localStorage.setItem('sagatama_products', JSON.stringify(products));
-
+                
                 closeModal('productFormModal');
                 renderAdminProducts();
                 renderHome();
-                showToast('Produk berhasil disimpan ke Firestore ✅', 'success');
-                debugLog('Product saved: ' + productData.name + ' | Total: ' + products.length);
+                showToast('Produk berhasil disimpan', 'success');
+                debugLog('Product saved: ' + productData.name);
             } catch (error) {
-                showToast('Gagal menyimpan produk: ' + error.message, 'error');
+                showToast('Gagal menyimpan produk', 'error');
                 debugLog('Save product error: ' + error.message);
             } finally {
                 showLoading(false);
@@ -2402,46 +2361,24 @@ function loadProductsFromStorage() {
             openProductModal(productId);
         }
         
-        async function toggleProductStatus(productId) {
+        function toggleProductStatus(productId) {
             const product = products.find(p => p.id === productId);
             if (product) {
                 product.active = !product.active;
-                // Update Firestore
-                if (window._firebaseReady && window._db) {
-                    try {
-                        const { doc, updateDoc } = window._fsUtils;
-                        await updateDoc(doc(window._db, 'products', productId), { active: product.active });
-                        debugLog('Firestore product status toggled: ' + productId);
-                    } catch(e) { debugLog('Firestore toggle error: ' + e.message); }
-                }
-                localStorage.setItem('sagatama_products', JSON.stringify(products));
                 renderAdminProducts();
                 renderHome();
                 showToast(`Produk ${product.active ? 'diaktifkan' : 'dinonaktifkan'}`, 'success');
             }
         }
         
-        async function deleteProduct(productId) {
+        function deleteProduct(productId) {
             if (!confirm('Apakah Anda yakin ingin menghapus produk ini?')) return;
-            showLoading(true);
-            try {
-                // Hapus dari Firestore
-                if (window._firebaseReady && window._db) {
-                    const { doc, deleteDoc } = window._fsUtils;
-                    await deleteDoc(doc(window._db, 'products', productId));
-                    debugLog('Firestore product deleted: ' + productId);
-                }
-                products = products.filter(p => p.id !== productId);
-                localStorage.setItem('sagatama_products', JSON.stringify(products));
-                renderAdminProducts();
-                renderHome();
-                showToast('Produk berhasil dihapus', 'success');
-            } catch(e) {
-                showToast('Gagal menghapus: ' + e.message, 'error');
-                debugLog('Delete error: ' + e.message);
-            } finally {
-                showLoading(false);
-            }
+            
+            products = products.filter(p => p.id !== productId);
+            renderAdminProducts();
+            renderHome();
+            showToast('Produk berhasil dihapus', 'success');
+            debugLog('Product deleted: ' + productId);
         }
         
         // ==================== ORDER MANAGEMENT ====================
@@ -2818,20 +2755,8 @@ async function finalizeOrder(orderId, total, subtotal, fee, address, sgtReward) 
             sgtEarned: sgtReward,
             createdAt: new Date().toISOString()
         };
-
-        // Simpan ke Firestore
-        if (window._firebaseReady && window._db) {
-            try {
-                const { doc, setDoc } = window._fsUtils;
-                const { id, ...orderData } = order;
-                await setDoc(doc(window._db, 'orders', orderId), orderData);
-                debugLog('Order saved to Firestore: ' + orderId);
-            } catch(e) {
-                debugLog('Firestore order save error: ' + e.message);
-            }
-        }
         
-        // Simpan ke localStorage juga sebagai cache
+        // Simpan ke localStorage untuk persistensi
         orders.unshift(order);
         localStorage.setItem('sagatama_orders', JSON.stringify(orders));
         
