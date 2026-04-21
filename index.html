@@ -2183,46 +2183,155 @@ async function processPiPayment() {
 
     localStorage.setItem('sagatama_address_' + currentUser.uid, address);
 
-    // --- PEMBAYARAN REAL PI SDK ---
-    if (typeof Pi !== 'undefined' && Pi.createPayment) {
-        try {
-            Pi.createPayment({
-                amount: total,
-                memo: `Sagatama Mart - ${cart.length} item`,
-                metadata: { orderId: 'ORD' + Date.now(), sgtReward: sgtReward }
-            }, {
-                onReadyForServerApproval: (paymentId) => {
-                    debugLog('Payment ready for approval: ' + paymentId);
-                    // Kirim paymentId ke backend Anda di sini jika ada
-                    // return axios.post('/approve', {paymentId}); 
-                },
-                onReadyForServerCompletion: (paymentId, txid) => {
-                    debugLog('Payment completed. txid: ' + txid);
-                    // EKSEKUSI PENYELESAIAN PESANAN HANYA DI SINI
-                    finalizeOrder(address, subtotal, fee, total, sgtReward);
-                },
-                onCancel: (paymentId) => {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-lock"></i> Bayar dengan Pi Network';
-                    showToast('Pembayaran dibatalkan', 'info');
-                },
-                onError: (error, payment) => {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-lock"></i> Bayar dengan Pi Network';
-                    showToast('Error Pi: ' + error.message, 'error');
-                }
-            });
-        } catch (err) {
+    // ==================== PEMBAYARAN PI NETWORK (VERSI STABIL) ====================
+let paymentTimeout = null;
+let pendingPayment = null;
+
+async function processPiPayment() {
+    // 1. Validasi Awal
+    const address = document.getElementById('shippingAddress').value.trim();
+    if (!address) { 
+        showToast('Mohon isi alamat pengiriman', 'error'); 
+        document.getElementById('shippingAddress').focus(); 
+        return; 
+    }
+    if (!cart.length) return;
+
+    const btn = document.getElementById('payButton');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner" style="width:18px; height:18px; border-width:2px;"></div> Memproses...';
+
+    // 2. Hitung Total & Reward
+    const subtotalPi = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const feePi = subtotalPi * 0.02;
+    const totalPi = parseFloat((subtotalPi + feePi).toFixed(4));
+    const sgtReward = Math.floor(subtotalPi * (window.sgtRatePerPi || 0));
+
+    // 3. Simpan Alamat & Buat Metadata
+    localStorage.setItem('sagatama_address_' + currentUser.uid, address);
+    
+    const orderMetadata = {
+        orderId: 'ORD_' + Date.now(),
+        items: cart.map(i => ({ id: i.id, name: i.name, qty: i.quantity, price: i.price })),
+        customerUid: currentUser.uid,
+        shippingAddress: address,
+        sgtReward: sgtReward
+    };
+
+    // 4. Setup SDK Callbacks
+    const callbacks = {
+        onReadyForServerApproval: function(paymentId) {
+            clearTimeout(paymentTimeout);
+            showToast('Memverifikasi pembayaran...', 'info');
+            approvePaymentOnServer(paymentId);
+        },
+        onReadyForServerCompletion: function(paymentId, txid) {
+            clearTimeout(paymentTimeout);
+            showToast('Menyelesaikan transaksi...', 'info');
+            completePaymentOnServer(paymentId, txid, orderMetadata);
+        },
+        onCancel: function(paymentId) {
+            clearTimeout(paymentTimeout);
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-lock"></i> Bayar dengan Pi Network';
-            showToast('Gagal inisiasi pembayaran', 'error');
+            showToast('Pembayaran dibatalkan', 'warning');
+        },
+        onError: function(error, payment) {
+            clearTimeout(paymentTimeout);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-lock"></i> Bayar dengan Pi Network';
+            showToast('Error: ' + error.message, 'error');
         }
-    } else {
-        // --- MODE DEMO / SANDBOX ---
-        debugLog('Pi SDK tidak ditemukan, menjalankan simulasi...');
-        setTimeout(() => {
-            finalizeOrder(address, subtotal, fee, total, sgtReward);
-        }, 2000);
+    };
+
+    // 5. Jalankan Timeout (3 Menit)
+    paymentTimeout = setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock"></i> Bayar dengan Pi Network';
+        showToast('Waktu pembayaran habis', 'error');
+    }, 180000);
+
+    // 6. Eksekusi Pi SDK
+    try {
+        if (typeof window.Pi !== 'undefined') {
+            window.Pi.createPayment({
+                amount: totalPi,
+                memo: `Sagatama Mart - ${cart.length} item`,
+                metadata: orderMetadata
+            }, callbacks);
+        } else {
+            throw new Error("Pi SDK tidak terdeteksi");
+        }
+    } catch (err) {
+        btn.disabled = false;
+        showToast(err.message, 'error');
+    }
+}
+
+// ==================== SERVER INTERACTION ====================
+
+async function approvePaymentOnServer(paymentId) {
+    try {
+        const response = await fetch('/api/payments/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentId: paymentId })
+        });
+        if (!response.ok) throw new Error("Gagal Approve di Server");
+        debugLog("✓ Server Approved: " + paymentId);
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+async function completePaymentOnServer(paymentId, txid, metadata) {
+    try {
+        const response = await fetch('/api/payments/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentId: paymentId, txid: txid })
+        });
+
+        if (response.ok) {
+            // Jika server Pi oke, baru simpan ke Firebase kita
+            await finalizeOrderToFirebase(paymentId, txid, metadata);
+        }
+    } catch (error) {
+        debugLog("Completion Error: " + error.message);
+    }
+}
+
+async function finalizeOrderToFirebase(paymentId, txid, metadata) {
+    const orderData = {
+        orderId: metadata.orderId,
+        paymentId: paymentId,
+        txid: txid,
+        userId: currentUser.uid,
+        items: [...cart],
+        total: (metadata.totalPi || 0),
+        status: 'paid',
+        shippingAddress: metadata.shippingAddress,
+        createdAt: new Date().toISOString()
+    };
+
+    // Simpan ke Firebase (Gunakan fungsi addDoc Anda)
+    try {
+        await addDoc(collection(db, 'orders'), orderData);
+        
+        // Reward SGT
+        if (metadata.sgtReward > 0) {
+            await awardSGTReward(metadata.sgtReward, metadata.orderId);
+        }
+
+        // Clean Up
+        cart = [];
+        saveCart();
+        updateCartUI();
+        closeModal('paymentModal');
+        openModal('paymentSuccessModal');
+        showToast('Transaksi Berhasil!', 'success');
+    } catch (e) {
+        debugLog("Firebase Save Error: " + e.message);
     }
 }
 
