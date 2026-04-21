@@ -1559,28 +1559,32 @@
 
     // ==================== INIT ====================
     document.addEventListener('DOMContentLoaded', initApp);
+	
+	window.onerror = function(msg, url, line, col, error) {
+    console.error('GLOBAL ERROR:', msg, line);
+    document.getElementById('loadingOverlay').style.display = 'none';
+    return false;
+};
 
     async function initApp() {
-        showLoading(true);
-        try {
-            if (typeof Pi !== 'undefined') {
-                Pi.init({ version: "2.0", sandbox: true });
-                debugLog('Pi SDK initialized (sandbox mode)');
-            } else {
-                debugLog('Pi SDK not available (running outside Pi Browser)');
-            }
-
-            await Promise.all([loadProducts(), loadCategories()]);
-            checkSession();
-            updateCartUI();
-            renderHome();
-            debugLog('Sagatama Mart v3.0 loaded');
-        } catch (e) {
-            debugLog('Init error: ' + e.message);
-        } finally {
-            showLoading(false);
+    showLoading(true);
+    try {
+        if (typeof Pi !== 'undefined') {
+            Pi.init({ version: "2.0", sandbox: true });
         }
+
+        await Promise.all([loadProducts(), loadCategories()]);
+
+        if (typeof checkSession === 'function') checkSession();
+        if (typeof updateCartUI === 'function') updateCartUI();
+        if (typeof renderHome === 'function') renderHome();
+
+    } catch (e) {
+        console.error('Init error:', e);
+    } finally {
+        showLoading(false);
     }
+}
 
     // ==================== DEBUG ====================
     function debugLog(msg) {
@@ -1635,27 +1639,40 @@
 
     // ==================== VIEW NAVIGATION ====================
     function switchView(name) {
-        document.querySelectorAll('.view').forEach(v => { v.classList.remove('active'); v.style.opacity = '0'; });
+    try {
+        document.querySelectorAll('.view').forEach(v => {
+            v.classList.remove('active');
+            v.style.opacity = '0';
+        });
+
         const target = document.getElementById(name + '-view');
         if (!target) return;
+
         target.classList.add('active');
-        requestAnimationFrame(() => { requestAnimationFrame(() => target.style.opacity = '1'; )});
+        requestAnimationFrame(() => {
+            target.style.opacity = '1';
+        });
 
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         const navEl = document.getElementById('nav-' + name);
         if (navEl) navEl.classList.add('active');
 
         const renderMap = {
-            home: renderHome, products: renderProducts, cart: renderCart,
-            orders: renderOrders, account: renderAccount, wallet: renderWallet,
-            'admin-dashboard': renderAdminDashboard,
-            'admin-products': renderAdminProducts,
-            'admin-orders': renderAdminOrders,
-            'admin-analytics': renderAdminAnalytics
+            home: typeof renderHome === 'function' ? renderHome : null,
+            products: renderProducts,
+            cart: typeof renderCart === 'function' ? renderCart : null,
+            orders: renderOrders,
+            account: renderAccount,
+            wallet: typeof renderWallet === 'function' ? renderWallet : null
         };
+
         if (renderMap[name]) renderMap[name]();
+
         window.scrollTo(0, 0);
+    } catch (e) {
+        console.error('switchView error:', e);
     }
+}
 
     // ==================== AUTH ====================
     async function authenticatePi() {
@@ -2770,6 +2787,10 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden && currentUser) updateSGTUI(); });
 
     debugLog('Sagatama Mart v3.0 — Script ready');
+	
+	setTimeout(() => {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}, 5000);
     </script>
 </body>
 </html>
