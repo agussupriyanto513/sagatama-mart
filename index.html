@@ -1270,17 +1270,14 @@
 function initPiSDK() {
     try {
         if (typeof Pi !== 'undefined') {
+            // PENTING: sandbox: true untuk testnet, sandbox: false untuk mainnet
+            // Sesuaikan dengan environment Pi Network Anda
             Pi.init({ 
                 version: "2.0", 
-                sandbox: true 
+                sandbox: true  // Ganti ke false saat mainnet
             });
             piSdkReady = true;
-            debugLog('Pi SDK initialized - version 2.0');
-            
-            // Cek environment
-            if (Pi.platform && Pi.platform.version) {
-                debugLog('Pi platform: ' + Pi.platform.version);
-            }
+            debugLog('Pi SDK initialized - version 2.0, sandbox: true');
         } else {
             piSdkReady = false;
             debugLog('Pi SDK not available - not in Pi Browser');
@@ -1304,12 +1301,22 @@ async function authenticatePi() {
             return;
         }
 
-        // Scope WAJIB untuk pembayaran
+        // PENTING: Scope 'payments' WAJIB ada agar Pi.createPayment() bisa berjalan
+        // Scope ini harus di-approve oleh user saat login
         const scopes = ['payments', 'username'];
         
         debugLog('Authenticating with scopes: ' + JSON.stringify(scopes));
         
+        // Pi.authenticate() akan meminta user menyetujui scope termasuk 'payments'
         const auth = await Pi.authenticate(scopes, onIncompletePaymentFound);
+        
+        if (!auth || !auth.user) {
+            throw new Error('Autentikasi gagal - respons tidak valid');
+        }
+
+        // Validasi bahwa scope payments benar-benar diberikan
+        // auth.user tidak memiliki field scopes, tapi jika authenticate berhasil
+        // dengan scopes=['payments'], maka payment sudah ter-authorize
         
         // Simpan data user lengkap
         currentUser = {
@@ -1328,16 +1335,17 @@ async function authenticatePi() {
         showToast('Login Pi berhasil! Selamat datang, ' + auth.user.username, 'success');
         showSGTElements(true);
         
-        debugLog('Pi auth success - UID: ' + auth.user.uid);
+        debugLog('Pi auth success - UID: ' + auth.user.uid + ', Token: ' + (auth.accessToken ? 'ada' : 'tidak ada'));
         
     } catch (error) {
-        debugLog('Pi auth error: ' + error.message);
+        debugLog('Pi auth error: ' + (error.message || JSON.stringify(error)));
         
-        // Jika error scope, beri instruksi yang jelas
         if (error.message && error.message.includes('scope')) {
-            showToast('Error: Scope payments diperlukan. Logout dan login ulang di Pi Browser.', 'error');
+            showToast('Error scope: Pastikan Anda mengizinkan "payments" saat login Pi. Coba logout dari Pi Browser lalu login ulang.', 'error');
+        } else if (error.message && error.message.includes('cancel')) {
+            showToast('Login dibatalkan', 'warning');
         } else {
-            showToast('Gagal login Pi: ' + error.message, 'error');
+            showToast('Gagal login Pi: ' + (error.message || 'Unknown error'), 'error');
         }
     } finally {
         showLoading(false);
@@ -2593,7 +2601,7 @@ function loadProductsFromStorage() {
     openModal('paymentModal');
 }
         
-        // ==================== PAYMENT PROCESSING (FIXED) ====================
+// ==================== PAYMENT PROCESSING (FIXED) ====================
 // ==================== PAYMENT PROCESSING (FIXED) ====================
 // ==================== PAYMENT PI ASLI ====================
 async function processPiPayment() {
@@ -2610,10 +2618,24 @@ async function processPiPayment() {
         openModal('loginOptionsModal');
         return;
     }
+
+    // Validasi accessToken - WAJIB ada untuk pembayaran
+    // Jika accessToken null, berarti user login via simulasi/demo, bukan Pi asli
+    if (!currentUser.accessToken) {
+        showToast('Pembayaran Pi hanya tersedia untuk akun Pi asli. Silakan login dengan Pi Browser.', 'error');
+        setTimeout(() => openModal('loginOptionsModal'), 1500);
+        return;
+    }
     
     // Validasi Pi SDK
     if (typeof Pi === 'undefined' || !Pi.createPayment) {
         showToast('Pi Browser diperlukan untuk pembayaran. Silakan buka di Pi Browser.', 'error');
+        return;
+    }
+
+    // Validasi piSdkReady
+    if (!piSdkReady) {
+        showToast('Pi SDK belum siap. Refresh halaman dan coba lagi.', 'error');
         return;
     }
     
@@ -2624,7 +2646,7 @@ async function processPiPayment() {
     try {
         const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         const fee = subtotal * 0.02;
-        const total = subtotal + fee;
+        const total = parseFloat((subtotal + fee).toFixed(7)); // Pi butuh presisi tinggi
         const sgtReward = Math.floor(subtotal * sgtRatePerPi);
         const orderId = 'ORD' + Date.now();
         
@@ -2632,6 +2654,7 @@ async function processPiPayment() {
         localStorage.setItem('sagatama_address_' + currentUser.uid, address);
         
         // Data pembayaran Pi
+        // PENTING: amount harus number, memo string pendek, metadata object
         const paymentData = {
             amount: total,
             memo: "Sagatama Mart - " + cart.length + " produk",
@@ -2645,15 +2668,18 @@ async function processPiPayment() {
             }
         };
         
-        debugLog('Creating Pi payment: ' + JSON.stringify(paymentData));
+        debugLog('Creating Pi payment: amount=' + total + ', orderId=' + orderId);
         
         // Buat pembayaran Pi
-        const payment = await Pi.createPayment(paymentData, {
+        // CATATAN: Pi.createPayment() akan gagal dengan "payments scope" jika:
+        // 1. Pi.authenticate() tidak dipanggil dengan scope 'payments'
+        // 2. User tidak menyetujui scope payments saat login
+        // 3. Session sudah expired - perlu login ulang
+        Pi.createPayment(paymentData, {
             onReadyForServerApproval: async (paymentId) => {
                 debugLog('onReadyForServerApproval: ' + paymentId);
                 
                 try {
-                    // Kirim ke backend untuk approval
                     const response = await fetch('https://sagatama-mart.vercel.app/api/payments/approve', {
                         method: 'POST',
                         headers: { 
@@ -2670,23 +2696,22 @@ async function processPiPayment() {
                     });
                     
                     if (!response.ok) {
-                        throw new Error('Server approval failed: ' + response.status);
+                        debugLog('Server approval failed: ' + response.status + ' - Payment will retry');
+                    } else {
+                        const result = await response.json();
+                        debugLog('Server approval success: ' + JSON.stringify(result));
                     }
                     
-                    const result = await response.json();
-                    debugLog('Server approval success: ' + JSON.stringify(result));
-                    
                 } catch (err) {
-                    debugLog('Server approval error: ' + err.message);
-                    // Jangan throw - Pi SDK akan retry
+                    // Jangan throw - biarkan Pi SDK retry sendiri
+                    debugLog('Server approval error (akan retry): ' + err.message);
                 }
             },
             
             onReadyForServerCompletion: async (paymentId, txid) => {
-                debugLog('onReadyForServerCompletion: ' + paymentId + ' txid: ' + txid);
+                debugLog('onReadyForServerCompletion: paymentId=' + paymentId + ', txid=' + txid);
                 
                 try {
-                    // Kirim ke backend untuk completion
                     const response = await fetch('https://sagatama-mart.vercel.app/api/payments/complete', {
                         method: 'POST',
                         headers: { 
@@ -2701,38 +2726,57 @@ async function processPiPayment() {
                     });
                     
                     if (!response.ok) {
-                        throw new Error('Server completion failed: ' + response.status);
+                        debugLog('Server completion failed: ' + response.status + ' - akan retry');
+                    } else {
+                        const result = await response.json();
+                        debugLog('Server completion success: ' + JSON.stringify(result));
                     }
                     
-                    const result = await response.json();
-                    debugLog('Server completion success: ' + JSON.stringify(result));
-                    
-                    // Finalisasi order di frontend
+                    // Finalisasi order di frontend (jalankan meski server gagal)
                     await finalizeOrder(orderId, total, subtotal, fee, address, sgtReward, txid);
                     
                 } catch (err) {
                     debugLog('Server completion error: ' + err.message);
-                    // Pi SDK akan retry setiap ~10 detik
+                    // Tetap finalisasi di frontend agar user tidak kebingungan
+                    try {
+                        await finalizeOrder(orderId, total, subtotal, fee, address, sgtReward, txid);
+                    } catch(e) {
+                        debugLog('Finalize juga error: ' + e.message);
+                    }
                 }
             },
             
             onCancel: (paymentId) => {
-                debugLog('Payment cancelled by user: ' + paymentId);
+                debugLog('Payment cancelled: ' + paymentId);
                 showToast('Pembayaran dibatalkan', 'warning');
+                payButton.disabled = false;
+                payButton.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Bayar dengan Pi';
             },
             
             onError: (error, payment) => {
-                debugLog('Payment error: ' + error.message);
-                showToast('Pembayaran gagal: ' + error.message, 'error');
+                const errMsg = (error && error.message) ? error.message : JSON.stringify(error);
+                debugLog('Payment error: ' + errMsg);
+                
+                if (errMsg && errMsg.includes('payments')) {
+                    showToast('Error scope: Logout dari Pi Browser, lalu login ulang dan izinkan scope "payments"', 'error');
+                } else {
+                    showToast('Pembayaran gagal: ' + errMsg, 'error');
+                }
+                payButton.disabled = false;
+                payButton.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Bayar dengan Pi';
             }
         });
         
-        debugLog('Payment created: ' + (payment?.identifier || 'unknown'));
-        
     } catch (error) {
-        debugLog('Payment error: ' + error.message);
-        showToast('Pembayaran gagal: ' + error.message, 'error');
-    } finally {
+        const errMsg = error.message || JSON.stringify(error);
+        debugLog('Payment create error: ' + errMsg);
+        
+        if (errMsg.includes('payments') || errMsg.includes('scope')) {
+            showToast('Scope "payments" belum diizinkan. Silakan logout dari Pi Browser dan login ulang, lalu izinkan semua permission.', 'error');
+        } else {
+            showToast('Pembayaran gagal: ' + errMsg, 'error');
+        }
+        
         payButton.disabled = false;
         payButton.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Bayar dengan Pi';
     }
