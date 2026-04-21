@@ -1272,9 +1272,9 @@ function initPiSDK() {
         if (typeof Pi !== 'undefined') {
             Pi.init({ 
                 version: "2.0", 
-                sandbox: false 
+                sandbox: true 
             });
-            piSdkReady = false;
+            piSdkReady = true;
             debugLog('Pi SDK initialized - version 2.0');
             
             // Cek environment
