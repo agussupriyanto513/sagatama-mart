@@ -2519,10 +2519,7 @@
 
             logDebug("Calling Pi.authenticate with scopes: " + JSON.stringify(scopes));
             
-            const authResult = await Promise.race([
-                window.Pi.authenticate(scopes, onIncompletePaymentFound),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout after 20s')), 20000))
-            ]);
+            
             
             logDebug("Auth result received: " + JSON.stringify(authResult));
             
