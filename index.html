@@ -895,31 +895,40 @@
 
         <!-- WALLET VIEW - HANYA UNTUK LIHAT SALDO PI BROWSER -->
         <div id="wallet-view" class="view">
-            <h2 style="font-size:22px; font-weight:800; margin-bottom:16px; color:#1F2937;">
-                <i class="fas fa-wallet" style="color:#8B5CF6; margin-right:8px;"></i>Dompet Pi
-            </h2>
+    <h2 style="font-size:22px; font-weight:800; margin-bottom:16px; color:#1F2937;">
+        <i class="fas fa-wallet" style="color:#8B5CF6; margin-right:8px;"></i>Dompet Digital
+    </h2>
+    
+    <div class="pi-card" style="margin-bottom: 12px;">
+        <div style="text-align:center; position:relative; z-index:1;">
+            <p style="font-size:13px; opacity:0.9; font-weight:500;">Saldo Pi (Pi Browser)</p>
+            <p style="font-size:36px; font-weight:800; margin:8px 0;" id="walletPiBalance">π --</p>
+        </div>
+    </div>
 
-            <div class="pi-card">
-                <div style="text-align:center; position:relative; z-index:1;">
-                    <p style="font-size:13px; opacity:0.9; font-weight:500;">Saldo Pi Anda</p>
-                    <p style="font-size:40px; font-weight:800; margin:12px 0;" id="walletPiBalance">π --</p>
-                    <p style="font-size:14px; opacity:0.8; margin-bottom:16px;">Terkoneksi ke Pi Browser</p>
-                    <div style="display:flex; gap:12px; justify-content:center;">
-                        <button onclick="refreshPiBalance()" style="background:rgba(255,255,255,0.2); border:none; color:white; padding:12px 24px; border-radius:12px; font-weight:600; cursor:pointer; backdrop-filter:blur(10px);">
-                            <i class="fas fa-sync-alt" style="margin-right:6px;"></i>Refresh
-                        </button>
-                    </div>
-                </div>
+    <div class="card" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; border: none; padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <p style="font-size:12px; opacity:0.9; font-weight:600;">Saldo Sagatama Token</p>
+                <p style="font-size:28px; font-weight:800; margin-top:4px;" id="walletSgtBalance">0 SGT</p>
             </div>
-
-            <h3 style="font-weight:800; margin-bottom:12px; color:#1F2937; font-size:16px;">Riwayat Transaksi</h3>
-            <div id="transactionHistory">
-                <div class="empty-state">
-                    <i class="fas fa-receipt"></i>
-                    <p>Belum ada transaksi</p>
-                </div>
+            <div style="width:50px; height:50px; background:rgba(255,255,255,0.2); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:24px;">
+                <i class="fas fa-coins"></i>
             </div>
         </div>
+        <button onclick="refreshSgtBalance()" style="width:100%; margin-top:15px; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3); color:white; padding:8px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;">
+            <i class="fas fa-sync-alt" style="margin-right:6px;"></i>Sinkronisasi Token
+        </button>
+    </div>
+
+    <h3 style="font-weight:800; margin:20px 0 12px; color:#1F2937; font-size:16px;">Riwayat Transaksi</h3>
+    <div id="transactionHistory">
+        <div class="empty-state">
+            <i class="fas fa-receipt"></i>
+            <p>Belum ada transaksi</p>
+        </div>
+    </div>
+</div>
 
         <!-- CART VIEW -->
         <div id="cart-view" class="view">
@@ -1433,6 +1442,26 @@
     let currentAdminProductFilter = 'all';
     let currentAdminOrderFilter = 'all';
     let pendingPayment = null; // Track payment yang sedang berlangsung
+	
+	// Konfigurasi Global
+window.APP_URL = "https://sagatama-mart.vercel.app";
+let selectedMethod = 'pi';
+let currentTotalSgt = 0;
+let sgtBalance = 0;
+let paymentTimeout = null;
+
+// Fungsi Sinkronisasi Saldo SGT
+async function refreshSgtBalance() {
+    if (!currentUser) return;
+    try {
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDoc.exists()) {
+            sgtBalance = userDoc.data().sgtBalance || 0;
+            const balEl = document.getElementById('walletSgtBalance');
+            if (balEl) balEl.innerText = `${sgtBalance.toLocaleString('id-ID')} SGT`;
+        }
+    } catch (e) { console.error("Error SGT Balance:", e); }
+}
 
     // Constants
     const USE_SANDBOX = false; // Set true untuk testing, false untuk production
@@ -1648,6 +1677,32 @@
             }, 300);
         }
     };
+	
+	// Global State untuk SGT
+let sgtBalance = 0;
+const SGT_IDR_RATE = 1000; // Contoh: 1 SGT = Rp 1.000 (sesuaikan dengan Whitepaper Anda)
+
+// Fungsi mengambil saldo SGT dari Firestore
+async function refreshSgtBalance() {
+    if (!currentUser) {
+        showToast("Silakan login terlebih dahulu", "error");
+        return;
+    }
+    
+    try {
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDoc.exists()) {
+            sgtBalance = userDoc.data().sgtBalance || 0;
+            document.getElementById('walletSgtBalance').innerText = `${sgtBalance.toLocaleString('id-ID')} SGT`;
+            logDebug("SGT Balance Updated: " + sgtBalance);
+        }
+    } catch (error) {
+        logDebug("Error refresh SGT: " + error.message);
+    }
+}
+
+// Tambahkan pemanggilan ini di dalam fungsi init() atau setelah login berhasil
+// refreshSgtBalance();
 
     // ============================================
     // INITIALIZATION
@@ -1684,6 +1739,7 @@
             // Update UI
             updateUI();
             updateCartUI();
+			refreshSgtBalance();
             
             // Load data dari Firebase
             await loadDataWithCache();
@@ -2169,24 +2225,44 @@
     let paymentTimeout = null;
     
     async function createPiPayment() {
-        if (!isPiAuthenticated || !piAuth) {
-            showToast('Silakan login dengan Pi terlebih dahulu', 'warning');
-            openModal('loginOptionsModal');
-            return;
-        }
+    const totalPi = cart.reduce((sum, item) => sum + (parseFloat(item.pricePi) * item.qty), 0);
+    
+    const callbacks = {
+        onReadyForServerApproval: (paymentId) => {
+            showToast('Verifikasi Server...', 'info');
+            approvePaymentOnServer(paymentId);
+        },
+        onReadyForServerCompletion: (paymentId, txid) => {
+            completePaymentOnServer(paymentId, txid);
+        },
+        onCancel: (paymentId) => { resetPayBtn(); showToast('Dibatalkan', 'warning'); },
+        onError: (error) => { resetPayBtn(); showToast(error.message, 'error'); }
+    };
 
-        // Hitung total Pi dari cart
-        const totalPi = cart.reduce((sum, item) => {
-            const itemPricePi = parseFloat(item.pricePi) || 0;
-            return sum + (itemPricePi * item.qty);
-        }, 0);
-        
-        if (totalPi <= 0) {
-            showToast('Keranjang kosong!', 'error');
-            return;
-        }
+    window.Pi.createPayment({
+        amount: parseFloat(totalPi.toFixed(8)),
+        memo: `Sagatama Mart - ${cart.length} item`,
+        metadata: { orderId: 'ORD_' + Date.now(), customerUid: currentUser.uid }
+    }, callbacks);
+}
 
-        logDebug("Creating payment for: " + totalPi.toFixed(8) + " π");
+function finalizeTransaction(msg) {
+    cart = [];
+    saveCart();
+    renderCart();
+    refreshSgtBalance();
+    showToast(msg, 'success');
+    closeModal('paymentModal');
+    setTimeout(() => { switchView('orders'); }, 1500);
+}
+
+function resetPayBtn() {
+    const btn = document.getElementById('btnProcessPayment');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi Pembayaran';
+    }
+}
 
         // Setup timeout handler
         const PAYMENT_TIMEOUT_MS = 180000; // 180 detik timeout
@@ -3473,6 +3549,7 @@ async function cancelOrCompletePaymentOnServer(paymentId, txid) {
         showToast(`${item?.name || 'Item'} dihapus`, 'info');
     };
 
+   // --- 1. MODIFIKASI FUNGSI BUKA MODAL PEMBAYARAN ---
     window.openPayment = function() {
         if (cart.length === 0) {
             showToast('Keranjang masih kosong!', 'error');
@@ -3484,64 +3561,162 @@ async function cancelOrCompletePaymentOnServer(paymentId, txid) {
             return;
         }
         
-        // Hitung total Pi
-        const totalPi = cart.reduce((sum, item) => {
-            const itemPricePi = parseFloat(item.pricePi) || 0;
-            return sum + (itemPricePi * item.qty);
-        }, 0);
+        // Hitung total Pi dan total SGT (1 SGT = Rp 1.000)
+        let totalPi = 0;
+        let totalIdr = 0;
+        cart.forEach(item => {
+            totalPi += (parseFloat(item.pricePi) || 0) * item.qty;
+            totalIdr += (parseInt(item.price) || 0) * item.qty;
+        });
+        
+        const totalSgt = Math.ceil(totalIdr / 1000);
+        window.currentTotalSgt = totalSgt; // Simpan untuk proses eksekusi nanti
+        window.currentTotalPi = totalPi;
         
         const amountEl = document.getElementById('paymentAmount');
         const itemsEl = document.getElementById('paymentItems');
         const btn = document.getElementById('btnProcessPayment');
         
-        if (amountEl) amountEl.innerText = 'π ' + totalPi.toFixed(8);
-        
+        // Update Daftar Item di Modal
         if (itemsEl) {
-            itemsEl.innerHTML = cart.map(item => {
-                const itemTotalPi = (parseFloat(item.pricePi) || 0) * item.qty;
-                return `
+            itemsEl.innerHTML = cart.map(item => `
                 <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #E5E7EB;">
                     <div>
-                        <span style="font-size:13px; color:#374151; font-weight:500;">${item.name}</span>
+                        <span style="font-size:13px; color:#374151; font-weight:600;">${item.name}</span>
                         <span style="font-size:11px; color:#9CA3AF; margin-left:4px;">x${item.qty}</span>
                     </div>
-                    <span style="font-size:13px; font-weight:700; color:#1F2937;">π ${itemTotalPi.toFixed(8)}</span>
+                    <div style="text-align:right;">
+                        <div style="font-size:12px; font-weight:700; color:#8B5CF6;">π ${(item.pricePi * item.qty).toFixed(7)}</div>
+                        <div style="font-size:10px; color:#10B981;">${Math.ceil((item.price * item.qty) / 1000)} SGT</div>
+                    </div>
                 </div>
-            `}).join('');
+            `).join('');
         }
         
-        // Enable button (balance check dilakukan oleh Pi Browser)
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
-            btn.style.background = '';
-            btn.style.cursor = 'pointer';
-        }
+        // Render Pilihan Metode Pembayaran (Pi vs SGT)
+        amountEl.parentElement.innerHTML = `
+            <div id="paymentAmount" style="font-size:28px; font-weight:800; color:#1F2937;">π ${totalPi.toFixed(7)}</div>
+            <div id="sgtAmountDisplay" style="font-size:24px; font-weight:800; color:#10B981; display:none;">${totalSgt} SGT</div>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:15px;">
+                <div id="optPi" onclick="setMethod('pi', ${totalPi})" style="cursor:pointer; padding:10px; border:2px solid #8B5CF6; border-radius:10px; text-align:center; background:#F5F3FF;">
+                    <i class="fas fa-coins" style="color:#8B5CF6;"></i> <span style="display:block; font-size:10px; font-weight:700;">Pi Network</span>
+                </div>
+                <div id="optSgt" onclick="setMethod('sgt', ${totalSgt})" style="cursor:pointer; padding:10px; border:2px solid #E5E7EB; border-radius:10px; text-align:center;">
+                    <i class="fas fa-gem" style="color:#10B981;"></i> <span style="display:block; font-size:10px; font-weight:700;">SGT Token</span>
+                </div>
+            </div>
+        `;
+        
+        window.selectedMethod = 'pi'; // Default metode awal
+        if (btn) btn.innerHTML = `<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar π ${totalPi.toFixed(7)}`;
         
         openModal('paymentModal');
     };
 
+    // --- 2. FUNGSI SWITCH METODE ---
+    window.setMethod = function(method, amount) {
+        window.selectedMethod = method;
+        const piDisplay = document.getElementById('paymentAmount');
+        const sgtDisplay = document.getElementById('sgtAmountDisplay');
+        const optPi = document.getElementById('optPi');
+        const optSgt = document.getElementById('optSgt');
+        const btn = document.getElementById('btnProcessPayment');
+
+        if (method === 'pi') {
+            piDisplay.style.display = 'block';
+            sgtDisplay.style.display = 'none';
+            optPi.style.border = '2px solid #8B5CF6'; optPi.style.background = '#F5F3FF';
+            optSgt.style.border = '2px solid #E5E7EB'; optSgt.style.background = 'white';
+            btn.innerHTML = `<i class="fas fa-lock" style="margin-right:8px;"></i>Bayar π ${amount.toFixed(7)}`;
+        } else {
+            piDisplay.style.display = 'none';
+            sgtDisplay.style.display = 'block';
+            optSgt.style.border = '2px solid #10B981'; optSgt.style.background = '#ECFDF5';
+            optPi.style.border = '2px solid #E5E7EB'; optPi.style.background = 'white';
+            btn.innerHTML = `<i class="fas fa-gem" style="margin-right:8px;"></i>Bayar ${amount} SGT`;
+        }
+    };
+
+    // --- 3. MODIFIKASI FUNGSI EKSEKUSI PEMBAYARAN ---
     window.processPayment = async function() {
         const btn = document.getElementById('btnProcessPayment');
         if (btn?.disabled) return;
         
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Memproses...';
-        }
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Memproses...';
         
         try {
-            await createPiPayment();
-        } catch (error) {
-            logDebug("Process payment error: " + error.message);
-            showToast('Gagal memproses pembayaran: ' + error.message, 'error');
-        } finally {
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
+            if (window.selectedMethod === 'sgt') {
+                // Jalankan logika pembayaran Token SGT
+                await executeSgtPayment();
+            } else {
+                // Jalankan logika pembayaran Pi SDK
+                await createPiPayment();
             }
+        } catch (error) {
+            showToast('Gagal: ' + error.message, 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Coba Lagi';
         }
     };
+
+    // --- 4. LOGIKA PENGURANGAN SALDO SGT DI FIRESTORE ---
+    async function executeSgtPayment() {
+        if (sgtBalance < window.currentTotalSgt) {
+            throw new Error("Saldo SGT tidak mencukupi!");
+        }
+
+        const userRef = doc(db, "users", currentUser.uid);
+        
+        // Gunakan transaksi atau updateDoc untuk mengurangi saldo
+        await updateDoc(userRef, {
+            sgtBalance: increment(-window.currentTotalSgt)
+        });
+
+        // Simpan sebagai Order Berhasil
+        await addDoc(collection(db, "orders"), {
+            userId: currentUser.uid,
+            items: [...cart],
+            totalSgt: window.currentTotalSgt,
+            paymentMethod: "SGT",
+            status: "paid",
+            createdAt: serverTimestamp()
+        });
+
+        // Bersihkan Keranjang & Update UI
+        cart = [];
+        saveCart();
+        renderCart();
+        if (typeof refreshSgtBalance === 'function') await refreshSgtBalance();
+        
+        showToast("Pembayaran SGT Berhasil!", "success");
+        closeModal('paymentModal');
+        switchView('orders');
+    }
+	
+	window.setMethod = function(method, amount) {
+    window.selectedMethod = method;
+    const piDisplay = document.getElementById('paymentAmount');
+    const sgtDisplay = document.getElementById('sgtAmountDisplay');
+    const optPi = document.getElementById('optPi');
+    const optSgt = document.getElementById('optSgt');
+    const btn = document.getElementById('btnProcessPayment');
+
+    if (method === 'pi') {
+        piDisplay.style.display = 'block';
+        sgtDisplay.style.display = 'none';
+        optPi.style.border = '2px solid #8B5CF6'; optPi.style.background = '#F5F3FF';
+        optSgt.style.border = '2px solid #E5E7EB'; optSgt.style.background = 'white';
+        btn.innerHTML = `<i class="fas fa-lock" style="margin-right:8px;"></i>Bayar π ${amount.toFixed(7)}`;
+    } else {
+        piDisplay.style.display = 'none';
+        sgtDisplay.style.display = 'block';
+        optSgt.style.border = '2px solid #10B981'; optSgt.style.background = '#ECFDF5';
+        optPi.style.border = '2px solid #E5E7EB'; optPi.style.background = 'white';
+        btn.innerHTML = `<i class="fas fa-gem" style="margin-right:8px;"></i>Bayar ${amount} SGT`;
+    }
+};
 
     // ============================================
     // FILTER FUNCTIONS
@@ -3764,6 +3939,89 @@ async function cancelOrCompletePaymentOnServer(paymentId, txid) {
     
     openModal('orderDetailModal');
 };
+
+
+window.processPayment = async function() {
+    const btn = document.getElementById('btnProcessPayment');
+    if (btn?.disabled) return;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Memproses...';
+    
+    try {
+        if (selectedMethod === 'sgt') {
+            await executeSgtPayment();
+        } else {
+            await createPiPayment(); // Memanggil fungsi SDK Pi Anda
+        }
+    } catch (error) {
+        showToast(error.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Coba Lagi';
+    }
+};
+
+// Fungsi Eksekusi Pembayaran SGT
+async function executeSgtPayment() {
+    if (sgtBalance < currentTotalSgt) throw new Error("Saldo SGT tidak cukup!");
+
+    const userRef = doc(db, "users", currentUser.uid);
+    await updateDoc(userRef, { sgtBalance: increment(-currentTotalSgt) });
+
+    await addDoc(collection(db, "orders"), {
+        userId: currentUser.uid,
+        username: currentUser.username,
+        items: [...cart],
+        totalSgt: currentTotalSgt,
+        paymentMethod: "SGT",
+        status: "paid",
+        createdAt: serverTimestamp()
+    });
+
+    finalizeTransaction("SGT Berhasil!");
+}
+
+async function processSgtPayment(totalHargaRp) {
+    // Sesuai Whitepaper SGT v1.0: 1 SGT = Rp 1.000
+    const nominalSgtDibutuhkan = Math.ceil(totalHargaRp / 1000);
+
+    if (sgtBalance < nominalSgtDibutuhkan) {
+        showToast("Saldo SGT tidak cukup. Kurang " + (nominalSgtDibutuhkan - sgtBalance) + " SGT lagi", "error");
+        return;
+    }
+
+    try {
+        const userRef = doc(db, "users", currentUser.uid);
+        
+        // Kurangi saldo di Firestore
+        await updateDoc(userRef, {
+            sgtBalance: increment(-nominalSgtDibutuhkan)
+        });
+
+        // Catat Transaksi SGT ke Riwayat
+        await addDoc(collection(db, "orders"), {
+            userId: currentUser.uid,
+            items: [...cart],
+            totalIdr: totalHargaRp,
+            totalSgt: nominalSgtDibutuhkan,
+            paymentMethod: "SGT",
+            status: "success",
+            timestamp: serverTimestamp()
+        });
+
+        // Reset Keranjang
+        cart = [];
+        saveCart();
+        renderCart();
+        await refreshSgtBalance();
+        
+        showToast("Pembayaran dengan SGT Berhasil!", "success");
+        switchView('wallet'); // Arahkan ke dompet untuk lihat saldo baru
+    } catch (error) {
+        logDebug("SGT Payment Error: " + error.message);
+        showToast("Gagal memproses transaksi SGT", "error");
+    }
+}
 
     // ============================================
     // PRODUCT FORM FUNCTIONS
