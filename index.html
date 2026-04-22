@@ -2494,77 +2494,49 @@
     // ============================================
     
     window.authenticatePi = async function() {
-    logDebug("authenticatePi called, SDK ready: " + isPiSDKReady);
-    
     if (!window.Pi) {
-        showToast('Pi SDK tidak tersedia. Pastikan Anda membuka di Pi Browser.', 'error');
+        showToast('Gunakan Pi Browser!', 'error');
         return;
     }
 
     try {
-        logDebug("Starting Pi authentication...");
-        showToast('Menghubungkan ke Pi Network...', 'info');
+        showToast('Menghubungkan...', 'info');
 
-        const scopes = ['username', 'payments'];
-        
-        const onIncompletePaymentFound = async (payment) => {
-            logDebug("Incomplete payment found: " + payment?.identifier);
+        // 1. Ambil data dari Pi (Proses ini memang tergantung server Pi)
+        const authResult = await window.Pi.authenticate(['username', 'payments'], async (payment) => {
             await handleIncompletePayment(payment);
-        };
+        });
 
-        // --- BAGIAN YANG DIPERBAIKI ---
-        // Kita panggil langsung tanpa Promise.race agar tidak kena timeout prematur
-        logDebug("Calling Pi.authenticate...");
-        const authResult = await window.Pi.authenticate(scopes, onIncompletePaymentFound);
-        // ------------------------------
-        
-        logDebug("Auth result received for: " + authResult.user.username);
-        
-        if (!authResult || !authResult.user) {
-            throw new Error('Data user tidak ditemukan dari Pi Network');
-        }
-        
-        piAuth = authResult;
-        isPiAuthenticated = true;
-        
+        // 2. Simpan data user ke memori lokal (Sangat cepat)
         currentUser = {
             uid: authResult.user.uid,
             username: authResult.user.username,
             role: 'buyer',
             accessToken: authResult.accessToken,
-            walletAddress: authResult.user.wallet_address || null,
             authType: 'pi'
         };
-
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
 
-        // Jalankan fungsi pendukung
-        await ensureUserInFirestore();
-        updateUI();
-        
-        // Ambil saldo (bungkus dengan try agar jika gagal login tetap lanjut)
-        try {
-            await fetchPiBalance();
-        } catch (e) { logDebug("Saldo gagal dimuat"); }
-        
+        // 3. LANGSUNG PINDAH HALAMAN (Inilah yang bikin terasa cepat)
         closeModal('piAuthModal');
         closeModal('loginOptionsModal');
-        showToast(`Selamat datang, @${currentUser.username}!`, 'success');
-        
+        updateUI();
+        switchView('home'); 
+        showToast(`Halo @${currentUser.username}!`, 'success');
+
+        // 4. JALANKAN PROSES BERAT DI BALIK LAYAR (Tanpa kata 'await')
+        // Ini akan berjalan sendiri tanpa menahan tampilan depan
+        ensureUserInFirestore(); 
+        fetchPiBalance();
         loadDataFromFirebase();
-        switchView('home');
-        
+
     } catch (error) {
         logDebug("Auth error: " + error.message);
-        // Jika user menekan "Cancel" di pop-up Pi, pesan error biasanya mengandung 'user_cancelled'
-        if (error.message && error.message.includes('cancelled')) {
-            showToast('Login dibatalkan', 'warning');
-        } else {
-            showToast('Gagal login: ' + error.message, 'error');
-        }
+        showToast('Gagal login: ' + error.message, 'error');
     }
 };
-    
+
+            
     async function ensureUserInFirestore() {
         if (!currentUser?.uid || !db) return;
         try {
