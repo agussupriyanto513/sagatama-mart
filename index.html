@@ -1956,7 +1956,7 @@
     // FIREBASE IMPORTS - TAMBAHKAN increment
     // ============================================
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth,onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 	import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, increment } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // ============================================
@@ -2141,30 +2141,6 @@
             return false;
         }
     }
-	
-	async function loadUserSGT() {
-    if (!currentUser?.uid) return;
-
-    const userRef = doc(db, "users", currentUser.uid);
-    const snap = await getDoc(userRef);
-
-    if (snap.exists()) {
-        const data = snap.data();
-
-        sgtBalance = data.sgtBalance || 0;
-        sgtEarned = data.sgtEarned || 0;
-
-        updateSGTUI();
-        logDebug("SGT loaded: " + sgtBalance);
-    }
-}
-
-onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        currentUser = user;
-        await loadUserSGT(); // 🔥 WAJIB
-    }
-});
 
     // ============================================
     // SGT TOKEN FUNCTIONS
@@ -3476,7 +3452,7 @@ onAuthStateChanged(auth, async (user) => {
         if (!container) return;
         
         container.innerHTML = `
-            <div class="cross-app-card" onclick="window.open('https://hidayatulamin.vercel.app', '_blank')">
+            <div class="cross-app-card" onclick="window.open('https://portal-sagatama.vercel.app', '_blank')">
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div style="width:44px; height:44px; background:linear-gradient(135deg, #8B5CF6, #7C3AED); border-radius:12px; display:flex; align-items:center; justify-content:center; color:white; font-size:20px;">
                         <i class="fas fa-graduation-cap"></i>
