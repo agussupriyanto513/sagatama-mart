@@ -2042,6 +2042,31 @@
         }
         console.log('[DEBUG]', msg);
     }
+	
+	
+	async function loadUserSGT() {
+    if (!currentUser?.uid) return;
+
+    const userRef = doc(db, "users", currentUser.uid);
+    const snap = await getDoc(userRef);
+
+    if (snap.exists()) {
+        const data = snap.data();
+
+        sgtBalance = data.sgtBalance || 0;
+        sgtEarned = data.sgtEarned || 0;
+
+        updateSGTUI();
+        logDebug("SGT loaded: " + sgtBalance);
+    }
+}
+
+onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        currentUser = user;
+        await loadUserSGT(); // 🔥 WAJIB
+    }
+});
 
     // ============================================
     // INITIALIZATION
