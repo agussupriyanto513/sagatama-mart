@@ -2773,7 +2773,7 @@
             
             const authResult = await Promise.race([
                 window.Pi.authenticate(scopes, onIncompletePaymentFound),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout after 20s')), 20000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout after 60s')), 60000))
             ]);
             
             logDebug("Auth result received: " + JSON.stringify(authResult));
@@ -2993,7 +2993,6 @@
             return;
         }
 
-        // Hitung total Pi dari cart
         const totalPi = cart.reduce((sum, item) => {
             const itemPricePi = parseFloat(item.pricePi) || 0;
             return sum + (itemPricePi * item.qty);
@@ -3006,81 +3005,68 @@
 
         logDebug("Creating payment for: " + totalPi.toFixed(8) + " π");
 
-        // Setup timeout handler
-        const PAYMENT_TIMEOUT_MS = 180000; // 180 detik timeout
-        
-        paymentTimeout = setTimeout(() => {
-            logDebug("Payment timeout reached");
-            pendingPayment = null;
-            showToast('Waktu pembayaran habis. Silakan coba lagi.', 'error');
-            
-            // Reset button
+        // Clear any existing timeout
+        if (paymentTimeout) {
+            clearTimeout(paymentTimeout);
+            paymentTimeout = null;
+        }
+
+        const resetPaymentBtn = () => {
             const btn = document.getElementById('btnProcessPayment');
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
+                btn.style.background = '';
+                btn.style.cursor = 'pointer';
             }
-        }, PAYMENT_TIMEOUT_MS);
+        };
 
         try {
             const callbacks = {
                 onReadyForServerApproval: function(paymentId) {
                     logDebug("✓ onReadyForServerApproval: " + paymentId);
-                    clearTimeout(paymentTimeout); // Cancel timeout
+                    // Clear timeout immediately — Pi SDK is responding
+                    if (paymentTimeout) { clearTimeout(paymentTimeout); paymentTimeout = null; }
                     showToast('Memverifikasi pembayaran...', 'info');
                     approvePaymentOnServer(paymentId);
                 },
                 
                 onReadyForServerCompletion: function(paymentId, txid) {
                     logDebug("✓ onReadyForServerCompletion: " + paymentId + " TX: " + txid);
-                    clearTimeout(paymentTimeout); // Cancel timeout
+                    if (paymentTimeout) { clearTimeout(paymentTimeout); paymentTimeout = null; }
                     showToast('Menyelesaikan transaksi...', 'info');
                     completePaymentOnServer(paymentId, txid);
                 },
                 
                 onCancel: function(paymentId) {
                     logDebug("✗ onCancel: " + paymentId);
-                    clearTimeout(paymentTimeout);
+                    if (paymentTimeout) { clearTimeout(paymentTimeout); paymentTimeout = null; }
                     pendingPayment = null;
-                    showToast('Pembayaran dibatalkan', 'warning');
-					
-					// Force redirect kembali ke app
-                    forceRedirectToApp();
-                    
-                    // Reset button
-                    const btn = document.getElementById('btnProcessPayment');
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
-                    }
+                    showToast('Pembayaran dibatalkan. Silakan coba lagi.', 'warning');
+                    resetPaymentBtn();
+                    // Jangan redirect — biarkan user tetap di app
                 },
                 
                 onError: function(error, payment) {
-                    logDebug("✗ onError: " + error.message);
-                    clearTimeout(paymentTimeout);
+                    logDebug("✗ onError: " + (error?.message || error));
+                    if (paymentTimeout) { clearTimeout(paymentTimeout); paymentTimeout = null; }
                     pendingPayment = null;
-					
-					// Force redirect kembali ke app meskipun error
-                    forceRedirectToApp();
+                    resetPaymentBtn();
                     
-                    if (error.message && error.message.toLowerCase().includes('balance')) {
-                        showToast('Saldo Pi tidak mencukupi! Silakan cek wallet Pi Browser Anda.', 'error');
-                    } else if (error.message && error.message.toLowerCase().includes('timeout')) {
-                        showToast('Waktu habis. Silakan refresh dan coba lagi.', 'error');
+                    const msg = (error?.message || '').toLowerCase();
+                    if (msg.includes('balance') || msg.includes('insufficient')) {
+                        showToast('Saldo Pi tidak mencukupi! Cek wallet Pi Browser Anda.', 'error');
+                    } else if (msg.includes('timeout')) {
+                        showToast('Koneksi lambat. Silakan coba lagi.', 'warning');
+                    } else if (msg.includes('cancel') || msg.includes('user_cancelled')) {
+                        showToast('Pembayaran dibatalkan.', 'warning');
                     } else {
-                        showToast('Error pembayaran: ' + error.message, 'error');
+                        showToast('Error: ' + (error?.message || 'Coba lagi'), 'error');
                     }
-                    
-                    // Reset button
-                    const btn = document.getElementById('btnProcessPayment');
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
-                    }
+                    // Jangan redirect — biarkan user retry
                 }
             };
 
-            // Buat metadata order
             const orderMetadata = {
                 orderId: 'ORD_' + Date.now(),
                 items: cart.map(i => ({ 
@@ -3103,7 +3089,6 @@
 
             logDebug("Payment data: " + JSON.stringify(paymentData));
             
-            // Simpan pending payment untuk tracking
             pendingPayment = {
                 amount: totalPi,
                 items: [...cart],
@@ -3112,22 +3097,29 @@
                 createdAt: Date.now()
             };
             
-            // Create payment via Pi SDK
+            // Create payment — timeout starts AFTER createPayment is called
+            // Pi SDK sendiri sudah punya timeout internal; kita hanya set safety net yang panjang
             window.Pi.createPayment(paymentData, callbacks);
             logDebug("Pi.createPayment called successfully");
+
+            // Safety timeout: 10 menit (600 detik) — hanya untuk kasus SDK hang total
+            // Jangan terlalu pendek karena Pi network bisa lambat
+            paymentTimeout = setTimeout(() => {
+                logDebug("Safety timeout reached (10 min) — SDK mungkin hang");
+                if (pendingPayment) {
+                    pendingPayment = null;
+                    showToast('Waktu habis (10 menit). Silakan refresh dan coba lagi.', 'error');
+                    resetPaymentBtn();
+                }
+                paymentTimeout = null;
+            }, 600000); // 10 menit
             
         } catch (error) {
-            clearTimeout(paymentTimeout);
+            if (paymentTimeout) { clearTimeout(paymentTimeout); paymentTimeout = null; }
             logDebug("Create payment error: " + error.message);
             pendingPayment = null;
+            resetPaymentBtn();
             showToast('Gagal membuat pembayaran: ' + error.message, 'error');
-            
-            // Reset button
-            const btn = document.getElementById('btnProcessPayment');
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
-            }
         }
     }
 	
@@ -4357,6 +4349,7 @@
 
     window.processPayment = async function() {
         const btn = document.getElementById('btnProcessPayment');
+        // Prevent double-tap
         if (btn?.disabled) return;
         
         if (btn) {
@@ -4366,10 +4359,13 @@
         
         try {
             await createPiPayment();
+            // NOTE: Do NOT re-enable button here.
+            // createPiPayment hands off to Pi SDK callbacks (onCancel/onError)
+            // which will re-enable the button when appropriate.
         } catch (error) {
             logDebug("Process payment error: " + error.message);
-            showToast('Gagal memproses pembayaran: ' + error.message, 'error');
-        } finally {
+            showToast('Gagal memproses: ' + error.message, 'error');
+            // Re-enable only on hard throw (not normal async flow)
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
