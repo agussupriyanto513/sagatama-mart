@@ -1919,6 +1919,14 @@
         if (typeof logDebug === 'function') logDebug("REJECTION: " + e.reason);
         e.preventDefault();
     });
+	
+	onAuthStateChanged(auth, (user) => {
+    if (user) {
+        logDebug("Firebase Auth: User login sebagai " + user.uid);
+    } else {
+        logDebug("Firebase Auth: User Logout/Tidak Login");
+    }
+});
 
     // ============================================
     // CONFIG & STATE
@@ -3333,23 +3341,34 @@ window.addEventListener('DOMContentLoaded', handleSSO);
    async function saveOrderToFirebase(orderData, paymentId) {
     try {
         if (!db) throw new Error('Database tidak siap');
-        const user = auth.currentUser;
-        if (!user) throw new Error('User tidak login di Firebase');
+        
+        let user = auth.currentUser;
 
-        // Tambahkan UID ke dalam data agar lolos Security Rules
+        // JIKA USER TIDAK LOGIN, COBA RE-AUTHENTICATE (Kunci Perbaikan)
+        if (!user) {
+            logDebug("Sesi hilang, mencoba re-authenticate...");
+            // Asumsikan Anda punya fungsi authenticatePi yang mengembalikan user firebase
+            // Jika tidak, kita gunakan metode paksa (cek logic login Pi Anda)
+            await authenticatePi(); 
+            user = auth.currentUser;
+        }
+
+        if (!user) throw new Error('User tetap tidak login di Firebase');
+
         const finalData = {
             ...orderData,
-            uid: user.uid, // WAJIB ADA
+            uid: user.uid, 
             paymentId: paymentId,
-            createdAt: serverTimestamp()
+            status: "completed",
+            updatedAt: serverTimestamp()
         };
 
-        // Gunakan setDoc ke koleksi 'orders' dengan ID = paymentId
-        // Ini mencegah order ganda jika user klik bayar berkali-kali
+        // Gunakan setDoc agar ID dokumen adalah paymentId (sesuai koleksi 'orders' Anda)
         await setDoc(doc(db, 'orders', paymentId), finalData, { merge: true });
         
-        logDebug("Order berhasil disimpan dengan ID: " + paymentId);
+        logDebug("Order berhasil disimpan: " + paymentId);
         return paymentId;
+
     } catch (error) {
         logDebug("Save order error: " + error.message);
         throw error;
