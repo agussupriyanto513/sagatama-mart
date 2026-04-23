@@ -3330,17 +3330,31 @@ window.addEventListener('DOMContentLoaded', handleSSO);
         }
     }
 
-    async function saveOrderToFirebase(orderData) {
-        try {
-            if (!db) throw new Error('Database not ready');
-            const docRef = await addDoc(collection(db, 'orders'), orderData);
-            logDebug("Order saved to Firebase: " + docRef.id);
-            return docRef.id;
-        } catch (error) {
-            logDebug("Save order error: " + error.message);
-            throw error;
-        }
+   async function saveOrderToFirebase(orderData, paymentId) {
+    try {
+        if (!db) throw new Error('Database tidak siap');
+        const user = auth.currentUser;
+        if (!user) throw new Error('User tidak login di Firebase');
+
+        // Tambahkan UID ke dalam data agar lolos Security Rules
+        const finalData = {
+            ...orderData,
+            uid: user.uid, // WAJIB ADA
+            paymentId: paymentId,
+            createdAt: serverTimestamp()
+        };
+
+        // Gunakan setDoc ke koleksi 'orders' dengan ID = paymentId
+        // Ini mencegah order ganda jika user klik bayar berkali-kali
+        await setDoc(doc(db, 'orders', paymentId), finalData, { merge: true });
+        
+        logDebug("Order berhasil disimpan dengan ID: " + paymentId);
+        return paymentId;
+    } catch (error) {
+        logDebug("Save order error: " + error.message);
+        throw error;
     }
+}
 
 
     // ============================================
