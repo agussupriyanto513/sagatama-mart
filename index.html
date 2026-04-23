@@ -939,6 +939,17 @@
 </head>
 <body>
 
+<div id="loader-sso" class="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center transition-opacity duration-500">
+    <div class="relative">
+        <div class="w-20 h-20 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin"></div>
+        <div class="absolute inset-0 flex items-center justify-center">
+            <i class="fas fa-shopping-basket text-emerald-600 text-xl"></i>
+        </div>
+    </div>
+    <h2 class="mt-6 font-bold text-slate-800 tracking-tight">Menghubungkan Akun...</h2>
+    <p class="text-xs text-slate-400 mt-2">Sinkronisasi Dompet Sagatama</p>
+</div>
+
     <!-- DEBUG PANEL -->
     <div id="debugPanel"></div>
     
@@ -1955,6 +1966,73 @@
         username: 'sagatama_admin',
         password: 'Sagatama513'
     };
+
+// Pasang script ini di file JavaScript utama Toko Vercel Anda
+window.onload = function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const authToken = urlParams.get('auth_token');
+
+    if (authToken) {
+        console.log("Mendeteksi Akses dari Dashboard...");
+        
+        // Gunakan Firebase untuk login otomatis pakai token
+        firebase.auth().signInWithCustomToken(authToken).then((userCredential) => {
+            console.log("Auto-Login Berhasil!");
+            // Bersihkan URL agar token tidak terlihat lagi
+            window.history.replaceState({}, document.title, "/");
+            // Refresh halaman atau arahkan ke katalog
+            location.reload(); 
+        }).catch((error) => {
+            // Jika token khusus gagal, coba cara login standard dengan token ID
+            firebase.auth().signInWithCredential(
+                firebase.auth.GoogleAuthProvider.credential(null, authToken)
+            ).catch(e => console.error("Auto-login gagal:", e));
+        });
+    }
+};
+
+// Letakkan ini di file JS utama Toko Vercel
+function handleSSO() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const authToken = urlParams.get('auth_token');
+    const loader = document.getElementById('loader-sso');
+
+    if (authToken) {
+        // 1. Tampilkan loader
+        loader.style.display = 'flex';
+
+        // 2. Proses Login dengan Token
+        // Catatan: Jika menggunakan Firebase Client SDK standar
+        auth.signInWithCustomToken(authToken)
+            .then(() => {
+                console.log("SSO Berhasil!");
+                finishLoading();
+            })
+            .catch((error) => {
+                console.error("SSO Gagal:", error);
+                // Jika gagal, tetap hilangkan loader agar user bisa login manual
+                setTimeout(finishLoading, 1000);
+            });
+    } else {
+        // Jika tidak ada token (akses biasa), langsung hilangkan loader
+        if (loader) loader.style.display = 'none';
+    }
+}
+
+function finishLoading() {
+    const loader = document.getElementById('loader-sso');
+    if (loader) {
+        loader.classList.add('opacity-0');
+        setTimeout(() => {
+            loader.style.display = 'none';
+            // Bersihkan URL dari token agar rapi
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }, 500);
+    }
+}
+
+// Jalankan saat halaman siap
+window.addEventListener('DOMContentLoaded', handleSSO);
 
     // Debug
     let debugTapCount = 0;
