@@ -1920,13 +1920,6 @@
         e.preventDefault();
     });
 	
-	onAuthStateChanged(auth, (user) => {
-    if (user) {
-        logDebug("Firebase Auth: User login sebagai " + user.uid);
-    } else {
-        logDebug("Firebase Auth: User Logout/Tidak Login");
-    }
-});
 
     // ============================================
     // CONFIG & STATE
