@@ -2537,23 +2537,6 @@ async function init() {
     }
 }
 
-// Perbaiki initPiSDK timeout:
-async function initPiSDK() {
-    return new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-            logDebug("Pi SDK init timeout (10s)");
-            resolve(false); // Jangan reject, biar app tetap jalan
-        }, 10000); // Naikkan dari 5s ke 10s
-        
-        if (!window.Pi) {
-            clearTimeout(timeout);
-            logDebug("Pi SDK tidak tersedia");
-            resolve(false);
-            return;
-        }
-        // ... rest
-    });
-}
 
 function detectPiEnv() {
     try {
