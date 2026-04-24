@@ -58,6 +58,119 @@
             console.log('[Sagatama] ' + Object.keys(fns).length + ' functions registered, ' + queue.length + ' deferred calls flushed.');
         };
     </script>
+	
+	// ============================================
+// PATCH GLOBAL - Taruh di <head> SEBELUM script lain
+// Fixes: 404 image, template literal tidak terevaluasi
+// ============================================
+
+(function() {
+    'use strict';
+
+    // === 1. INLINE SVG FALLBACKS (tidak pernah 404) ===
+    var FB = {
+        default: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Crect width='300' height='200' fill='%23F3F4F6'/%3E%3Ctext x='150' y='105' font-size='14' font-family='sans-serif' fill='%239CA3AF' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E",
+        sq:      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23F3F4F6'/%3E%3Ctext x='30' y='35' font-size='9' font-family='sans-serif' fill='%239CA3AF' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E",
+        thumb:   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23F3F4F6'/%3E%3Ctext x='40' y='44' font-size='9' font-family='sans-serif' fill='%239CA3AF' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E",
+        large:   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='250'%3E%3Crect width='400' height='250' fill='%23F3F4F6'/%3E%3Ctext x='200' y='130' font-size='16' font-family='sans-serif' fill='%239CA3AF' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E"
+    };
+
+    // === 2. safeImg: dipanggil dari dalam template literal script ===
+    window.safeImg = function(url, size) {
+        if (!url || typeof url !== 'string' || url.trim() === '' || url.indexOf('${') !== -1) {
+            return FB[size] || FB.default;
+        }
+        return url;
+    };
+
+    // === 3. onImgError: dipanggil dari onerror= di img tag ===
+    window.onImgError = function(el, size) {
+        el.onerror = null; // cegah infinite loop
+        el.src = FB[size] || FB.default;
+    };
+
+    // === 4. IMG_FALLBACK constants (untuk kompatibilitas script lama) ===
+    window.IMG_FALLBACK        = FB.default;
+    window.IMG_FALLBACK_SQ     = FB.sq;
+    window.IMG_FALLBACK_THUMB  = FB.thumb;
+    window.IMG_FALLBACK_LARGE  = FB.large;
+
+    // === 5. MutationObserver: auto-fix img yang src-nya masih berisi ${...} ===
+    // Ini menangani kasus script lama yang menghasilkan literal "${p.image}" sebagai URL
+    function fixBrokenImgs(root) {
+        var imgs = (root || document).querySelectorAll('img');
+        imgs.forEach(function(img) {
+            var src = img.getAttribute('src') || '';
+            // Deteksi: URL mengandung ${, %7B (encode dari {), atau literal p.image
+            if (
+                src.indexOf('%7B') !== -1 ||
+                src.indexOf('${') !== -1 ||
+                src.indexOf('p.image') !== -1 ||
+                src.indexOf('item.image') !== -1 ||
+                src.indexOf('safeImg') !== -1
+            ) {
+                // Tentukan ukuran dari style/width
+                var w = img.style.width || img.getAttribute('width') || '';
+                var size = 'default';
+                if (w === '60px' || w === '60') size = 'sq';
+                else if (w === '80px' || w === '80') size = 'thumb';
+                else if (w === '100%') size = 'large';
+
+                img.onerror = null;
+                img.src = FB[size] || FB.default;
+                console.warn('[PATCH] Fixed broken img src:', src.substring(0, 60));
+            }
+            // Tambah onerror jika belum ada
+            if (!img.onerror && !img.getAttribute('onerror')) {
+                img.onerror = function() {
+                    this.onerror = null;
+                    var w2 = this.style.width || '';
+                    if (w2 === '60px') this.src = FB.sq;
+                    else if (w2 === '80px') this.src = FB.thumb;
+                    else if (w2 === '100%') this.src = FB.large;
+                    else this.src = FB.default;
+                };
+            }
+        });
+    }
+
+    // Jalankan saat DOM siap
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() { fixBrokenImgs(); });
+    } else {
+        fixBrokenImgs();
+    }
+
+    // Pantau perubahan DOM (saat renderProducts() dipanggil)
+    var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            mutation.addedNodes.forEach(function(node) {
+                if (node.nodeType === 1) { // Element node
+                    if (node.tagName === 'IMG') {
+                        fixBrokenImgs(node.parentElement);
+                    } else if (node.querySelectorAll) {
+                        var imgs = node.querySelectorAll('img');
+                        if (imgs.length > 0) fixBrokenImgs(node);
+                    }
+                }
+            });
+        });
+    });
+
+    // Mulai observe setelah DOM siap
+    function startObserver() {
+        if (document.body) {
+            observer.observe(document.body, { childList: true, subtree: true });
+            console.log('[PATCH] Image fix observer aktif');
+        } else {
+            setTimeout(startObserver, 50);
+        }
+    }
+    startObserver();
+
+    console.log('[PATCH] Global image fix loaded');
+})();
+
     
     <!-- Pi SDK -->
     <script src="https://sdk.minepi.com/pi-sdk.js"></script>
@@ -1900,7 +2013,8 @@
     </div>
 
 
-    // ============================================
+<script type="module">
+// ============================================
 // SAGATAMA MART - SCRIPT PERBAIKAN
 // Versi: 2.0 - Fixed Payment, SGT, Auth
 // ============================================
@@ -1971,13 +2085,13 @@ const ADMIN_CREDENTIALS = { username: 'sagatama_admin', password: 'Sagatama513' 
 // ============================================
 // IMAGE HELPER - Fallback inline SVG, tidak pernah 404
 // ============================================
-const IMG_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Crect width='300' height='200' fill='%23F3F4F6'/%3E%3Ctext x='150' y='105' text-anchor='middle' fill='%239CA3AF' font-size='14' font-family='sans-serif'%3ENo Image%3C/text%3E%3C/svg%3E";
-const IMG_FALLBACK_SQ = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23F3F4F6'/%3E%3Ctext x='30' y='35' text-anchor='middle' fill='%239CA3AF' font-size='9' font-family='sans-serif'%3ENo Image%3C/text%3E%3C/svg%3E";
-const IMG_FALLBACK_THUMB = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23F3F4F6'/%3E%3Ctext x='40' y='44' text-anchor='middle' fill='%239CA3AF' font-size='9' font-family='sans-serif'%3ENo Image%3C/text%3E%3C/svg%3E";
-const IMG_FALLBACK_LARGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='250'%3E%3Crect width='400' height='250' fill='%23F3F4F6'/%3E%3Ctext x='200' y='130' text-anchor='middle' fill='%239CA3AF' font-size='16' font-family='sans-serif'%3ENo Image%3C/text%3E%3C/svg%3E";
+window.IMG_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Crect width='300' height='200' fill='%23F3F4F6'/%3E%3Ctext x='150' y='105' text-anchor='middle' fill='%239CA3AF' font-size='14' font-family='sans-serif'%3ENo Image%3C/text%3E%3C/svg%3E";
+window.IMG_FALLBACK_SQ = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23F3F4F6'/%3E%3Ctext x='30' y='35' text-anchor='middle' fill='%239CA3AF' font-size='9' font-family='sans-serif'%3ENo Image%3C/text%3E%3C/svg%3E";
+window.IMG_FALLBACK_THUMB = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23F3F4F6'/%3E%3Ctext x='40' y='44' text-anchor='middle' fill='%239CA3AF' font-size='9' font-family='sans-serif'%3ENo Image%3C/text%3E%3C/svg%3E";
+window.IMG_FALLBACK_LARGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='250'%3E%3Crect width='400' height='250' fill='%23F3F4F6'/%3E%3Ctext x='200' y='130' text-anchor='middle' fill='%239CA3AF' font-size='16' font-family='sans-serif'%3ENo Image%3C/text%3E%3C/svg%3E";
 
 // safeImg: kembalikan URL gambar yang aman, fallback ke SVG inline jika kosong/tidak valid
-function safeImg(url, size) {
+window.safeImg = function safeImg(url, size) {
     if (!url || typeof url !== 'string' || url.trim() === '' || url.includes('${')) {
         if (size === 'sq') return IMG_FALLBACK_SQ;
         if (size === 'thumb') return IMG_FALLBACK_THUMB;
@@ -4098,6 +4212,6 @@ if (typeof window._registerReal === 'function') {
         showToast, logDebug,
     });
 }
-
+    </script>
 </body>
 </html>
