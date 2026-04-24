@@ -1968,6 +1968,34 @@ let adminExchangeRate = 15000;
 const USE_SANDBOX = false;
 const ADMIN_CREDENTIALS = { username: 'sagatama_admin', password: 'Sagatama513' };
 
+// ============================================
+// IMAGE HELPER - Fallback inline SVG, tidak pernah 404
+// ============================================
+const IMG_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Crect width='300' height='200' fill='%23F3F4F6'/%3E%3Ctext x='150' y='105' text-anchor='middle' fill='%239CA3AF' font-size='14' font-family='sans-serif'%3ENo Image%3C/text%3E%3C/svg%3E";
+const IMG_FALLBACK_SQ = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23F3F4F6'/%3E%3Ctext x='30' y='35' text-anchor='middle' fill='%239CA3AF' font-size='9' font-family='sans-serif'%3ENo Image%3C/text%3E%3C/svg%3E";
+const IMG_FALLBACK_THUMB = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23F3F4F6'/%3E%3Ctext x='40' y='44' text-anchor='middle' fill='%239CA3AF' font-size='9' font-family='sans-serif'%3ENo Image%3C/text%3E%3C/svg%3E";
+const IMG_FALLBACK_LARGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='250'%3E%3Crect width='400' height='250' fill='%23F3F4F6'/%3E%3Ctext x='200' y='130' text-anchor='middle' fill='%239CA3AF' font-size='16' font-family='sans-serif'%3ENo Image%3C/text%3E%3C/svg%3E";
+
+// safeImg: kembalikan URL gambar yang aman, fallback ke SVG inline jika kosong/tidak valid
+function safeImg(url, size) {
+    if (!url || typeof url !== 'string' || url.trim() === '' || url.includes('${')) {
+        if (size === 'sq') return IMG_FALLBACK_SQ;
+        if (size === 'thumb') return IMG_FALLBACK_THUMB;
+        if (size === 'large') return IMG_FALLBACK_LARGE;
+        return IMG_FALLBACK;
+    }
+    return url;
+}
+
+// onImgError: dipanggil dari onerror di img tag HTML
+window.onImgError = function(el, size) {
+    el.onerror = null; // Cegah infinite loop
+    if (size === 'sq') el.src = IMG_FALLBACK_SQ;
+    else if (size === 'thumb') el.src = IMG_FALLBACK_THUMB;
+    else if (size === 'large') el.src = IMG_FALLBACK_LARGE;
+    else el.src = IMG_FALLBACK;
+};
+
 // Debug
 let debugTapCount = 0;
 let lastTapTime = 0;
@@ -3247,7 +3275,7 @@ function renderProducts() {
         return `
         <div class="product-card fade-in" onclick="showProductDetail('${p.id}')" style="${isOutOfStock ? 'opacity:0.6;' : ''}">
             <div style="position:relative;">
-                <img src="${p.image || 'https://via.placeholder.com/300x200?text=No+Image'}" alt="${p.name}" loading="lazy">
+                <img src="${safeImg(p.image)}" alt="${p.name}" loading="lazy" onerror="onImgError(this)">
                 ${isOutOfStock ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;border-radius:10px;"><i class="fas fa-ban" style="margin-right:8px;"></i>HABIS</div>` : ''}
                 ${sgtEst > 0 && !isOutOfStock ? `<div style="position:absolute;top:6px;right:6px;background:linear-gradient(135deg,#FCD34D,#F59E0B);color:#1A0533;font-size:9px;font-weight:800;padding:3px 7px;border-radius:8px;">+${sgtEst} SGT</div>` : ''}
             </div>
@@ -3279,7 +3307,7 @@ function renderFeaturedProducts() {
         const sgtEst = calculateSGTReward(pricePi);
         return `
         <div class="product-card fade-in" onclick="showProductDetail('${p.id}')">
-            <div style="position:relative;"><img src="${p.image || 'https://via.placeholder.com/300x200?text=No+Image'}" alt="${p.name}" loading="lazy">
+            <div style="position:relative;"><img src="${safeImg(p.image)}" alt="${p.name}" loading="lazy" onerror="onImgError(this)">
             ${sgtEst > 0 ? `<div style="position:absolute;top:6px;right:6px;background:linear-gradient(135deg,#FCD34D,#F59E0B);color:#1A0533;font-size:9px;font-weight:800;padding:3px 7px;border-radius:8px;">+${sgtEst} SGT</div>` : ''}</div>
             <h4 style="font-weight:700;color:#1F2937;font-size:13px;margin-bottom:4px;">${p.name}</h4>
             <p style="font-weight:800;color:#8B5CF6;font-size:14px;">π ${pricePi.toFixed(8)}</p>
@@ -3374,7 +3402,7 @@ function renderCart() {
         const itemSGT = calculateSGTReward(itemTotalPi);
         return `
         <div style="background:white;border-radius:16px;padding:16px;margin-bottom:12px;display:flex;gap:12px;border:1px solid #e2e8f0;">
-            <img src="${item.image || 'https://via.placeholder.com/80?text=No+Image'}" style="width:80px;height:80px;object-fit:cover;border-radius:12px;">
+            <img src="${safeImg(item.image,'thumb')}" style="width:80px;height:80px;object-fit:cover;border-radius:12px;" onerror="onImgError(this,'thumb')">
             <div style="flex:1;">
                 <h4 style="font-weight:700;color:#1F2937;font-size:14px;margin-bottom:4px;">${item.name}</h4>
                 <p style="font-size:13px;color:#8B5CF6;font-weight:700;">π ${itemTotalPi.toFixed(8)}</p>
@@ -3590,7 +3618,7 @@ function renderAdminProducts() {
         const pricePi = parseFloat(p.pricePi) || 0;
         return `
         <div class="card" style="display:flex;gap:12px;margin-bottom:12px;${isOOS ? 'border-left:4px solid #EF4444;background:#FEF2F2;' : 'border-left:4px solid #10B981;'}">
-            <img src="${p.image || 'https://via.placeholder.com/60'}" style="width:60px;height:60px;object-fit:cover;border-radius:10px;">
+            <img src="${safeImg(p.image,'sq')}" style="width:60px;height:60px;object-fit:cover;border-radius:10px;" onerror="onImgError(this,'sq')">
             <div style="flex:1;min-width:0;">
                 <p style="font-weight:700;color:#1F2937;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</p>
                 <p style="font-size:12px;color:#8B5CF6;font-weight:700;">π ${pricePi.toFixed(8)}</p>
@@ -3803,7 +3831,7 @@ window.showProductDetail = function(id) {
     modal.innerHTML = `
         <div class="modal-content" style="padding:0;overflow:hidden;">
             <div style="position:relative;">
-                <img src="${p.image || 'https://via.placeholder.com/400x250'}" style="width:100%;height:240px;object-fit:cover;${isOOS ? 'filter:grayscale(0.5);' : ''}">
+                <img src="${safeImg(p.image,'large')}" style="width:100%;height:240px;object-fit:cover;${isOOS ? 'filter:grayscale(0.5);' : ''}" onerror="onImgError(this,'large')">
                 ${isOOS ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;color:white;"><div style="text-align:center;"><i class="fas fa-ban" style="font-size:48px;margin-bottom:8px;"></i><p style="font-size:18px;font-weight:800;">STOK HABIS</p></div></div>` : ''}
                 <button onclick="closeModal('productDetailModal')" style="position:absolute;top:16px;right:16px;width:40px;height:40px;background:rgba(255,255,255,0.9);border:none;border-radius:50%;cursor:pointer;"><i class="fas fa-times" style="color:#374151;"></i></button>
             </div>
@@ -3945,7 +3973,7 @@ window.saveProduct = async function() {
     const data = {
         name, pricePi, stock: stock || 0, category,
         description: description || '',
-        image: tempProductImage || 'https://via.placeholder.com/300x200?text=No+Image',
+        image: tempProductImage || '',
         updatedAt: serverTimestamp()
     };
 
