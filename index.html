@@ -3883,38 +3883,6 @@ window.processPayment = async function() {
     }
 };
 
-// PERBAIKAN: Mock server endpoints untuk development
-// Tambahkan ini di script untuk testing tanpa backend:
-const MOCK_PAYMENT_SERVER = true;
-
-async function approvePaymentOnServer(paymentId) {
-    if (MOCK_PAYMENT_SERVER) {
-        logDebug("MOCK: Payment approved " + paymentId);
-        return { approved: true };
-    }
-    // ... existing fetch code
-}
-
-async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
-    if (MOCK_PAYMENT_SERVER) {
-        logDebug("MOCK: Payment completed " + paymentId);
-        // Langsung simpan order tanpa panggil server
-        const orderData = {
-            paymentId, txid: txid || 'mock_tx_' + Date.now(),
-            amount: pendingPayment?.amount || 0,
-            items: cartSnapshot || [],
-            status: 'paid',
-            customer: currentUser?.username || 'User',
-            customerUid: currentUser?.uid || '',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            sgtEarned: calculateSGTReward(pendingPayment?.amount || 0)
-        };
-        await saveOrderToFirebase(orderData, paymentId);
-        return { completed: true };
-    }
-    // ... existing fetch code
-}
 
 // ============================================
 // FILTER FUNCTIONS
