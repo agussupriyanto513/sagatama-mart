@@ -1446,6 +1446,8 @@
     </div>
 </div>
 
+<button onclick="processSGTTransfer()" id="btnTransferSGT">
+
 <div class="bg-white rounded-2xl shadow-sm p-4 mt-6">
     <h4 class="font-bold text-gray-800 mb-3 text-sm">Riwayat Distribusi Terakhir</h4>
     <div class="overflow-x-auto">
@@ -2044,6 +2046,13 @@ let currentAdminOrderFilter = 'all';
 let pendingPayment = null;
 let paymentTimeout = null;
 
+listenUserSGTBalance(currentUser.uid);
+
+const btn = document.getElementById('btnTransferSGT');
+if (btn) btn.disabled = true;
+
+if (btn) btn.disabled = false;
+
 // SGT Token State
 let sgtBalance = 0;
 let sgtTransactions = [];
@@ -2312,32 +2321,98 @@ window.openSGTRedeemModal = function() {
     openModal('sgtRedeemModal');
 };
 
-window.processSGTTransfer = function() {
-    const targetUser = document.getElementById('transferTargetUser')?.value.trim();
-    const amountStr = document.getElementById('sgtTransferAmount')?.value;
-    const amount = parseInt(amountStr);
-    const targetApp = document.getElementById('transferTargetApp')?.value;
+let isTransferring = false;
 
-    if (!targetUser) { showToast('Masukkan username tujuan', 'error'); return; }
-    if (!amount || amount <= 0) { showToast('Jumlah SGT tidak valid', 'error'); return; }
-    if (amount > sgtBalance) { showToast('Saldo SGT tidak mencukupi', 'error'); return; }
+let isProcessingTransfer = false;
 
-    sgtBalance -= amount;
-    sgtTransactions.unshift({
-        type: 'transfer',
-        amount: amount,
-        description: `Transfer ke @${targetUser} (${targetApp === 'yayasan' ? 'Yayasan Hidayatullah Amin' : 'Sagatama Mart'})`,
-        date: new Date().toISOString(),
-        userId: currentUser.uid,
-        targetUser: targetUser,
-        targetApp: targetApp
-    });
-    saveSGTData();
-    updateSGTUI();
-    closeModal('sgtTransferModal');
-    showToast(`${amount} SGT berhasil dikirim ke @${targetUser}!`, 'success');
+window.processSGTTransfer = async function() {
+    if (isProcessingTransfer) return;
+    isProcessingTransfer = true;
+
+    try {
+        const targetUserInput = document.getElementById('transferTargetUser')?.value.trim();
+        const amount = parseInt(document.getElementById('sgtTransferAmount')?.value);
+        const targetApp = document.getElementById('transferTargetApp')?.value;
+
+        if (!currentUser || !currentUser.uid) {
+            throw new Error('User belum login');
+        }
+
+        if (!targetUserInput) {
+            throw new Error('Masukkan username tujuan');
+        }
+
+        if (!amount || amount <= 0) {
+            throw new Error('Jumlah SGT tidak valid');
+        }
+
+        showToast('Memproses transfer...', 'info');
+
+        // 🔥 Cari user berdasarkan username (BENERAN)
+        const userQuery = await db.collection('users')
+            .where('username', '==', targetUserInput)
+            .limit(1)
+            .get();
+
+        if (userQuery.empty) {
+            throw new Error('User penerima tidak ditemukan');
+        }
+
+        const receiverDocSnap = userQuery.docs[0];
+        const receiverId = receiverDocSnap.id;
+
+        if (receiverId === currentUser.uid) {
+            throw new Error('Tidak bisa transfer ke diri sendiri');
+        }
+
+        const senderRef = db.collection('users').doc(currentUser.uid);
+        const receiverRef = db.collection('users').doc(receiverId);
+        const txRef = db.collection('sgt_transactions').doc();
+
+        await db.runTransaction(async (tx) => {
+            const senderDoc = await tx.get(senderRef);
+            const receiverDoc = await tx.get(receiverRef);
+
+            if (!senderDoc.exists) throw new Error("User pengirim tidak ditemukan");
+
+            const senderBalance = senderDoc.data().sgtBalance || 0;
+
+            if (senderBalance < amount) {
+                throw new Error("Saldo tidak mencukupi");
+            }
+
+            tx.update(senderRef, {
+                sgtBalance: senderBalance - amount,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            tx.update(receiverRef, {
+                sgtBalance: (receiverDoc.data().sgtBalance || 0) + amount,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            tx.set(txRef, {
+                type: 'transfer',
+                from: currentUser.uid,
+                to: receiverId,
+                toUsername: targetUserInput,
+                amount,
+                targetApp,
+                status: 'completed',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+
+        showToast(`Transfer ${amount} SGT berhasil ke @${targetUserInput}`, 'success');
+        closeModal('sgtTransferModal');
+
+    } catch (err) {
+        console.error(err);
+        showToast(err.message || 'Transfer gagal', 'error');
+    } finally {
+        isProcessingTransfer = false;
+    }
 };
-
 window.redeemSGT = function(rewardType) {
     const rewards = {
         discount10: { cost: 100, label: 'Diskon 10% Pembelian' },
@@ -2496,6 +2571,23 @@ window._real_.loadSGTLogs = async function() {
         logDebug("Gagal load logs: " + error.message);
     }
 };
+
+function listenUserSGTBalance(userId) {
+    return db.collection('users').doc(userId)
+        .onSnapshot((doc) => {
+            if (!doc.exists) return;
+
+            const data = doc.data();
+            const balance = data.sgtBalance || 0;
+
+            // update global state
+            sgtBalance = balance;
+
+            // update UI
+            document.getElementById('walletSgtBalance').innerText = balance;
+            document.getElementById('sgtHeaderBalance').innerText = balance + ' SGT';
+        });
+}
 
 // Autosave SGT tiap 30 detik
 setInterval(() => { if (currentUser) saveSGTData(); }, 30000);
@@ -3291,6 +3383,26 @@ async function saveOrderToFirebase(orderData, paymentId) {
 
         throw error;
     }
+}
+
+function listenSGTTransactions(userId) {
+    return db.collection('sgt_transactions')
+        .where('from', '==', userId)
+        .onSnapshot((snapshot) => {
+            const container = document.getElementById('sgtTransactionHistory');
+            container.innerHTML = '';
+
+            snapshot.forEach(doc => {
+                const tx = doc.data();
+
+                container.innerHTML += `
+                    <div class="card">
+                        <p><b>Transfer:</b> ${tx.amount} SGT</p>
+                        <p>Ke: ${tx.to}</p>
+                    </div>
+                `;
+            });
+        });
 }
 
 // ============================================
