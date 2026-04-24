@@ -32,7 +32,7 @@
             'openExchangeRateModal','updateAdminCalculator','closeAndRemoveModal',
             'handleStartShopping','adminLogin','loginAdmin','continueAsGuest',
             'togglePasswordVisibility','filterByCategory','filterOrders',
-            'openProductModal','previewProductImage','searchProducts','showToast',
+            'openProductModal','previewProductImage','saveProduct','searchProducts','showToast',
             'logDebug','showOrderDetail'
         ];
 
@@ -57,123 +57,68 @@
             });
             console.log('[Sagatama] ' + Object.keys(fns).length + ' functions registered, ' + queue.length + ' deferred calls flushed.');
         };
-   
-	
-// ============================================
-// PATCH GLOBAL - Taruh di <head> SEBELUM script lain
-// Fixes: 404 image, template literal tidak terevaluasi
-// ============================================
+    </script>
 
-(function() {
-    'use strict';
-
-    // === 1. INLINE SVG FALLBACKS (tidak pernah 404) ===
-    var FB = {
-        default: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Crect width='300' height='200' fill='%23F3F4F6'/%3E%3Ctext x='150' y='105' font-size='14' font-family='sans-serif' fill='%239CA3AF' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E",
-        sq:      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23F3F4F6'/%3E%3Ctext x='30' y='35' font-size='9' font-family='sans-serif' fill='%239CA3AF' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E",
-        thumb:   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23F3F4F6'/%3E%3Ctext x='40' y='44' font-size='9' font-family='sans-serif' fill='%239CA3AF' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E",
-        large:   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='250'%3E%3Crect width='400' height='250' fill='%23F3F4F6'/%3E%3Ctext x='200' y='130' font-size='16' font-family='sans-serif' fill='%239CA3AF' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E"
-    };
-
-    // === 2. safeImg: dipanggil dari dalam template literal script ===
-    window.safeImg = function(url, size) {
-        if (!url || typeof url !== 'string' || url.trim() === '' || url.indexOf('${') !== -1) {
-            return FB[size] || FB.default;
-        }
-        return url;
-    };
-
-    // === 3. onImgError: dipanggil dari onerror= di img tag ===
-    window.onImgError = function(el, size) {
-        el.onerror = null; // cegah infinite loop
-        el.src = FB[size] || FB.default;
-    };
-
-    // === 4. IMG_FALLBACK constants (untuk kompatibilitas script lama) ===
-    window.IMG_FALLBACK        = FB.default;
-    window.IMG_FALLBACK_SQ     = FB.sq;
-    window.IMG_FALLBACK_THUMB  = FB.thumb;
-    window.IMG_FALLBACK_LARGE  = FB.large;
-
-    // === 5. MutationObserver: auto-fix img yang src-nya masih berisi ${...} ===
-    // Ini menangani kasus script lama yang menghasilkan literal "${p.image}" sebagai URL
-    function fixBrokenImgs(root) {
-        var imgs = (root || document).querySelectorAll('img');
-        imgs.forEach(function(img) {
-            var src = img.getAttribute('src') || '';
-            // Deteksi: URL mengandung ${, %7B (encode dari {), atau literal p.image
-            if (
-                src.indexOf('%7B') !== -1 ||
-                src.indexOf('${') !== -1 ||
-                src.indexOf('p.image') !== -1 ||
-                src.indexOf('item.image') !== -1 ||
-                src.indexOf('safeImg') !== -1
-            ) {
-                // Tentukan ukuran dari style/width
-                var w = img.style.width || img.getAttribute('width') || '';
-                var size = 'default';
-                if (w === '60px' || w === '60') size = 'sq';
-                else if (w === '80px' || w === '80') size = 'thumb';
-                else if (w === '100%') size = 'large';
-
-                img.onerror = null;
-                img.src = FB[size] || FB.default;
-                console.warn('[PATCH] Fixed broken img src:', src.substring(0, 60));
+    <script>
+    // ============================================
+    // PATCH GLOBAL - safeImg & onImgError (sync)
+    // ============================================
+    (function() {
+        var FB = {
+            def:   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Crect width='300' height='200' fill='%23F3F4F6'/%3E%3Ctext x='150' y='105' font-size='14' font-family='sans-serif' fill='%239CA3AF' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E",
+            sq:    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23F3F4F6'/%3E%3Ctext x='30' y='35' font-size='9' font-family='sans-serif' fill='%239CA3AF' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E",
+            thumb: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23F3F4F6'/%3E%3Ctext x='40' y='44' font-size='9' font-family='sans-serif' fill='%239CA3AF' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E",
+            large: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='250'%3E%3Crect width='400' height='250' fill='%23F3F4F6'/%3E%3Ctext x='200' y='130' font-size='16' font-family='sans-serif' fill='%239CA3AF' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E"
+        };
+        window.safeImg = function(url, size) {
+            if (!url || typeof url !== 'string' || url.trim() === '' || url.indexOf('${') !== -1) {
+                return FB[size] || FB.def;
             }
-            // Tambah onerror jika belum ada
-            if (!img.onerror && !img.getAttribute('onerror')) {
-                img.onerror = function() {
-                    this.onerror = null;
-                    var w2 = this.style.width || '';
-                    if (w2 === '60px') this.src = FB.sq;
-                    else if (w2 === '80px') this.src = FB.thumb;
-                    else if (w2 === '100%') this.src = FB.large;
-                    else this.src = FB.default;
-                };
-            }
-        });
-    }
-
-    // Jalankan saat DOM siap
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function() { fixBrokenImgs(); });
-    } else {
-        fixBrokenImgs();
-    }
-
-    // Pantau perubahan DOM (saat renderProducts() dipanggil)
-    var observer = new MutationObserver(function(mutations) {
-        mutations.forEach(function(mutation) {
-            mutation.addedNodes.forEach(function(node) {
-                if (node.nodeType === 1) { // Element node
-                    if (node.tagName === 'IMG') {
-                        fixBrokenImgs(node.parentElement);
-                    } else if (node.querySelectorAll) {
-                        var imgs = node.querySelectorAll('img');
-                        if (imgs.length > 0) fixBrokenImgs(node);
-                    }
+            return url;
+        };
+        window.onImgError = function(el, size) {
+            el.onerror = null;
+            el.src = FB[size] || FB.def;
+        };
+        window.IMG_FALLBACK       = FB.def;
+        window.IMG_FALLBACK_SQ    = FB.sq;
+        window.IMG_FALLBACK_THUMB = FB.thumb;
+        window.IMG_FALLBACK_LARGE = FB.large;
+        // MutationObserver: auto-fix img broken saat render dipanggil
+        function fixImgs(root) {
+            (root || document).querySelectorAll('img').forEach(function(img) {
+                var src = img.getAttribute('src') || '';
+                if (src.indexOf('%7B') !== -1 || src.indexOf('${') !== -1 ||
+                    src.indexOf('safeImg') !== -1 || src.indexOf('p.image') !== -1) {
+                    var w = img.style.width || '';
+                    img.onerror = null;
+                    img.src = w==='60px' ? FB.sq : w==='80px' ? FB.thumb : w==='100%' ? FB.large : FB.def;
+                }
+                if (!img.onerror && !img.getAttribute('onerror')) {
+                    img.onerror = function() {
+                        this.onerror = null;
+                        var w2 = this.style.width || '';
+                        this.src = w2==='60px' ? FB.sq : w2==='80px' ? FB.thumb : w2==='100%' ? FB.large : FB.def;
+                    };
                 }
             });
-        });
-    });
-
-    // Mulai observe setelah DOM siap
-    function startObserver() {
-        if (document.body) {
-            observer.observe(document.body, { childList: true, subtree: true });
-            console.log('[PATCH] Image fix observer aktif');
-        } else {
-            setTimeout(startObserver, 50);
         }
-    }
-    startObserver();
+        document.addEventListener('DOMContentLoaded', function() { fixImgs(); });
+        var obs = new MutationObserver(function(muts) {
+            muts.forEach(function(m) {
+                m.addedNodes.forEach(function(n) {
+                    if (n.nodeType === 1) fixImgs(n.querySelectorAll ? n : n.parentElement);
+                });
+            });
+        });
+        function startObs() {
+            if (document.body) obs.observe(document.body, { childList: true, subtree: true });
+            else setTimeout(startObs, 50);
+        }
+        startObs();
+    })();
+    </script>
 
-    console.log('[PATCH] Global image fix loaded');
-})();
-
-</script>
-
-    
     <!-- Pi SDK -->
     <script src="https://sdk.minepi.com/pi-sdk.js"></script>
     
@@ -1055,7 +1000,7 @@
 </head>
 <body>
 
-<div id="loader-sso" class="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center transition-opacity duration-500">
+<div id="loader-sso" class="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center transition-opacity duration-500" style="display:none;">
     <div class="relative">
         <div class="w-20 h-20 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin"></div>
         <div class="absolute inset-0 flex items-center justify-center">
@@ -2125,9 +2070,20 @@ let lastTapTime = 0;
 async function handleSSO() {
     const urlParams = new URLSearchParams(window.location.search);
     const authToken = urlParams.get('auth_token');
-    if (!authToken || !auth) return;
-
     const loader = document.getElementById('loader-sso');
+
+    if (!authToken) {
+        // Tidak ada token SSO - langsung sembunyikan loader
+        if (loader) loader.style.display = 'none';
+        return;
+    }
+
+    if (!auth) {
+        if (loader) loader.style.display = 'none';
+        return;
+    }
+
+    // Ada token SSO - tampilkan loader sementara proses login
     if (loader) loader.style.display = 'flex';
 
     try {
@@ -2159,90 +2115,60 @@ function logDebug(msg) {
 // ============================================
 // SGT TOKEN FUNCTIONS
 // ============================================
-// PERBAIKAN: Simpan SGT dengan anonymous auth fallback
-async function saveSGTData() {
+function saveSGTData() {
     if (!currentUser) return;
     try {
         localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
         localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
-        
-        // PERBAIKAN: Pastikan Firebase auth siap sebelum write
-        if (db && auth) {
-            if (!auth.currentUser) {
-                await signInAnonymously(auth);
-            }
-            await setDoc(doc(db, 'users', currentUser.uid), {
+        localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
+
+        // PERBAIKAN: Juga simpan ke Firestore agar persist lintas device
+        if (db && currentUser.uid) {
+            setDoc(doc(db, 'users', currentUser.uid), {
                 sgtBalance: sgtBalance,
-                sgtTransactions: sgtTransactions.slice(0, 50),
+                sgtTransactions: sgtTransactions.slice(0, 50), // Batasi 50 tx
                 sgtUpdatedAt: serverTimestamp()
-            }, { merge: true });
+            }, { merge: true }).catch(e => logDebug("SGT Firestore save error: " + e.message));
         }
     } catch (e) {
-        logDebug("SGT save error (non-kritis): " + e.message);
-        // Data tetap tersimpan di localStorage
+        logDebug("SGT save error: " + e.message);
     }
 }
 
-// PERBAIKAN: Load SGT dengan fallback chain yang jelas
 async function loadSGTData() {
     if (!currentUser) return;
-    
-    // 1. Coba Firestore dulu
-    if (db && currentUser.uid) {
-        try {
-            // Pastikan auth siap
-            if (!auth.currentUser) {
-                await signInAnonymously(auth);
-            }
-            const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-            if (userDoc.exists() && userDoc.data().sgtBalance !== undefined) {
-                sgtBalance = userDoc.data().sgtBalance || 0;
-                sgtTransactions = userDoc.data().sgtTransactions || [];
-                logDebug("SGT loaded from Firestore: " + sgtBalance);
-                updateSGTUI();
-                return;
-            }
-        } catch (fsErr) {
-            logDebug("Firestore SGT load failed: " + fsErr.message);
-        }
-    }
-    
-    // 2. Fallback ke localStorage
     try {
+        // Coba load dari Firestore dulu (lebih akurat)
+        if (db && currentUser.uid) {
+            try {
+                const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    if (data.sgtBalance !== undefined) {
+                        sgtBalance = data.sgtBalance || 0;
+                        sgtTransactions = data.sgtTransactions || [];
+                        logDebug("SGT loaded from Firestore: " + sgtBalance);
+                        updateSGTUI();
+                        return;
+                    }
+                }
+            } catch (fsErr) {
+                logDebug("Firestore SGT load failed, fallback to localStorage: " + fsErr.message);
+            }
+        }
+
+        // Fallback ke localStorage
         const bal = localStorage.getItem('sgt_balance_' + currentUser.uid);
         const tx = localStorage.getItem('sgt_transactions_' + currentUser.uid);
+        const rate = localStorage.getItem('sgt_rate');
         sgtBalance = bal ? parseInt(bal) : 0;
         sgtTransactions = tx ? JSON.parse(tx) : [];
+        if (rate) sgtRatePerPi = parseInt(rate);
         logDebug("SGT loaded from localStorage: " + sgtBalance);
         updateSGTUI();
     } catch (e) {
-        logDebug("SGT localStorage error: " + e.message);
-        sgtBalance = 0;
-        sgtTransactions = [];
+        logDebug("SGT load error: " + e.message);
     }
-}
-
-// PERBAIKAN: Award SGT setelah order berhasil (pindahkan ke completePaymentOnServer)
-function awardSGT(piAmount, description) {
-    if (!currentUser) return 0;
-    if (piAmount < sgtMinPurchase) return 0;
-    
-    const sgtEarned = Math.floor(piAmount * sgtRatePerPi);
-    if (sgtEarned <= 0) return 0;
-    
-    sgtBalance += sgtEarned;
-    sgtTransactions.unshift({
-        type: 'earn',
-        amount: sgtEarned,
-        description: description || 'Reward pembelian',
-        date: new Date().toISOString(),
-        userId: currentUser.uid
-    });
-    
-    saveSGTData(); // Simpan ke localStorage + Firestore
-    updateSGTUI();
-    showToast(`+${sgtEarned} SGT berhasil dikreditkan!`, 'success');
-    return sgtEarned;
 }
 
 function updateSGTUI() {
@@ -2313,6 +2239,26 @@ function renderSGTTransactionHistory() {
             </div>
         `;
     }).join('');
+}
+
+function awardSGT(piAmount, description) {
+    if (!currentUser) return 0;
+    if (piAmount < sgtMinPurchase) return 0;
+    const sgtEarned = Math.floor(piAmount * sgtRatePerPi);
+    if (sgtEarned <= 0) return 0;
+    sgtBalance += sgtEarned;
+    sgtTransactions.unshift({
+        type: 'earn',
+        amount: sgtEarned,
+        description: description || 'Reward pembelian',
+        date: new Date().toISOString(),
+        userId: currentUser.uid
+    });
+    saveSGTData();
+    updateSGTUI();
+    showToast(`+${sgtEarned} SGT berhasil dikreditkan! 🎉`, 'success');
+    logDebug("SGT awarded: " + sgtEarned + " SGT. New balance: " + sgtBalance);
+    return sgtEarned;
 }
 
 function calculateSGTReward(piAmount) {
@@ -2521,22 +2467,78 @@ window.quickFilter = function(category) {
 // ============================================
 // INITIALIZATION
 // ============================================
-// Di bagian init(), perbaiki timeout dan error handling:
 async function init() {
+    logDebug("Starting initialization...");
+
+    // Restore cart
+    try {
+        cart = JSON.parse(localStorage.getItem('sagatama_cart') || '[]');
+    } catch (e) { cart = []; }
+
+    // Restore user session
+    try {
+        const savedUser = localStorage.getItem('sagatama_user');
+        if (savedUser) {
+            currentUser = JSON.parse(savedUser);
+            userRole = currentUser.role || 'user';
+            logDebug("Restored user: " + currentUser.username);
+        }
+    } catch (e) {
+        currentUser = null;
+        logDebug("Session restore error: " + e.message);
+    }
+
     const loading = document.getElementById('loadingOverlay');
+    if (loading) loading.style.display = 'flex';
+
     try {
         detectPiEnv();
-        await initPiSDK(); // Timeout dinaikkan ke 10s
+        await initPiSDK();
         await initFirebase();
+
+        // Tangani SSO setelah Firebase siap
         await handleSSO();
-        // ... rest of init
+
+        // Muat SGT setelah user dan DB siap
+        if (currentUser) {
+            const savedRate = localStorage.getItem('sgt_rate');
+            const savedMin = localStorage.getItem('sgt_min_purchase');
+            if (savedRate) sgtRatePerPi = parseInt(savedRate);
+            if (savedMin) sgtMinPurchase = parseFloat(savedMin);
+            await loadSGTData();
+            showSGTElements(currentUser.role !== 'admin');
+        }
+
+        updateUI();
+        updateCartUI();
+        await loadDataWithCache();
+
+        if (!currentUser) {
+            setTimeout(() => openModal('loginOptionsModal'), 1000);
+        }
+
+        logDebug("Initialization complete!");
     } catch (e) {
-        console.error("Init failed:", e);
-        if (loading) loading.style.display = 'none';
-        showToast('Gagal memuat aplikasi. Refresh halaman.', 'error');
+        logDebug("Init error: " + e.message);
+        console.error("INIT ERROR:", e);
+        // Tampilkan pesan error ke user alih-alih loading selamanya
+        if (loading) {
+            loading.innerHTML = `
+                <div style="text-align:center; padding:20px;">
+                    <i class="fas fa-exclamation-circle" style="font-size:48px; color:#EF4444; margin-bottom:16px; display:block;"></i>
+                    <p style="font-size:16px; font-weight:700; color:#1F2937; margin-bottom:8px;">Gagal Memuat</p>
+                    <p style="font-size:13px; color:#6B7280; margin-bottom:20px;">${e.message}</p>
+                    <button onclick="location.reload()" style="background:#8B5CF6; color:white; border:none; padding:12px 24px; border-radius:10px; font-weight:700; cursor:pointer; font-size:14px;">
+                        <i class="fas fa-redo" style="margin-right:8px;"></i>Muat Ulang
+                    </button>
+                </div>`;
+        }
+    } finally {
+        if (loading && loading.innerHTML.includes('Memuat...')) {
+            loading.style.display = 'none';
+        }
     }
 }
-
 
 function detectPiEnv() {
     try {
@@ -2551,9 +2553,9 @@ function detectPiEnv() {
 async function initPiSDK() {
     return new Promise((resolve) => {
         const timeout = setTimeout(() => {
-            logDebug("Pi SDK init timeout");
+            logDebug("Pi SDK init timeout (10s) - lanjut tanpa Pi SDK");
             resolve(false);
-        }, 5000);
+        }, 10000);
 
         if (!window.Pi) {
             clearTimeout(timeout);
@@ -3851,38 +3853,18 @@ window.openPayment = function() {
     openModal('paymentModal');
 };
 
-// PERBAIKAN: Cek autentikasi sebelum payment
 window.processPayment = async function() {
-    if (!isPiAuthenticated || !piAuth) {
-        showToast('Silakan login dengan Pi terlebih dahulu', 'warning');
-        openModal('loginOptionsModal');
-        return;
-    }
-    
-    // PERBAIKAN: Cek apakah di Pi Browser
-    if (!isPiBrowser) {
-        showToast('Pembayaran Pi hanya bisa dilakukan di Pi Browser', 'warning');
-        return;
-    }
-    
     const btn = document.getElementById('btnProcessPayment');
-    if (btn) { 
-        btn.disabled = true; 
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...'; 
-    }
-    
+    if (btn?.disabled) return;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Memproses...'; }
     try {
         await createPiPayment();
     } catch (error) {
-        logDebug("Payment error: " + error.message);
+        logDebug("Process payment error: " + error.message);
         showToast('Gagal: ' + error.message, 'error');
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-lock"></i> Konfirmasi & Bayar';
-        }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi'; }
     }
 };
-
 
 // ============================================
 // FILTER FUNCTIONS
