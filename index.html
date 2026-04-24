@@ -2004,8 +2004,16 @@ import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTim
 // ============================================
 window.onerror = function(msg, url, line) {
     console.error("ERROR:", msg, "line:", line);
-    if (typeof logDebug === 'function') logDebug("ERROR: " + msg);
-    return true;
+
+    try {
+        if (typeof logDebug === 'function') {
+            logDebug("ERROR: " + msg);
+        }
+    } catch (e) {
+        console.warn("logDebug error di onerror:", e);
+    }
+
+    return false; // 🔥 JANGAN true
 };
 window.addEventListener('unhandledrejection', function(e) {
     console.error("Promise rejection:", e.reason);
