@@ -2046,7 +2046,6 @@ let currentAdminOrderFilter = 'all';
 let pendingPayment = null;
 let paymentTimeout = null;
 
-listenUserSGTBalance(currentUser.uid);
 
 const btn = document.getElementById('btnTransferSGT');
 if (btn) btn.disabled = true;
@@ -2572,10 +2571,25 @@ window._real_.loadSGTLogs = async function() {
     }
 };
 
+let unsubscribeSGT = null;
+
 function listenUserSGTBalance(userId) {
-    return db.collection('users').doc(userId)
+    if (!userId) {
+        console.warn('listenUserSGTBalance: userId kosong');
+        return;
+    }
+
+    // 🔥 stop listener lama (biar tidak dobel)
+    if (unsubscribeSGT) {
+        unsubscribeSGT();
+    }
+
+    unsubscribeSGT = db.collection('users').doc(userId)
         .onSnapshot((doc) => {
-            if (!doc.exists) return;
+            if (!doc.exists) {
+                console.warn('User doc tidak ditemukan');
+                return;
+            }
 
             const data = doc.data();
             const balance = data.sgtBalance || 0;
@@ -2583,10 +2597,18 @@ function listenUserSGTBalance(userId) {
             // update global state
             sgtBalance = balance;
 
-            // update UI
-            document.getElementById('walletSgtBalance').innerText = balance;
-            document.getElementById('sgtHeaderBalance').innerText = balance + ' SGT';
+            // update UI (AMAN)
+            const walletEl = document.getElementById('walletSgtBalance');
+            const headerEl = document.getElementById('sgtHeaderBalance');
+
+            if (walletEl) walletEl.innerText = balance;
+            if (headerEl) headerEl.innerText = balance + ' SGT';
+
+        }, (error) => {
+            console.error('Listener SGT error:', error);
         });
+
+    return unsubscribeSGT;
 }
 
 // Autosave SGT tiap 30 detik
