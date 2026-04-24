@@ -25,12 +25,6 @@
                             dark: '#7C3AED',
                             light: '#A78BFA',
                             accent: '#F59E0B'
-                        },
-                        sgt: {
-                            gold: '#F59E0B',
-                            dark: '#D97706',
-                            light: '#FCD34D',
-                            bg: '#FEF3C7'
                         }
                     },
                     fontFamily: {
@@ -220,23 +214,6 @@
             gap: 10px;
         }
         
-        .btn-sgt {
-            background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
-            color: white; 
-            font-weight: 700; 
-            border: none;
-            padding: 14px 20px; 
-            border-radius: 12px; 
-            cursor: pointer;
-            width: 100%; 
-            font-size: 15px; 
-            transition: all 0.2s;
-            display: flex; 
-            align-items: center; 
-            justify-content: center;
-            gap: 10px;
-        }
-        
         /* Pi Card */
         .pi-card { 
             background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); 
@@ -260,225 +237,6 @@
         @keyframes shimmer {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
-        }
-        
-        /* SGT Premium Card */
-        .sgt-premium-card {
-            background: linear-gradient(135deg, #1A0533 0%, #3D1078 40%, #7C3AED 70%, #F59E0B 100%);
-            border-radius: 24px; 
-            padding: 28px 24px; 
-            margin-bottom: 16px; 
-            position: relative; 
-            overflow: hidden; 
-            color: white;
-            box-shadow: 0 20px 60px rgba(124, 58, 237, 0.4);
-        }
-        .sgt-premium-card::before {
-            content: 'SGT'; 
-            position: absolute; 
-            right: -20px; 
-            top: -20px;
-            font-size: 140px; 
-            font-weight: 900; 
-            color: rgba(255,255,255,0.04);
-            line-height: 1; 
-            letter-spacing: -4px;
-        }
-        .sgt-premium-card::after {
-            content: ''; 
-            position: absolute; 
-            bottom: -60px; 
-            left: -60px;
-            width: 200px; 
-            height: 200px;
-            background: radial-gradient(circle, rgba(245,158,11,0.25) 0%, transparent 70%);
-            border-radius: 50%; 
-            animation: glow 4s ease-in-out infinite;
-        }
-        @keyframes glow {
-            0%, 100% { transform: scale(1); opacity: 0.6; }
-            50% { transform: scale(1.3); opacity: 1; }
-        }
-        
-        .sgt-coin {
-            width: 64px; 
-            height: 64px;
-            background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 50%, #D97706 100%);
-            border-radius: 50%; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center;
-            font-size: 28px; 
-            font-weight: 900; 
-            color: #1A0533;
-            box-shadow: 0 4px 16px rgba(245,158,11,0.5), inset 0 -3px 0 rgba(0,0,0,0.2);
-            position: relative; 
-            z-index: 1;
-        }
-        .sgt-coin::after {
-            content: ''; 
-            position: absolute; 
-            inset: 3px; 
-            border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.4);
-        }
-        
-        .sgt-balance-large {
-            font-size: 48px; 
-            font-weight: 900; 
-            line-height: 1; 
-            letter-spacing: -2px;
-            background: linear-gradient(135deg, #FCD34D, #F59E0B);
-            -webkit-background-clip: text; 
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .sgt-stats-row {
-            display: grid; 
-            grid-template-columns: repeat(3, 1fr); 
-            gap: 10px; 
-            margin-bottom: 16px;
-        }
-        .sgt-stat-box {
-            background: rgba(255,255,255,0.12); 
-            border-radius: 12px; 
-            padding: 12px;
-            text-align: center; 
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.15);
-        }
-        
-        .token-progress {
-            height: 8px; 
-            background: rgba(255,255,255,0.2); 
-            border-radius: 4px; 
-            overflow: hidden; 
-            margin: 8px 0;
-        }
-        .token-progress-fill {
-            height: 100%; 
-            border-radius: 4px;
-            background: linear-gradient(90deg, #FCD34D, #F59E0B);
-            transition: width 1s ease;
-        }
-        
-        .sgt-token-info {
-            background: linear-gradient(135deg, #FEF9EE 0%, #FFFBEB 100%);
-            border: 2px solid #F59E0B; 
-            border-radius: 20px; 
-            padding: 20px;
-            margin-bottom: 16px; 
-            position: relative; 
-            overflow: hidden;
-        }
-        .sgt-token-info::before {
-            content: ''; 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            right: 0; 
-            height: 4px;
-            background: linear-gradient(90deg, #F59E0B, #FCD34D, #F59E0B);
-        }
-        
-        .sgt-reward-badge {
-            display: inline-flex; 
-            align-items: center; 
-            gap: 6px;
-            background: linear-gradient(135deg, #FEF3C7, #FDE68A);
-            border: 1.5px solid #F59E0B; 
-            border-radius: 20px;
-            padding: 6px 14px; 
-            font-size: 12px; 
-            font-weight: 800; 
-            color: #92400E;
-            animation: pulse-badge 2s infinite;
-        }
-        @keyframes pulse-badge {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.3); }
-            50% { box-shadow: 0 0 0 6px rgba(245,158,11,0); }
-        }
-        
-        .sgt-ticker {
-            background: linear-gradient(135deg, #1A0533 0%, #3D1078 100%);
-            border-radius: 12px; 
-            padding: 12px 16px; 
-            margin-bottom: 16px;
-            display: flex; 
-            align-items: center; 
-            gap: 12px; 
-            overflow: hidden;
-        }
-        .ticker-scroll {
-            flex: 1; 
-            overflow: hidden; 
-            white-space: nowrap;
-        }
-        .ticker-inner {
-            display: inline-block; 
-            animation: ticker 20s linear infinite;
-            color: #FCD34D; 
-            font-size: 12px; 
-            font-weight: 700;
-        }
-        @keyframes ticker { 
-            0% { transform: translateX(0); } 
-            100% { transform: translateX(-50%); } 
-        }
-        
-        .sgt-promo {
-            display: none;
-            background: linear-gradient(135deg, #F59E0B 0%, #D97706 60%, #92400E 100%);
-            color: white; 
-            padding: 18px; 
-            border-radius: 18px; 
-            margin-bottom: 16px;
-            cursor: pointer; 
-            position: relative; 
-            overflow: hidden;
-            box-shadow: 0 8px 24px rgba(245,158,11,0.35);
-        }
-        .sgt-promo::before {
-            content: ''; 
-            position: absolute; 
-            top: -30px; 
-            right: -30px;
-            width: 120px; 
-            height: 120px;
-            background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%);
-            border-radius: 50%;
-        }
-        
-        .cross-app-card {
-            background: white; 
-            border-radius: 14px; 
-            padding: 14px;
-            border: 2px solid #e2e8f0; 
-            margin-bottom: 10px;
-            transition: all 0.2s; 
-            cursor: pointer;
-        }
-        .cross-app-card:hover { 
-            border-color: #F59E0B; 
-            transform: translateY(-2px); 
-            box-shadow: 0 4px 12px rgba(245,158,11,0.15); 
-        }
-        
-        .redeem-card {
-            border: 2px solid #e2e8f0; 
-            border-radius: 14px; 
-            padding: 16px;
-            cursor: pointer; 
-            transition: all 0.2s; 
-            margin-bottom: 12px;
-            display: flex; 
-            align-items: center; 
-            gap: 14px;
-        }
-        .redeem-card:hover { 
-            border-color: #F59E0B; 
-            background: #FEF3C7; 
         }
         
         /* Product Card */
@@ -603,23 +361,6 @@
             justify-content: center; 
             font-weight: 700; 
             border: 2px solid white;
-        }
-        
-        /* SGT Header Badge */
-        #sgtHeaderBadge {
-            display: none; 
-            align-items: center; 
-            gap: 6px;
-            background: linear-gradient(135deg, #FEF3C7, #FDE68A);
-            padding: 6px 12px; 
-            border-radius: 20px; 
-            cursor: pointer;
-            border: 1.5px solid #F59E0B; 
-            transition: all 0.2s;
-        }
-        #sgtHeaderBadge:hover { 
-            transform: scale(1.05); 
-            box-shadow: 0 2px 10px rgba(245,158,11,0.3); 
         }
         
         /* Tabs */
@@ -962,7 +703,7 @@
             }
         }
         
-        /* Hero Section */
+         /* Hero Section */
         .hero-section {
             position: relative;
             overflow: hidden;
@@ -995,51 +736,6 @@
             background: radial-gradient(circle, rgba(255,215,0,0.1) 0%, transparent 70%);
             border-radius: 50%;
             animation: float 8s ease-in-out infinite reverse;
-        }
-        
-        /* Payment Steps */
-        .payment-step {
-            display: flex; 
-            align-items: center; 
-            gap: 14px; 
-            padding: 14px;
-            background: #F8FAFC; 
-            border-radius: 12px; 
-            margin-bottom: 10px;
-        }
-        .step-num {
-            width: 32px; 
-            height: 32px; 
-            border-radius: 50%;
-            background: linear-gradient(135deg, #8B5CF6, #7C3AED);
-            color: white; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center;
-            font-weight: 800; 
-            font-size: 14px; 
-            flex-shrink: 0;
-        }
-        
-        /* Success Modal */
-        .success-circle {
-            width: 90px; 
-            height: 90px; 
-            border-radius: 50%;
-            background: linear-gradient(135deg, #059669, #10B981);
-            margin: 0 auto 16px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center;
-            color: white; 
-            font-size: 44px; 
-            box-shadow: 0 8px 24px rgba(5,150,105,0.35);
-            animation: successPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        @keyframes successPop {
-            0% { transform: scale(0); }
-            80% { transform: scale(1.1); }
-            100% { transform: scale(1); }
         }
     </style>
 </head>
@@ -1079,11 +775,6 @@
         </div>
         
         <div style="display:flex; align-items:center; gap:10px;">
-            <!-- SGT Header Badge -->
-            <div id="sgtHeaderBadge" onclick="switchView('wallet')">
-                <i class="fas fa-coins" style="color:#D97706; font-size:12px;"></i>
-                <span id="sgtHeaderBalance" style="font-size:12px; font-weight:800; color:#92400E;">0 SGT</span>
-            </div>
             <span id="userBadge" style="font-size:11px; padding:6px 14px; background:#F3F4F6; border-radius:20px; font-weight:700; color:#6B7280; display:none;">Tamu</span>
             <button onclick="toggleWallet()" style="width:40px; height:40px; border-radius:50%; background:#F5F3FF; border:none; color:#8B5CF6; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:18px;">
                 <i class="fas fa-wallet"></i>
@@ -1103,23 +794,6 @@
                 <p style="font-size:13px; opacity:0.9;">Jelajahi produk dengan Pi Anda</p>
             </div>
             
-            <!-- SGT Promo Banner -->
-            <div class="sgt-promo" id="sgtPromoBanner" onclick="switchView('wallet')">
-                <div style="position:relative; z-index:1; display:flex; align-items:center; gap:14px;">
-                    <div style="width:50px; height:50px; background:rgba(255,255,255,0.2); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0;">
-                        <i class="fas fa-coins"></i>
-                    </div>
-                    <div style="flex:1;">
-                        <div class="sgt-reward-badge" style="margin-bottom:6px; background:rgba(255,255,255,0.25); border-color:rgba(255,255,255,0.4); color:white; animation:none;">
-                            <i class="fas fa-star"></i> Saldo Anda
-                        </div>
-                        <p style="font-size:22px; font-weight:900;"><span id="sgtPromoBalance">0</span> SGT</p>
-                        <p style="font-size:12px; opacity:0.85; margin-top:2px;">Klik untuk lihat & tukar reward</p>
-                    </div>
-                    <i class="fas fa-chevron-right" style="font-size:18px; opacity:0.7;"></i>
-                </div>
-            </div>
-
             <!-- HERO SECTION -->
             <div class="hero-section hero-animate">
                 <div style="position:relative; z-index:10;">
@@ -1132,7 +806,7 @@
                         Sagatama Mart
                     </h2>
                     <p style="font-size:15px; color:rgba(255,255,255,0.9); margin-bottom:24px; font-weight:500; max-width:280px;">
-                        Marketplace Terpercaya dengan pembayaran Pi Network & SGT Token
+                        Marketplace Terpercaya dengan pembayaran Pi Network
                     </p>
                     
                     <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px;">
@@ -1141,12 +815,12 @@
                             <span style="font-size:12px; font-weight:700; color:white;">Aman</span>
                         </div>
                         <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.15); padding:10px 16px; border-radius:12px; backdrop-filter:blur(10px);">
-                            <i class="fas fa-coins" style="color:#FFD700;"></i>
-                            <span style="font-size:12px; font-weight:700; color:white;">Dapat SGT</span>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.15); padding:10px 16px; border-radius:12px; backdrop-filter:blur(10px);">
                             <i class="fas fa-bolt" style="color:#FFD700;"></i>
                             <span style="font-size:12px; font-weight:700; color:white;">Cepat</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.15); padding:10px 16px; border-radius:12px; backdrop-filter:blur(10px);">
+                            <i class="fas fa-gem" style="color:#FFD700;"></i>
+                            <span style="font-size:12px; font-weight:700; color:white;">Puas</span>
                         </div>
                     </div>
                     
@@ -1162,15 +836,7 @@
                 </div>
             </div>
 
-            <!-- SGT Token Ticker -->
-            <div class="sgt-ticker">
-                <div style="width:36px; height:36px; background:linear-gradient(135deg, #FCD34D, #F59E0B); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900; color:#1A0533; flex-shrink:0; font-size:14px;">S</div>
-                <div class="ticker-scroll">
-                    <span class="ticker-inner">
-                        🪙 SGT Token • Sagatama Loyalty Token &nbsp;&nbsp;&nbsp; ✦ &nbsp;&nbsp;&nbsp; 1 Pi = 100 SGT &nbsp;&nbsp;&nbsp; ✦ &nbsp;&nbsp;&nbsp; Setiap belanja dapat reward SGT &nbsp;&nbsp;&nbsp; ✦ &nbsp;&nbsp;&nbsp; Tukar SGT untuk diskon & cashback &nbsp;&nbsp;&nbsp; ✦ &nbsp;&nbsp;&nbsp; Cross-app: Sagatama + Yayasan Hidayatullah &nbsp;&nbsp;&nbsp; ✦ &nbsp;&nbsp;&nbsp; 🪙 SGT Token • Sagatama Loyalty Token &nbsp;&nbsp;&nbsp; ✦ &nbsp;&nbsp;&nbsp; 1 Pi = 100 SGT &nbsp;&nbsp;&nbsp; ✦ &nbsp;&nbsp;&nbsp; Setiap belanja dapat reward SGT &nbsp;&nbsp;&nbsp; ✦ &nbsp;&nbsp;&nbsp; Tukar SGT untuk diskon & cashback &nbsp;&nbsp;&nbsp; ✦ &nbsp;&nbsp;&nbsp; Cross-app: Sagatama + Yayasan Hidayatullah
-                    </span>
-                </div>
-            </div>
+            
             
             <!-- Categories -->
             <h3 style="font-weight:800; margin-bottom:12px; color:#1F2937; font-size:16px;">Kategori</h3>
@@ -1246,128 +912,11 @@
                 </div>
             </div>
 
-            <!-- ===== SGT TOKEN PREMIUM CARD ===== -->
-            <div class="sgt-premium-card">
-                <div style="position:relative; z-index:1;">
-                    <!-- Header -->
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
-                        <div style="display:flex; align-items:center; gap:12px;">
-                            <div class="sgt-coin">₴</div>
-                            <div>
-                                <p style="font-size:10px; color:rgba(255,255,255,0.65); font-weight:700; letter-spacing:1px; text-transform:uppercase;">Sagatama Token</p>
-                                <p style="font-size:16px; font-weight:900; color:white;">SGT</p>
-                            </div>
-                        </div>
-                        <div style="text-align:right;">
-                            <div style="background:rgba(255,255,255,0.15); padding:4px 12px; border-radius:20px; font-size:10px; font-weight:800; color:#FCD34D; border:1px solid rgba(255,215,77,0.3);">
-                                LIVE
-                            </div>
-                            <p style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:4px;">1 π = 100 SGT</p>
-                        </div>
-                    </div>
-
-                    <!-- Balance -->
-                    <div style="margin-bottom:20px;">
-                        <p style="font-size:12px; color:rgba(255,255,255,0.65); font-weight:600; margin-bottom:6px;">Total Saldo SGT</p>
-                        <div style="display:flex; align-items:end; gap:10px;">
-                            <p class="sgt-balance-large" id="walletSgtBalance">0</p>
-                            <p style="font-size:22px; font-weight:700; color:rgba(255,255,255,0.6); margin-bottom:6px;">SGT</p>
-                        </div>
-                        <p style="font-size:12px; color:rgba(255,255,255,0.55); margin-top:4px;">≈ <span id="sgtPiEquivalent">0.0000</span> Pi</p>
-                    </div>
-
-                    <!-- Stats -->
-                    <div class="sgt-stats-row">
-                        <div class="sgt-stat-box">
-                            <p style="font-size:16px; font-weight:800; color:#FCD34D;" id="statSgtEarned">0</p>
-                            <p style="font-size:10px; color:rgba(255,255,255,0.65); font-weight:600;">Didapat</p>
-                        </div>
-                        <div class="sgt-stat-box">
-                            <p style="font-size:16px; font-weight:800; color:#FCD34D;" id="statSgtSpent">0</p>
-                            <p style="font-size:10px; color:rgba(255,255,255,0.65); font-weight:600;">Digunakan</p>
-                        </div>
-                        <div class="sgt-stat-box">
-                            <p style="font-size:16px; font-weight:800; color:#FCD34D;" id="statSgtTx">0</p>
-                            <p style="font-size:10px; color:rgba(255,255,255,0.65); font-weight:600;">Transaksi</p>
-                        </div>
-                    </div>
-
-                    <!-- Next Reward Progress -->
-                    <div style="margin: 16px 0;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                            <p style="font-size:11px; color:rgba(255,255,255,0.7); font-weight:600;">Progress ke Reward Berikutnya</p>
-                            <p style="font-size:11px; color:#FCD34D; font-weight:700;" id="rewardProgressText">0 / 500 SGT</p>
-                        </div>
-                        <div class="token-progress">
-                            <div class="token-progress-fill" id="rewardProgressBar" style="width:0%;"></div>
-                        </div>
-                        <p style="font-size:10px; color:rgba(255,255,255,0.5); margin-top:4px;">Kumpulkan 500 SGT untuk bonus eksklusif!</p>
-                    </div>
-
-                    <!-- Action Buttons -->
-                    <div style="display:flex; gap:10px;">
-                        <button onclick="openSGTTransferModal()" style="flex:1; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25); color:white; padding:12px; border-radius:12px; font-weight:700; cursor:pointer; font-size:13px; font-family:inherit; backdrop-filter:blur(10px);">
-                            <i class="fas fa-exchange-alt" style="margin-right:5px;"></i>Transfer
-                        </button>
-                        <button onclick="openSGTRedeemModal()" style="flex:1; background:linear-gradient(135deg, #F59E0B, #D97706); border:none; color:white; padding:12px; border-radius:12px; font-weight:700; cursor:pointer; font-size:13px; font-family:inherit; box-shadow:0 4px 12px rgba(245,158,11,0.4);">
-                            <i class="fas fa-gift" style="margin-right:5px;"></i>Tukar Reward
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SGT Token Info -->
-            <div class="sgt-token-info">
-                <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-                    <div style="width:40px; height:40px; background:linear-gradient(135deg, #FCD34D, #F59E0B); border-radius:10px; display:flex; align-items:center; justify-content:center; color:#1A0533; font-weight:900; font-size:16px;">₴</div>
-                    <div>
-                        <p style="font-weight:800; color:#1E293B; font-size:15px;">Sagatama Token (SGT)</p>
-                        <p style="font-size:12px; color:#64748B;">Cross-App Loyalty Token</p>
-                    </div>
-                    <div class="sgt-reward-badge" style="margin-left:auto;">
-                        <i class="fas fa-star"></i> Aktif
-                    </div>
-                </div>
-                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px;">
-                    <div style="text-align:center; background:white; padding:12px; border-radius:12px; border:1px solid #FDE68A;">
-                        <p style="font-size:18px; font-weight:900; color:#D97706;">100</p>
-                        <p style="font-size:10px; color:#64748B; font-weight:600;">SGT/Pi</p>
-                    </div>
-                    <div style="text-align:center; background:white; padding:12px; border-radius:12px; border:1px solid #FDE68A;">
-                        <p style="font-size:18px; font-weight:900; color:#D97706;">2+</p>
-                        <p style="font-size:10px; color:#64748B; font-weight:600;">Apps</p>
-                    </div>
-                    <div style="text-align:center; background:white; padding:12px; border-radius:12px; border:1px solid #FDE68A;">
-                        <p style="font-size:18px; font-weight:900; color:#D97706;">∞</p>
-                        <p style="font-size:10px; color:#64748B; font-weight:600;">Reward</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Connected Apps -->
-            <div class="card" style="border-left:4px solid #F59E0B;">
-                <h3 style="font-weight:800; margin-bottom:14px; color:#1E293B; font-size:15px;">
-                    <i class="fas fa-network-wired" style="color:#F59E0B; margin-right:8px;"></i>Aplikasi Terhubung
-                </h3>
-                <div id="connectedAppsList"></div>
-            </div>
-
             <h3 style="font-weight:800; margin-bottom:12px; color:#1F2937; font-size:16px;">Riwayat Transaksi</h3>
             <div id="transactionHistory">
                 <div class="empty-state">
                     <i class="fas fa-receipt"></i>
                     <p>Belum ada transaksi</p>
-                </div>
-            </div>
-
-            <!-- SGT Transaction History -->
-            <h3 style="font-weight:800; margin-bottom:12px; color:#1E293B; font-size:15px; margin-top:8px;">
-                <i class="fas fa-coins" style="color:#F59E0B; margin-right:8px;"></i>Riwayat SGT
-            </h3>
-            <div id="sgtTransactionHistory">
-                <div class="empty-state">
-                    <i class="fas fa-coins"></i>
-                    <p>Belum ada transaksi SGT</p>
                 </div>
             </div>
         </div>
@@ -1395,14 +944,6 @@
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                     <span style="font-weight:600; color:#6B7280; font-size:13px;">Total Pi</span>
                     <span id="cartTotalPi" style="font-size:24px; font-weight:800; color:#8B5CF6;">π 0.0000</span>
-                </div>
-                <!-- SGT Reward Preview -->
-                <div style="background:linear-gradient(135deg, #FEF9EE, #FEF3C7); border:1.5px solid #F59E0B; border-radius:12px; padding:12px; display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-                    <i class="fas fa-gift" style="color:#D97706; font-size:20px;"></i>
-                    <div>
-                        <p style="font-size:11px; color:#92400E; font-weight:700;">Reward SGT yang akan didapat:</p>
-                        <p style="font-size:20px; font-weight:900; color:#D97706;" id="sgtRewardPreview">+0 SGT</p>
-                    </div>
                 </div>
                 <button onclick="openPayment()" class="btn-primary">
                     <i class="fas fa-lock" style="margin-right:8px;"></i>Bayar dengan Pi
@@ -1482,24 +1023,6 @@
                 </div>
             </div>
 
-            <!-- SGT Stats Admin -->
-            <div class="card" style="border-left:4px solid #F59E0B; margin-bottom:16px;">
-                <h3 style="font-weight:800; margin-bottom:12px; font-size:15px; display:flex; align-items:center; gap:8px;">
-                    <span style="width:28px; height:28px; background:linear-gradient(135deg, #FCD34D, #F59E0B); border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; color:#1A0533;">₴</span>
-                    Statistik SGT Token
-                </h3>
-                <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
-                    <div style="text-align:center; padding:14px; background:#FEF3C7; border-radius:12px;">
-                        <p style="font-size:22px; font-weight:900; color:#D97706;" id="statTotalSGTIssued">0</p>
-                        <p style="font-size:11px; color:#92400E; font-weight:700;">SGT Diterbitkan</p>
-                    </div>
-                    <div style="text-align:center; padding:14px; background:#FEF3C7; border-radius:12px;">
-                        <p style="font-size:22px; font-weight:900; color:#D97706;" id="statTotalSGTUsers">0</p>
-                        <p style="font-size:11px; color:#92400E; font-weight:700;">User SGT Aktif</p>
-                    </div>
-                </div>
-            </div>
-
             <!-- Quick Actions -->
             <div class="admin-section">
                 <h3 style="font-weight:700; margin-bottom:12px; color:#1F2937;">Menu Admin</h3>
@@ -1515,7 +1038,7 @@
                         <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
                     </div>
                     
-					<div onclick="switchView('admin-orders')" class="card" style="cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:12px;">
+                    <div onclick="switchView('admin-orders')" class="card" style="cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:12px;">
                         <div style="width:48px; height:48px; background:#FEF3C7; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#D97706; font-size:20px;">
                             <i class="fas fa-clipboard-check"></i>
                         </div>
@@ -1537,10 +1060,8 @@
                         </div>
                         <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
                     </div>
-                </div>
-            </div>
-
-            <!-- Admin Tools -->
+					
+					            <!-- Admin Tools -->
             <div class="admin-section">
                 <h3 style="font-weight:700; margin-bottom:12px; color:#1F2937;">Tools Admin</h3>
                 <div onclick="openExchangeRateModal()" class="card" style="cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:12px;">
@@ -1552,6 +1073,8 @@
                         <p style="font-size:12px; color:#6B7280;">Hitung konversi Pi ke IDR (referensi)</p>
                     </div>
                     <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
+                </div>
+            </div>
                 </div>
             </div>
 
@@ -1760,13 +1283,12 @@
     <div id="paymentModal" class="modal">
         <div class="modal-content">
             <h3 style="font-size:20px; font-weight:800; margin-bottom:20px; color:#1F2937;">
-                <i class="fas fa-lock" style="color:#8B5CF6; margin-right:8px;"></i>Konfirmasi Pembayaran
+                <i class="fas fa-lock" style="color:#8B5CF6; margin-right:8px;"></i>Konfirmasi Pembayaran Pi
             </h3>
             
             <div style="background:linear-gradient(135deg, #F5F3FF 0%, #ffffff 100%); padding:20px; border-radius:16px; margin-bottom:20px; border:2px solid #8B5CF6;">
                 <p style="font-size:12px; color:#6B7280; font-weight:600; margin-bottom:4px;">TOTAL PEMBAYARAN</p>
                 <p style="font-size:36px; font-weight:800; color:#8B5CF6;" id="paymentAmount">π 0.0000</p>
-                <p style="font-size:14px; color:#F59E0B; font-weight:700; margin-top:4px;" id="sgtPaymentAmount">+ Dapat 0 SGT Reward</p>
             </div>
 
             <div style="background:#F9FAFB; padding:16px; border-radius:12px; margin-bottom:20px;">
@@ -1856,104 +1378,9 @@
         </div>
     </div>
 
-    <!-- MODAL: SGT TRANSFER -->
-    <div id="sgtTransferModal" class="modal">
-        <div class="modal-content">
-            <h3 style="font-size:20px; font-weight:800; margin-bottom:20px; color:#1F2937;">
-                <i class="fas fa-exchange-alt" style="color:#F59E0B; margin-right:8px;"></i>Transfer SGT
-            </h3>
-            
-            <div style="background:linear-gradient(135deg, #FEF9EE, #FEF3C7); border:2px solid #F59E0B; border-radius:16px; padding:20px; margin-bottom:20px;">
-                <p style="font-size:12px; color:#92400E; font-weight:600; margin-bottom:8px;">Saldo Tersedia</p>
-                <p style="font-size:32px; font-weight:900; color:#D97706;" id="transferSgtBalance">0 SGT</p>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Username Tujuan</label>
-                <input type="text" id="transferTargetUsername" class="form-input" placeholder="Masukkan username Pi">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Jumlah SGT</label>
-                <input type="number" id="transferAmount" class="form-input" placeholder="0" min="1">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Pesan (Opsional)</label>
-                <input type="text" id="transferMessage" class="form-input" placeholder="Pesan untuk penerima...">
-            </div>
-
-            <button onclick="executeSGTTransfer()" class="btn-sgt" style="margin-bottom:10px;">
-                <i class="fas fa-paper-plane" style="margin-right:8px;"></i>Kirim SGT
-            </button>
-            
-            <button onclick="closeModal('sgtTransferModal')" style="width:100%; background:#F3F4F6; color:#6B7280; border:none; padding:14px; border-radius:12px; font-weight:700; cursor:pointer;">
-                Batal
-            </button>
-        </div>
-    </div>
-
-    <!-- MODAL: SGT REDEEM -->
-    <div id="sgtRedeemModal" class="modal">
-        <div class="modal-content">
-            <h3 style="font-size:20px; font-weight:800; margin-bottom:20px; color:#1F2937;">
-                <i class="fas fa-gift" style="color:#F59E0B; margin-right:8px;"></i>Tukar Reward SGT
-            </h3>
-            
-            <div style="background:linear-gradient(135deg, #FEF9EE, #FEF3C7); border:2px solid #F59E0B; border-radius:16px; padding:20px; margin-bottom:20px;">
-                <p style="font-size:12px; color:#92400E; font-weight:600; margin-bottom:8px;">Saldo SGT Anda</p>
-                <p style="font-size:32px; font-weight:900; color:#D97706;" id="redeemSgtBalance">0 SGT</p>
-            </div>
-
-            <p style="font-size:13px; color:#6B7280; margin-bottom:16px; font-weight:600;">Pilih reward yang ingin ditukar:</p>
-
-            <div id="redeemOptions">
-                <div onclick="redeemReward('discount_10')" class="redeem-card">
-                    <div style="width:48px; height:48px; background:linear-gradient(135deg, #8B5CF6, #7C3AED); border-radius:12px; display:flex; align-items:center; justify-content:center; color:white; font-size:20px; flex-shrink:0;">
-                        <i class="fas fa-percentage"></i>
-                    </div>
-                    <div style="flex:1;">
-                        <p style="font-weight:700; color:#1F2937; font-size:14px;">Diskon 10%</p>
-                        <p style="font-size:12px; color:#6B7280;">Potongan harga untuk pembelian berikutnya</p>
-                        <p style="font-size:12px; color:#D97706; font-weight:800; margin-top:4px;">500 SGT</p>
-                    </div>
-                    <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
-                </div>
-
-                <div onclick="redeemReward('free_shipping')" class="redeem-card">
-                    <div style="width:48px; height:48px; background:linear-gradient(135deg, #3B82F6, #2563EB); border-radius:12px; display:flex; align-items:center; justify-content:center; color:white; font-size:20px; flex-shrink:0;">
-                        <i class="fas fa-shipping-fast"></i>
-                    </div>
-                    <div style="flex:1;">
-                        <p style="font-weight:700; color:#1F2937; font-size:14px;">Gratis Ongkir</p>
-                        <p style="font-size:12px; color:#6B7280;">Bebas biaya pengiriman</p>
-                        <p style="font-size:12px; color:#D97706; font-weight:800; margin-top:4px;">300 SGT</p>
-                    </div>
-                    <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
-                </div>
-
-                <div onclick="redeemReward('cashback_50')" class="redeem-card">
-                    <div style="width:48px; height:48px; background:linear-gradient(135deg, #10B981, #059669); border-radius:12px; display:flex; align-items:center; justify-content:center; color:white; font-size:20px; flex-shrink:0;">
-                        <i class="fas fa-hand-holding-usd"></i>
-                    </div>
-                    <div style="flex:1;">
-                        <p style="font-weight:700; color:#1F2937; font-size:14px;">Cashback 50 SGT</p>
-                        <p style="font-size:12px; color:#6B7280;">Dapatkan kembali 50 SGT</p>
-                        <p style="font-size:12px; color:#D97706; font-weight:800; margin-top:4px;">200 SGT</p>
-                    </div>
-                    <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
-                </div>
-            </div>
-
-            <button onclick="closeModal('sgtRedeemModal')" style="width:100%; background:#F3F4F6; color:#6B7280; border:none; padding:14px; border-radius:12px; font-weight:700; cursor:pointer; margin-top:16px;">
-                Tutup
-            </button>
-        </div>
-    </div>
-
     <script type="module">
     // ============================================
-    // FIREBASE IMPORTS - TAMBAHKAN increment
+    // FIREBASE IMPORTS
     // ============================================
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -1986,7 +1413,7 @@
         appId: "1:372845954028:web:189f2a3127ea8189b9f6c9"
     };
 
-    // State
+    // State - HAPUS userBalance simulasi, gunakan Pi Browser wallet
     let app, auth, db;
     let products = [];
     let orders = [];
@@ -2005,24 +1432,10 @@
     let tempProductImage = null;
     let currentAdminProductFilter = 'all';
     let currentAdminOrderFilter = 'all';
-    let pendingPayment = null;
-    
-    // SGT Token State
-    let sgtBalance = 0;
-    let sgtEarned = 0;
-    let sgtSpent = 0;
-    let sgtTransactions = [];
-    const SGT_PI_RATE = 100; // 1 Pi = 100 SGT
-    const SGT_REWARD_RATE = 10; // 10 SGT per 1 Pi spent
-    
-    // Payment State
-    let selectedPaymentMethod = 'pi';
-    let currentTotalPi = 0;
-    let currentTotalSgt = 0;
-    let paymentTimeout = null;
+    let pendingPayment = null; // Track payment yang sedang berlangsung
 
     // Constants
-    const USE_SANDBOX = false;
+    const USE_SANDBOX = false; // Set true untuk testing, false untuk production
     
     // Admin credentials
     const ADMIN_CREDENTIALS = {
@@ -2042,6 +1455,199 @@
         }
         console.log('[DEBUG]', msg);
     }
+	
+	    // ============================================
+    // EXCHANGE RATE FUNCTIONS - ADMIN ONLY (DEFINISIKAN LEBIH AWAL)
+    // ============================================
+    
+    let adminExchangeRate = 15000; // Default rate untuk kalkulator admin
+    
+    window.openExchangeRateModal = function() {
+        const modal = document.createElement('div');
+        modal.id = 'exchangeRateModal';
+        modal.className = 'modal active';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <h3 style="font-size:20px; font-weight:800; margin-bottom:20px; color:#1F2937;">
+                    <i class="fas fa-calculator" style="color:#8B5CF6; margin-right:8px;"></i>Kalkulator Pi (Admin)
+                </h3>
+                
+                <div style="background:#F5F3FF; border-radius:12px; padding:16px; margin-bottom:20px;">
+                    <p style="font-size:12px; color:#6B7280; margin-bottom:8px;">Rate Referensi (1 Pi = Rp)</p>
+                    <input type="number" id="adminRateInput" class="form-input" value="${adminExchangeRate}" min="1" step="1000" oninput="updateAdminCalculator()">
+                    <p style="font-size:11px; color:#9CA3AF; margin-top:6px;">
+                        <i class="fas fa-info-circle" style="margin-right:4px;"></i>
+                        Rate ini hanya untuk referensi admin, tidak mempengaruhi harga produk
+                    </p>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Jumlah Pi</label>
+                    <input type="number" id="adminCalcPi" class="form-input" placeholder="0.0000" step="0.0001" oninput="updateAdminCalculator()">
+                </div>
+                
+                <div style="text-align:center; margin:16px 0;">
+                    <i class="fas fa-arrow-down" style="color:#8B5CF6; font-size:24px;"></i>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Hasil IDR (Referensi)</label>
+                    <div style="background:#F3F4F6; padding:16px; border-radius:12px; font-size:24px; font-weight:800; color:#1F2937; text-align:center;">
+                        Rp <span id="adminCalcResult">0</span>
+                    </div>
+                </div>
+
+                <div style="background:#FEF3C7; border:1px solid #FCD34D; border-radius:12px; padding:12px; margin-bottom:20px;">
+                    <p style="font-size:12px; color:#92400E;">
+                        <i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>
+                        <strong>Catatan:</strong> Kalkulator ini hanya untuk referensi admin. 
+                        User hanya melihat harga dalam Pi.
+                    </p>
+                </div>
+
+                <button onclick="closeAndRemoveModal('exchangeRateModal')" class="btn-primary">
+                    Tutup
+                </button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Update kalkulator saat modal dibuka
+        setTimeout(updateAdminCalculator, 100);
+    };
+
+    window.updateAdminCalculator = function() {
+        const rate = parseInt(document.getElementById('adminRateInput')?.value || 15000);
+        const piAmount = parseFloat(document.getElementById('adminCalcPi')?.value || 0);
+        const resultEl = document.getElementById('adminCalcResult');
+        
+        adminExchangeRate = rate;
+        
+        if (resultEl) {
+            const idrResult = Math.round(piAmount * rate);
+            resultEl.innerText = idrResult.toLocaleString('id-ID');
+        }
+    };
+
+    window.closeAndRemoveModal = function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove('active');
+            setTimeout(() => {
+                if (modal.parentNode) modal.remove();
+            }, 300);
+        }
+    };
+	
+	    // ============================================
+    // NAVIGATION & UTILITY FUNCTIONS (DEFINISIKAN DI AWAL)
+    // ============================================
+    
+    window.handleStartShopping = function() {
+        logDebug("Navigasi ke Pasar Pi...");
+        
+        switchView('products');
+        
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        const navProducts = document.getElementById('nav-products');
+        if (navProducts) navProducts.classList.add('active');
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.quickFilter = function(category) {
+        switchView('products');
+        
+        setTimeout(() => {
+            if (typeof filterByCategory === 'function') {
+                filterByCategory(category);
+            }
+        }, 100);
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    // ============================================
+    // EXCHANGE RATE FUNCTIONS - ADMIN ONLY
+    // ============================================
+    
+    // adminExchangeRate sudah dideklarasikan di atas, gunakan yang sudah ada
+    // HAPUS: let adminExchangeRate = 15000;
+    
+    window.openExchangeRateModal = function() {
+        const modal = document.createElement('div');
+        modal.id = 'exchangeRateModal';
+        modal.className = 'modal active';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <h3 style="font-size:20px; font-weight:800; margin-bottom:20px; color:#1F2937;">
+                    <i class="fas fa-calculator" style="color:#8B5CF6; margin-right:8px;"></i>Kalkulator Pi (Admin)
+                </h3>
+                
+                <div style="background:#F5F3FF; border-radius:12px; padding:16px; margin-bottom:20px;">
+                    <p style="font-size:12px; color:#6B7280; margin-bottom:8px;">Rate Referensi (1 Pi = Rp)</p>
+                    <input type="number" id="adminRateInput" class="form-input" value="${adminExchangeRate}" min="1" step="1000" oninput="updateAdminCalculator()">
+                    <p style="font-size:11px; color:#9CA3AF; margin-top:6px;">
+                        <i class="fas fa-info-circle" style="margin-right:4px;"></i>
+                        Rate ini hanya untuk referensi admin
+                    </p>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Jumlah Pi</label>
+                    <input type="number" id="adminCalcPi" class="form-input" placeholder="0.0000" step="0.0001" oninput="updateAdminCalculator()">
+                </div>
+                
+                <div style="text-align:center; margin:16px 0;">
+                    <i class="fas fa-arrow-down" style="color:#8B5CF6; font-size:24px;"></i>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Hasil IDR (Referensi)</label>
+                    <div style="background:#F3F4F6; padding:16px; border-radius:12px; font-size:24px; font-weight:800; color:#1F2937; text-align:center;">
+                        Rp <span id="adminCalcResult">0</span>
+                    </div>
+                </div>
+
+                <div style="background:#FEF3C7; border:1px solid #FCD34D; border-radius:12px; padding:12px; margin-bottom:20px;">
+                    <p style="font-size:12px; color:#92400E;">
+                        <i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>
+                        <strong>Catatan:</strong> Kalkulator ini hanya untuk referensi admin. 
+                        User hanya melihat harga dalam Pi.
+                    </p>
+                </div>
+
+                <button onclick="closeAndRemoveModal('exchangeRateModal')" class="btn-primary">
+                    Tutup
+                </button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        setTimeout(updateAdminCalculator, 100);
+    };
+
+    window.updateAdminCalculator = function() {
+        const rate = parseInt(document.getElementById('adminRateInput')?.value || 15000);
+        const piAmount = parseFloat(document.getElementById('adminCalcPi')?.value || 0);
+        const resultEl = document.getElementById('adminCalcResult');
+        
+        adminExchangeRate = rate;
+        
+        if (resultEl) {
+            const idrResult = Math.round(piAmount * rate);
+            resultEl.innerText = idrResult.toLocaleString('id-ID');
+        }
+    };
+
+    window.closeAndRemoveModal = function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove('active');
+            setTimeout(() => {
+                if (modal.parentNode) modal.remove();
+            }, 300);
+        }
+    };
 
     // ============================================
     // INITIALIZATION
@@ -2050,6 +1656,7 @@
     async function init() {
         logDebug("Starting initialization...");
         
+        // Restore cart dari localStorage saja (tanpa user/balance simulasi)
         const savedCart = localStorage.getItem('sagatama_cart');
         if (savedCart) {
             try {
@@ -2060,19 +1667,28 @@
             }
         }
         
+        // Tampilkan loading
         const loading = document.getElementById('loadingOverlay');
         if (loading) loading.style.display = 'flex';
 
         try {
+            // Deteksi environment
             detectPiEnv();
+            
+            // Init Pi SDK
             await initPiSDK();
+            
+            // Init Firebase
             await initFirebase();
             
+            // Update UI
             updateUI();
             updateCartUI();
             
+            // Load data dari Firebase
             await loadDataWithCache();
             
+            // Jika belum login, tampilkan modal login setelah delay
             if (!currentUser) {
                 setTimeout(() => {
                     openModal('loginOptionsModal');
@@ -2117,7 +1733,7 @@
                 .then(() => {
                     clearTimeout(timeout);
                     isPiSDKReady = true;
-                    logDebug("Pi SDK initialized successfully");
+                    logDebug("Pi SDK initialized successfully (sandbox: " + USE_SANDBOX + ")");
                     resolve(true);
                 })
                 .catch((err) => {
@@ -2141,248 +1757,89 @@
             return false;
         }
     }
-
-    // ============================================
-    // SGT TOKEN FUNCTIONS
+	
+	// ============================================
+    // USER PROFILE & ADDRESS FUNCTIONS
     // ============================================
     
-    async function refreshSgtBalance() {
+    async function loadUserProfile() {
         if (!currentUser?.uid || !db) return;
+        
         try {
-            const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+            const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
             if (userDoc.exists()) {
-                const data = userDoc.data();
-                sgtBalance = data.sgtBalance || 0;
-                sgtEarned = data.sgtEarned || 0;
-                sgtSpent = data.sgtSpent || 0;
-                
-                // Update UI
-                const balEl = document.getElementById('walletSgtBalance');
-                if (balEl) balEl.innerText = sgtBalance.toLocaleString('id-ID');
-                
-                const headerBal = document.getElementById('sgtHeaderBalance');
-                if (headerBal) headerBal.innerText = sgtBalance + ' SGT';
-                
-                const promoBal = document.getElementById('sgtPromoBalance');
-                if (promoBal) promoBal.innerText = sgtBalance;
-                
-                const sgtBadge = document.getElementById('sgtHeaderBadge');
-                if (sgtBadge) sgtBadge.style.display = 'flex';
-                
-                const promoBanner = document.getElementById('sgtPromoBanner');
-                if (promoBanner) promoBanner.style.display = 'block';
-                
-                // Update stats
-                const earnedEl = document.getElementById('statSgtEarned');
-                if (earnedEl) earnedEl.innerText = sgtEarned;
-                
-                const spentEl = document.getElementById('statSgtSpent');
-                if (spentEl) spentEl.innerText = sgtSpent;
-                
-                // Update Pi equivalent
-                const piEquiv = document.getElementById('sgtPiEquivalent');
-                if (piEquiv) piEquiv.innerText = (sgtBalance / SGT_PI_RATE).toFixed(4);
-                
-                // Update progress bar
-                updateRewardProgress();
-                
-                logDebug("SGT Balance Updated: " + sgtBalance);
+                const userData = userDoc.data();
+                currentUser.address = userData.address || null;
+                currentUser.phone = userData.phone || '';
+                currentUser.fullName = userData.fullName || '';
+                logDebug("User profile loaded");
             }
-        } catch (e) {
-            logDebug("Error refresh SGT: " + e.message);
+        } catch (err) {
+            logDebug("Load profile error: " + err.message);
         }
     }
-    
-    function updateRewardProgress() {
-        const progressBar = document.getElementById('rewardProgressBar');
-        const progressText = document.getElementById('rewardProgressText');
-        if (!progressBar || !progressText) return;
-        
-        const target = 500;
-        const progress = Math.min((sgtBalance / target) * 100, 100);
-        progressBar.style.width = progress + '%';
-        progressText.innerText = sgtBalance + ' / ' + target + ' SGT';
+
+    window.saveUserAddress = async function() {
+    if (!currentUser?.uid) {
+        showToast('Silakan login terlebih dahulu', 'error');
+        return;
     }
-    
-    async function addSgtReward(amount) {
-        if (!currentUser?.uid || !db) return;
-        try {
-            const userRef = doc(db, "users", currentUser.uid);
-            await updateDoc(userRef, {
-                sgtBalance: increment(amount),
-                sgtEarned: increment(amount),
-                updatedAt: serverTimestamp()
-            });
-            logDebug("SGT Reward added: " + amount);
-            await refreshSgtBalance();
-        } catch (e) {
-            logDebug("Error adding SGT reward: " + e.message);
-        }
-    }
-    
-    async function deductSgt(amount) {
-        if (!currentUser?.uid || !db) return false;
-        try {
-            const userRef = doc(db, "users", currentUser.uid);
-            await updateDoc(userRef, {
-                sgtBalance: increment(-amount),
-                sgtSpent: increment(amount),
-                updatedAt: serverTimestamp()
-            });
-            logDebug("SGT Deducted: " + amount);
-            await refreshSgtBalance();
-            return true;
-        } catch (e) {
-            logDebug("Error deducting SGT: " + e.message);
-            return false;
-        }
-    }
-    
-    async function recordSgtTransaction(type, amount, description, relatedOrderId = null) {
-        if (!currentUser?.uid || !db) return;
-        try {
-            await addDoc(collection(db, "sgt_transactions"), {
-                userId: currentUser.uid,
-                username: currentUser.username,
-                type: type, // 'earn', 'spend', 'transfer_in', 'transfer_out', 'redeem'
-                amount: amount,
-                description: description,
-                relatedOrderId: relatedOrderId,
-                balanceAfter: sgtBalance + (type === 'earn' || type === 'transfer_in' ? amount : -amount),
-                createdAt: serverTimestamp()
-            });
-            logDebug("SGT Transaction recorded: " + type + " " + amount);
-        } catch (e) {
-            logDebug("Error recording SGT transaction: " + e.message);
-        }
-    }
-    
-    window.openSGTTransferModal = function() {
-        if (!currentUser) {
-            showToast('Silakan login terlebih dahulu', 'error');
-            return;
-        }
-        const balEl = document.getElementById('transferSgtBalance');
-        if (balEl) balEl.innerText = sgtBalance.toLocaleString('id-ID') + ' SGT';
-        openModal('sgtTransferModal');
+
+    const addressData = {
+        receiverName: document.getElementById('addrName')?.value.trim(),
+        phoneNumber: document.getElementById('addrPhone')?.value.trim(),
+        fullAddress: document.getElementById('addrFull')?.value.trim(),
+        city: document.getElementById('addrCity')?.value.trim(),
+        postalCode: document.getElementById('addrZip')?.value.trim()
     };
-    
-    window.openSGTRedeemModal = function() {
-        if (!currentUser) {
-            showToast('Silakan login terlebih dahulu', 'error');
-            return;
-        }
-        const balEl = document.getElementById('redeemSgtBalance');
-        if (balEl) balEl.innerText = sgtBalance.toLocaleString('id-ID') + ' SGT';
-        openModal('sgtRedeemModal');
-    };
-    
-    window.executeSGTTransfer = async function() {
-        const targetUsername = document.getElementById('transferTargetUsername')?.value.trim();
-        const amount = parseInt(document.getElementById('transferAmount')?.value || 0);
-        const message = document.getElementById('transferMessage')?.value.trim();
+
+    // Validasi
+    if (!addressData.receiverName || !addressData.phoneNumber || !addressData.fullAddress || !addressData.city) {
+        showToast('Mohon lengkapi semua field yang wajib diisi', 'error');
+        return;
+    }
+
+    // Validasi nomor telepon
+    const phoneRegex = /^[0-9]{10,15}$/;
+    if (!phoneRegex.test(addressData.phoneNumber.replace(/[^0-9]/g, ''))) {
+        showToast('Nomor telepon tidak valid (10-15 digit)', 'error');
+        return;
+    }
+
+    try {
+        // PENTING: Pastikan user sudah terautentikasi di Firebase Auth
+        // Gunakan setDoc dengan merge: true untuk update atau create
+        const userRef = doc(db, 'users', currentUser.uid);
         
-        if (!targetUsername) {
-            showToast('Masukkan username tujuan!', 'error');
-            return;
-        }
-        if (!amount || amount <= 0) {
-            showToast('Jumlah tidak valid!', 'error');
-            return;
-        }
-        if (amount > sgtBalance) {
-            showToast('Saldo SGT tidak mencukupi!', 'error');
-            return;
-        }
-        if (targetUsername === currentUser.username) {
-            showToast('Tidak bisa transfer ke diri sendiri!', 'error');
-            return;
-        }
+        await setDoc(userRef, {
+            address: addressData,
+            updatedAt: serverTimestamp(),
+            // Tambahkan field ini untuk memastikan dokumen terbuat
+            createdAt: serverTimestamp()
+        }, { merge: true });
+
+        // Update local state
+        currentUser.address = addressData;
+        localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
         
-        try {
-            // Cari user tujuan
-            const usersQuery = query(collection(db, "users"), where("username", "==", targetUsername));
-            const userSnap = await getDocs(usersQuery);
-            
-            if (userSnap.empty) {
-                showToast('User tidak ditemukan!', 'error');
-                return;
-            }
-            
-            const targetUser = userSnap.docs[0];
-            const targetUid = targetUser.id;
-            
-            // Transfer
-            await deductSgt(amount);
-            await updateDoc(doc(db, "users", targetUid), {
-                sgtBalance: increment(amount),
-                updatedAt: serverTimestamp()
-            });
-            
-            // Record transactions
-            await recordSgtTransaction('transfer_out', amount, 'Transfer ke @' + targetUsername + (message ? ': ' + message : ''));
-            await addDoc(collection(db, "sgt_transactions"), {
-                userId: targetUid,
-                username: targetUsername,
-                type: 'transfer_in',
-                amount: amount,
-                description: 'Transfer dari @' + currentUser.username + (message ? ': ' + message : ''),
-                fromUser: currentUser.username,
-                createdAt: serverTimestamp()
-            });
-            
-            showToast('Transfer SGT berhasil!', 'success');
-            closeModal('sgtTransferModal');
-            
-        } catch (e) {
-            logDebug("Transfer error: " + e.message);
-            showToast('Gagal transfer: ' + e.message, 'error');
-        }
-    };
-    
-    window.redeemReward = async function(rewardType) {
-        const costs = {
-            'discount_10': 500,
-            'free_shipping': 300,
-            'cashback_50': 200
-        };
+        showToast('Alamat berhasil disimpan!', 'success');
         
-        const cost = costs[rewardType];
-        if (sgtBalance < cost) {
-            showToast('Saldo SGT tidak mencukupi! Butuh ' + cost + ' SGT', 'error');
-            return;
-        }
+    } catch (error) {
+        console.error("Save address error:", error);
+        logDebug("Save address error: " + error.message);
         
-        try {
-            await deductSgt(cost);
-            
-            const rewards = {
-                'discount_10': 'Diskon 10%',
-                'free_shipping': 'Gratis Ongkir',
-                'cashback_50': 'Cashback 50 SGT'
-            };
-            
-            await recordSgtTransaction('redeem', cost, 'Tukar reward: ' + rewards[rewardType]);
-            
-            // Simpan reward ke user
-            await updateDoc(doc(db, "users", currentUser.uid), {
-                activeRewards: arrayUnion({
-                    type: rewardType,
-                    name: rewards[rewardType],
-                    redeemedAt: serverTimestamp(),
-                    used: false
-                })
-            });
-            
-            showToast('Reward ' + rewards[rewardType] + ' berhasil ditukar!', 'success');
-            closeModal('sgtRedeemModal');
-            
-        } catch (e) {
-            logDebug("Redeem error: " + e.message);
-            showToast('Gagal menukar reward', 'error');
+        // Error handling yang lebih spesifik
+        if (error.message.includes('permission') || error.code === 'permission-denied') {
+            showToast('Gagal: Izin akses ditolak. Coba login ulang.', 'error');
+        } else if (error.message.includes('offline')) {
+            showToast('Gagal: Periksa koneksi internet Anda.', 'error');
+        } else {
+            showToast('Gagal menyimpan: ' + error.message, 'error');
         }
-    };
-    
+    }
+};
+	
+
     // ============================================
     // CACHE SYSTEM
     // ============================================
@@ -2396,6 +1853,7 @@
         
         logDebug("Loading data with cache strategy...");
         
+        // Load from cache first
         const cachedProducts = localStorage.getItem('sagatama_products_cache');
         if (cachedProducts) {
             try {
@@ -2409,15 +1867,18 @@
             }
         }
         
+        // Then fetch from Firebase
         loadDataFromFirebase();
     }
 
     function loadDataFromFirebase() {
+        // Unsubscribe existing listeners
         Object.values(unsubscribers).forEach(unsub => {
             if (typeof unsub === 'function') unsub();
         });
         unsubscribers = {};
 
+        // Load products with real-time updates
         try {
             const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
             unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
@@ -2426,10 +1887,12 @@
                     newProducts.push({id: doc.id, ...doc.data()});
                 });
                 
+                // Update cache
                 products = newProducts;
                 localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
                 logDebug("Products updated from Firebase: " + products.length);
                 
+                // Render all views
                 renderProducts();
                 renderFeaturedProducts();
                 renderHomeCategories();
@@ -2441,6 +1904,7 @@
             logDebug("Products query error: " + e.message);
         }
 
+        // Load orders
         try {
             const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"));
             unsubscribers.orders = onSnapshot(ordersQuery, (snapshot) => {
@@ -2467,26 +1931,6 @@
         } catch (e) {
             logDebug("Orders query error: " + e.message);
         }
-        
-        // Load SGT transactions
-        if (currentUser) {
-            try {
-                const sgtQuery = query(
-                    collection(db, "sgt_transactions"), 
-                    where("userId", "==", currentUser.uid),
-                    orderBy("createdAt", "desc")
-                );
-                unsubscribers.sgt = onSnapshot(sgtQuery, (snapshot) => {
-                    sgtTransactions = [];
-                    snapshot.forEach(doc => {
-                        sgtTransactions.push({id: doc.id, ...doc.data()});
-                    });
-                    renderSgtTransactions();
-                });
-            } catch (e) {
-                logDebug("SGT transactions error: " + e.message);
-            }
-        }
     }
 
     // ============================================
@@ -2494,79 +1938,92 @@
     // ============================================
     
     window.authenticatePi = async function() {
-    if (!window.Pi) {
-        showToast('Gunakan Pi Browser!', 'error');
-        return;
-    }
-
-    try {
-        showToast('Menghubungkan...', 'info');
-
-        // 1. Ambil data dari Pi (Proses ini memang tergantung server Pi)
-        const authResult = await window.Pi.authenticate(['username', 'payments'], async (payment) => {
-            await handleIncompletePayment(payment);
-        });
-
-        // 2. Simpan data user ke memori lokal (Sangat cepat)
-        currentUser = {
-            uid: authResult.user.uid,
-            username: authResult.user.username,
-            role: 'buyer',
-            accessToken: authResult.accessToken,
-            authType: 'pi'
-        };
-        localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
-
-        // 3. LANGSUNG PINDAH HALAMAN (Inilah yang bikin terasa cepat)
-        closeModal('piAuthModal');
-        closeModal('loginOptionsModal');
-        updateUI();
-        switchView('home'); 
-        showToast(`Halo @${currentUser.username}!`, 'success');
-
-        // 4. JALANKAN PROSES BERAT DI BALIK LAYAR (Tanpa kata 'await')
-        // Ini akan berjalan sendiri tanpa menahan tampilan depan
-        ensureUserInFirestore(); 
-        fetchPiBalance();
-        loadDataFromFirebase();
-
-    } catch (error) {
-        logDebug("Auth error: " + error.message);
-        showToast('Gagal login: ' + error.message, 'error');
-    }
-};
-
-            
-    async function ensureUserInFirestore() {
-        if (!currentUser?.uid || !db) return;
-        try {
-            const userRef = doc(db, "users", currentUser.uid);
-            const userSnap = await getDoc(userRef);
-            
-            if (!userSnap.exists()) {
-                await setDoc(userRef, {
-                    uid: currentUser.uid,
-                    username: currentUser.username,
-                    role: 'buyer',
-                    authType: 'pi',
-                    sgtBalance: 0,
-                    sgtEarned: 0,
-                    sgtSpent: 0,
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp()
-                });
-                logDebug("User created in Firestore");
-            } else {
-                // Update last login
-                await updateDoc(userRef, {
-                    lastLogin: serverTimestamp(),
-                    updatedAt: serverTimestamp()
-                });
-            }
-        } catch (e) {
-            logDebug("Ensure user error: " + e.message);
+        logDebug("authenticatePi called, SDK ready: " + isPiSDKReady);
+        
+        if (!window.Pi) {
+            showToast('Pi SDK tidak tersedia. Pastikan Anda membuka di Pi Browser.', 'error');
+            logDebug("ERROR: window.Pi is undefined");
+            return;
         }
-    }
+
+        try {
+            logDebug("Starting Pi authentication...");
+            showToast('Menghubungkan ke Pi Network...', 'info');
+
+            const scopes = ['username', 'payments'];
+            
+            const onIncompletePaymentFound = async (payment) => {
+                logDebug("Incomplete payment found: " + payment?.identifier);
+                try {
+                    await handleIncompletePayment(payment);
+                } catch (err) {
+                    logDebug("Handle incomplete payment error: " + err.message);
+                }
+            };
+
+            logDebug("Calling Pi.authenticate with scopes: " + JSON.stringify(scopes));
+            
+            const authResult = await Promise.race([
+                window.Pi.authenticate(scopes, onIncompletePaymentFound),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout after 20s')), 20000))
+            ]);
+            
+            logDebug("Auth result received: " + JSON.stringify(authResult));
+            
+            if (!authResult || !authResult.user) {
+                throw new Error('Invalid auth result: no user data');
+            }
+            
+            piAuth = authResult;
+            isPiAuthenticated = true;
+            
+            currentUser = {
+                uid: authResult.user.uid || ('pi_' + Date.now()),
+                username: authResult.user.username || 'pioneer',
+                role: 'buyer',
+                accessToken: authResult.accessToken,
+                walletAddress: authResult.user.wallet_address || null,
+                authType: 'pi'
+            };
+
+            logDebug("User created: " + JSON.stringify(currentUser));
+
+            // Simpan user ke localStorage (TANPA balance simulasi)
+            localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
+
+            updateUI();
+            
+            // Coba fetch balance dari Pi (jika tersedia)
+            try {
+                await fetchPiBalance();
+            } catch (balanceErr) {
+                logDebug("Fetch balance error (non-critical): " + balanceErr.message);
+            }
+            
+            closeModal('piAuthModal');
+            closeModal('loginOptionsModal');
+            
+            showToast(`Selamat datang, @${currentUser.username}!`, 'success');
+            logDebug("Authentication successful, user: @" + currentUser.username);
+            
+            loadDataFromFirebase();
+            switchView('home');
+            
+        } catch (error) {
+            logDebug("Auth error details: " + error.message);
+            logDebug("Error stack: " + (error.stack || 'no stack'));
+            
+            if (error.message && error.message.includes('consent')) {
+                showToast('Login dibatalkan oleh user', 'warning');
+            } else if (error.message && error.message.includes('timeout')) {
+                showToast('Waktu habis. Silakan coba lagi.', 'error');
+            } else if (error.message && error.message.includes('network')) {
+                showToast('Masalah koneksi. Periksa internet Anda.', 'error');
+            } else {
+                showToast('Gagal login: ' + error.message, 'error');
+            }
+        }
+    };
 
     window.openAdminLoginModal = function() {
         closeModal('loginOptionsModal');
@@ -2652,7 +2109,6 @@
         userRole = 'guest';
         piAuth = null;
         isPiAuthenticated = false;
-        sgtBalance = 0;
         
         localStorage.removeItem('sagatama_user');
         localStorage.removeItem('sagatama_cart');
@@ -2669,22 +2125,27 @@
     };
 
     // ============================================
-    // PI BALANCE
+    // PI BALANCE - HANYA FETCH DARI PI BROWSER
     // ============================================
     
     async function fetchPiBalance() {
         try {
+            // Pi Mainnet tidak expose balance ke frontend untuk keamanan
+            // Hanya tampilkan placeholder atau info bahwa balance ada di Pi Browser
             logDebug("Pi Browser Wallet - balance managed by Pi Network");
             
+            // Jika ada method untuk cek balance (tergantung versi Pi SDK)
             if (window.Pi && typeof window.Pi.getUser === 'function') {
                 try {
                     const userData = await window.Pi.getUser();
                     logDebug("User data from Pi: " + JSON.stringify(userData));
+                    // Balance tidak tersedia di frontend untuk keamanan
                 } catch (sdkErr) {
                     logDebug("Pi SDK getUser failed: " + sdkErr.message);
                 }
             }
             
+            // Update UI dengan placeholder (user harus cek di Pi Browser)
             const walletBalance = document.getElementById('walletPiBalance');
             if (walletBalance) {
                 walletBalance.innerText = 'π --';
@@ -2700,369 +2161,304 @@
         fetchPiBalance();
     };
 
+     
     // ============================================
-    // PAYMENT FUNCTIONS - FIXED PI SDK IMPLEMENTATION
+    // PAYMENT FUNCTIONS - PI BROWSER WALLET (IMPROVED)
     // ============================================
     
-    window.openPayment = function() {
-        if (cart.length === 0) {
-            showToast('Keranjang masih kosong!', 'error');
-            return;
-        }
-        if (!currentUser) {
-            showToast('Silakan login terlebih dahulu', 'warning');
+    let paymentTimeout = null;
+    
+    async function createPiPayment() {
+        if (!isPiAuthenticated || !piAuth) {
+            showToast('Silakan login dengan Pi terlebih dahulu', 'warning');
             openModal('loginOptionsModal');
             return;
         }
-        
-        // Hitung total Pi dan reward SGT
-        let totalPi = 0;
-        let totalItems = 0;
-        cart.forEach(item => {
-            totalPi += (parseFloat(item.pricePi) || 0) * item.qty;
-            totalItems += item.qty;
-        });
-        
-        currentTotalPi = totalPi;
-        const sgtReward = Math.floor(totalPi * SGT_REWARD_RATE);
-        
-        const amountEl = document.getElementById('paymentAmount');
-        const itemsEl = document.getElementById('paymentItems');
-        const sgtRewardEl = document.getElementById('sgtPaymentAmount');
-        const btn = document.getElementById('btnProcessPayment');
-        
-        if (amountEl) amountEl.innerText = 'π ' + totalPi.toFixed(8);
-        if (sgtRewardEl) sgtRewardEl.innerText = '+ Dapat ' + sgtReward + ' SGT Reward';
-        
-        if (itemsEl) {
-            itemsEl.innerHTML = cart.map(item => {
-                const itemTotalPi = (parseFloat(item.pricePi) || 0) * item.qty;
-                return `
-                <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #E5E7EB;">
-                    <div>
-                        <span style="font-size:13px; color:#374151; font-weight:600;">${item.name}</span>
-                        <span style="font-size:11px; color:#9CA3AF; margin-left:4px;">x${item.qty}</span>
-                    </div>
-                    <div style="text-align:right;">
-                        <div style="font-size:12px; font-weight:700; color:#8B5CF6;">π ${itemTotalPi.toFixed(8)}</div>
-                        <div style="font-size:10px; color:#F59E0B;">+${Math.floor(itemTotalPi * SGT_REWARD_RATE)} SGT</div>
-                    </div>
-                </div>
-            `}).join('');
-        }
-        
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
-        }
-        
-        openModal('paymentModal');
-    };
 
-    window.processPayment = async function() {
-        const btn = document.getElementById('btnProcessPayment');
-        if (btn?.disabled) return;
+        // Hitung total Pi dari cart
+        const totalPi = cart.reduce((sum, item) => {
+            const itemPricePi = parseFloat(item.pricePi) || 0;
+            return sum + (itemPricePi * item.qty);
+        }, 0);
         
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Memproses...';
-        
-        try {
-            await createPiPayment();
-        } catch (error) {
-            logDebug("Payment error: " + error.message);
-            showToast('Gagal memproses pembayaran: ' + error.message, 'error');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Coba Lagi';
-        }
-    };
-
-    async function createPiPayment() {
-        if (!window.Pi || !isPiSDKReady) {
-            throw new Error('Pi SDK tidak tersedia');
-        }
-
-        const totalPi = cart.reduce((sum, item) => sum + ((parseFloat(item.pricePi) || 0) * item.qty), 0);
-        
-        const callbacks = {
-            onReadyForServerApproval: async function(paymentId) {
-                logDebug("✓ onReadyForServerApproval: " + paymentId);
-                showToast('Memverifikasi pembayaran...', 'info');
-                
-                try {
-                    // Simpan pending payment ke Firebase
-                    await addDoc(collection(db, 'pending_payments'), {
-                        paymentId: paymentId,
-                        status: 'pending_approval',
-                        createdAt: serverTimestamp(),
-                        customer: currentUser?.username,
-                        customerUid: currentUser?.uid,
-                        amount: totalPi,
-                        items: cart.map(i => ({id: i.id, name: i.name, qty: i.qty, pricePi: i.pricePi})),
-                        metadata: {
-                            orderId: 'ORD_' + Date.now(),
-                            customer: currentUser.username,
-                            customerUid: currentUser.uid
-                        }
-                    });
-                    
-                    // Call server approval API
-                    const response = await fetch('/api/payments/approve', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ paymentId: paymentId })
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error('Server approval failed');
-                    }
-                    
-                    logDebug("✓ Payment approved on server");
-                    
-                } catch (err) {
-                    logDebug("Approval error: " + err.message);
-                    throw err;
-                }
-            },
-            
-            onReadyForServerCompletion: async function(paymentId, txid) {
-                logDebug("✓ onReadyForServerCompletion: " + paymentId + " TX: " + txid);
-                showToast('Menyelesaikan transaksi...', 'info');
-                
-                try {
-                    // Complete on server
-                    const response = await fetch('/api/payments/complete', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ paymentId: paymentId, txid: txid })
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error('Server completion failed');
-                    }
-                    
-                    // Save order to Firebase
-                    const orderData = {
-                        paymentId: paymentId,
-                        txid: txid,
-                        amount: totalPi,
-                        items: [...cart],
-                        status: 'paid',
-                        customer: currentUser.username,
-                        customerUid: currentUser.uid,
-                        createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp(),
-                        paymentMethod: 'pi'
-                    };
-                    
-                    await saveOrderToFirebase(orderData);
-                    
-                    // Add SGT reward
-                    const sgtReward = Math.floor(totalPi * SGT_REWARD_RATE);
-                    await addSgtReward(sgtReward);
-                    await recordSgtTransaction('earn', sgtReward, 'Reward dari pembelian π ' + totalPi.toFixed(8));
-                    
-                    // Clear cart
-                    cart = [];
-                    saveCart();
-                    updateCartUI();
-                    
-                    // Close modal and show success
-                    closeModal('paymentModal');
-                    showSuccessModal('Pembayaran Berhasil!', 'π ' + totalPi.toFixed(8) + ' telah dibayar. Anda mendapat ' + sgtReward + ' SGT reward.');
-                    
-                    // Redirect to orders
-                    setTimeout(() => {
-                        switchView('orders');
-                    }, 2000);
-                    
-                } catch (err) {
-                    logDebug("Completion error: " + err.message);
-                    throw err;
-                }
-            },
-            
-            onCancel: function(paymentId) {
-                logDebug("✗ onCancel: " + paymentId);
-                showToast('Pembayaran dibatalkan', 'warning');
-                resetPaymentButton();
-                forceRedirectToApp();
-            },
-            
-            onError: function(error, payment) {
-                logDebug("✗ onError: " + error.message);
-                
-                if (error.message && error.message.toLowerCase().includes('balance')) {
-                    showToast('Saldo Pi tidak mencukupi!', 'error');
-                } else if (error.message && error.message.toLowerCase().includes('timeout')) {
-                    showToast('Waktu habis. Silakan coba lagi.', 'error');
-                } else {
-                    showToast('Error pembayaran: ' + error.message, 'error');
-                }
-                
-                resetPaymentButton();
-                forceRedirectToApp();
-            }
-        };
-
-        // Create payment data
-        const orderMetadata = {
-            orderId: 'ORD_' + Date.now(),
-            items: cart.map(i => ({ 
-                id: i.id,
-                name: i.name, 
-                qty: i.qty, 
-                pricePi: parseFloat(i.pricePi) || 0
-            })),
-            customer: currentUser.username,
-            customerUid: currentUser.uid,
-            timestamp: new Date().toISOString(),
-            totalPi: totalPi
-        };
-
-        const paymentData = {
-            amount: parseFloat(totalPi.toFixed(8)),
-            memo: `Sagatama Mart - ${cart.length} item`,
-            metadata: orderMetadata
-        };
-
-        logDebug("Creating Pi payment: " + JSON.stringify(paymentData));
-        
-        // Create payment via Pi SDK
-        window.Pi.createPayment(paymentData, callbacks);
-    }
-
-    function resetPaymentButton() {
-        const btn = document.getElementById('btnProcessPayment');
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
-        }
-    }
-
-    function forceRedirectToApp() {
-        const APP_URL = "https://sagatama-mart.vercel.app";
-        if (!APP_URL) return;
-        
-        if (window.location.href.includes(APP_URL)) {
-            logDebug("Sudah berada di App URL");
+        if (totalPi <= 0) {
+            showToast('Keranjang kosong!', 'error');
             return;
         }
 
-        logDebug("Redirecting to app: " + APP_URL);
-        setTimeout(() => {
-            try {
-                window.location.replace(APP_URL);
-            } catch(e) {
-                window.location.href = APP_URL;
-            }
-        }, 1500);
-    }
+        logDebug("Creating payment for: " + totalPi.toFixed(8) + " π");
 
-    async function handleIncompletePayment(payment) {
-        logDebug("Handling incomplete payment: " + payment?.identifier);
+        // Setup timeout handler
+        const PAYMENT_TIMEOUT_MS = 180000; // 180 detik timeout
         
-        if (!payment || !payment.identifier) {
-            logDebug("Invalid payment object");
-            return;
-        }
-
-        try {
-            const existingOrder = orders.find(o => o.paymentId === payment.identifier);
-            
-            if (existingOrder && existingOrder.status === 'completed') {
-                logDebug("Payment already processed, completing on Pi...");
-                await cancelOrCompletePaymentOnServer(payment.identifier, payment.transaction?.txid);
-                return;
-            }
-
-            if (payment?.transaction?.txid) {
-                logDebug("Payment has transaction, completing...");
-                
-                if (!existingOrder) {
-                    const orderData = {
-                        paymentId: payment.identifier,
-                        txid: payment.transaction.txid,
-                        amount: parseFloat(payment.amount) || 0,
-                        items: payment.metadata?.items || [],
-                        status: 'paid',
-                        customer: currentUser?.username || 'User',
-                        customerUid: currentUser?.uid || '',
-                        createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp(),
-                        metadata: payment.metadata || {}
-                    };
-                    await saveOrderToFirebase(orderData);
-                }
-                
-                await completePaymentOnServer(payment.identifier, payment.transaction.txid);
-                showToast('Pembayaran pending berhasil diselesaikan!', 'success');
-                
-            } else {
-                logDebug("Payment has no transaction, cancelling...");
-                await cancelPaymentOnServer(payment.identifier);
-            }
-            
+        paymentTimeout = setTimeout(() => {
+            logDebug("Payment timeout reached");
             pendingPayment = null;
+            showToast('Waktu pembayaran habis. Silakan coba lagi.', 'error');
             
-        } catch (err) {
-            logDebug("Handle incomplete payment error: " + err.message);
-            try {
-                await cancelPaymentOnServer(payment.identifier);
-            } catch (cancelErr) {
-                logDebug("Cancel also failed: " + cancelErr.message);
+            // Reset button
+            const btn = document.getElementById('btnProcessPayment');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
             }
-        }
-    }
+        }, PAYMENT_TIMEOUT_MS);
 
-    async function cancelPaymentOnServer(paymentId) {
         try {
-            logDebug("Cancelling payment: " + paymentId);
-            
-            const response = await fetch('/api/payments/cancel', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ paymentId: paymentId })
-            });
+            const callbacks = {
+                onReadyForServerApproval: function(paymentId) {
+                    logDebug("✓ onReadyForServerApproval: " + paymentId);
+                    clearTimeout(paymentTimeout); // Cancel timeout
+                    showToast('Memverifikasi pembayaran...', 'info');
+                    approvePaymentOnServer(paymentId);
+                },
+                
+                onReadyForServerCompletion: function(paymentId, txid) {
+                    logDebug("✓ onReadyForServerCompletion: " + paymentId + " TX: " + txid);
+                    clearTimeout(paymentTimeout); // Cancel timeout
+                    showToast('Menyelesaikan transaksi...', 'info');
+                    completePaymentOnServer(paymentId, txid);
+                },
+                
+                onCancel: function(paymentId) {
+                    logDebug("✗ onCancel: " + paymentId);
+                    clearTimeout(paymentTimeout);
+                    pendingPayment = null;
+                    showToast('Pembayaran dibatalkan', 'warning');
+					
+					// Force redirect kembali ke app
+                    forceRedirectToApp();
+                    
+                    // Reset button
+                    const btn = document.getElementById('btnProcessPayment');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
+                    }
+                },
+                
+                onError: function(error, payment) {
+                    logDebug("✗ onError: " + error.message);
+                    clearTimeout(paymentTimeout);
+                    pendingPayment = null;
+					
+					// Force redirect kembali ke app meskipun error
+                    forceRedirectToApp();
+                    
+                    if (error.message && error.message.toLowerCase().includes('balance')) {
+                        showToast('Saldo Pi tidak mencukupi! Silakan cek wallet Pi Browser Anda.', 'error');
+                    } else if (error.message && error.message.toLowerCase().includes('timeout')) {
+                        showToast('Waktu habis. Silakan refresh dan coba lagi.', 'error');
+                    } else {
+                        showToast('Error pembayaran: ' + error.message, 'error');
+                    }
+                    
+                    // Reset button
+                    const btn = document.getElementById('btnProcessPayment');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
+                    }
+                }
+            };
 
-            if (!response.ok) {
-                throw new Error("Failed to cancel payment");
-            }
+            // Buat metadata order
+            const orderMetadata = {
+                orderId: 'ORD_' + Date.now(),
+                items: cart.map(i => ({ 
+                    id: i.id,
+                    name: i.name, 
+                    qty: i.qty, 
+                    pricePi: parseFloat(i.pricePi) || 0
+                })),
+                customer: currentUser.username,
+                customerUid: currentUser.uid,
+                timestamp: new Date().toISOString(),
+                totalPi: totalPi
+            };
+
+            const paymentData = {
+                amount: parseFloat(totalPi.toFixed(8)),
+                memo: `Sagatama Mart - ${cart.length} item`,
+                metadata: orderMetadata
+            };
+
+            logDebug("Payment data: " + JSON.stringify(paymentData));
             
-            logDebug("Payment cancelled successfully");
-            return true;
+            // Simpan pending payment untuk tracking
+            pendingPayment = {
+                amount: totalPi,
+                items: [...cart],
+                metadata: orderMetadata,
+                status: 'pending',
+                createdAt: Date.now()
+            };
+            
+            // Create payment via Pi SDK
+            window.Pi.createPayment(paymentData, callbacks);
+            logDebug("Pi.createPayment called successfully");
+            
         } catch (error) {
-            logDebug("Cancel payment error: " + error.message);
-            throw error;
+            clearTimeout(paymentTimeout);
+            logDebug("Create payment error: " + error.message);
+            pendingPayment = null;
+            showToast('Gagal membuat pembayaran: ' + error.message, 'error');
+            
+            // Reset button
+            const btn = document.getElementById('btnProcessPayment');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
+            }
         }
     }
+	
+	function forceRedirectToApp() {
+    // Pastikan APP_URL didefinisikan (contoh: https://sagatama-mart.vercel.app)
+    if (!window.APP_URL) return;
 
-    async function cancelOrCompletePaymentOnServer(paymentId, txid) {
-        if (txid) {
-            return completePaymentOnServer(paymentId, txid);
-        } else {
-            return cancelPaymentOnServer(paymentId);
+    // 1. Cek apakah user sudah berada di URL yang benar
+    // Ini mencegah pengulangan redirect (infinite loop)
+    if (window.location.href.includes(APP_URL)) {
+        logDebug("Sudah berada di App URL. Redirect dibatalkan.");
+        return;
+    }
+
+    logDebug("Forcing redirect to app: " + APP_URL);
+    
+    // 2. Gunakan replace agar user tidak terjebak tombol 'back'
+    setTimeout(() => {
+        try {
+            // .replace lebih baik dari .href untuk redirect paksa
+            // agar histori browser tidak menumpuk
+            window.location.replace(APP_URL);
+        } catch(e) {
+            window.location.href = APP_URL;
+        }
+    }, 1500);
+}
+
+    async function approvePaymentOnServer(paymentId) {
+    try {
+        logDebug("Menghubungi Vercel untuk Approve...");
+
+        // INI BAGIAN PENTING: Memanggil file di Vercel Anda
+        const response = await fetch('/api/payments/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentId: paymentId })
+        });
+
+        const result = await response.json();
+
+        // Jika Vercel membalas dengan error
+        if (!response.ok) {
+            throw new Error(result.error_message || result.error || "Gagal Approve");
+        }
+
+        logDebug("✓ Berhasil Approve di Server Pi!");
+            
+            // Simpan payment pending ke Firebase
+            await addDoc(collection(db, 'pending_payments'), {
+                paymentId: paymentId,
+                status: 'pending_approval',
+                createdAt: serverTimestamp(),
+                customer: currentUser?.username,
+                customerUid: currentUser?.uid,
+                amount: pendingPayment?.amount || 0,
+                items: pendingPayment?.items || [],
+                orderMetadata: pendingPayment?.metadata || {}
+            });
+            
+            logDebug("✓ Payment approved on server: " + paymentId);
+        } catch (error) {
+            logDebug("✗ Approve error: " + error.message);
+            showToast('Error verifikasi: ' + error.message, 'error');
         }
     }
 
     async function completePaymentOnServer(paymentId, txid) {
-        try {
-            logDebug("Completing payment on server: " + paymentId);
-            
-            const response = await fetch('/api/payments/complete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ paymentId: paymentId, txid: txid })
-            });
+    try {
+        logDebug("Menyelesaikan pembayaran di server...");
 
-            if (!response.ok) throw new Error("Failed to complete payment");
+        const response = await fetch('/api/payments/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentId: paymentId, txid: txid })
+        });
+
+        if (!response.ok) throw new Error("Gagal konfirmasi ke Vercel");
+        
+        const result = await response.json();
+        logDebug("✓ Server Pi mengonfirmasi pembayaran selesai");
+
+        // --- PERBAIKAN VARIABEL AGAR TIDAK ERROR ---
+        const finalAmount = pendingPayment?.amount || 0;
+        const finalItems = (cart && cart.length > 0) ? [...cart] : (pendingPayment?.items || []);
+
+        const orderData = {
+            paymentId: paymentId,
+            txid: txid,
+            amount: finalAmount, // Gunakan finalAmount yang sudah aman
+            items: finalItems,  // Gunakan finalItems yang sudah aman
+            status: 'paid',
+            customer: currentUser?.username || 'User',
+            customerUid: currentUser?.uid || '',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            metadata: pendingPayment?.metadata || {}
+        };
+        
+        // Simpan ke Firebase
+        await saveOrderToFirebase(orderData);
+
+        // --- PROSES PEMBERSIHAN ---
+        cart = [];              
+        saveCart();             
+        updateCartUI();         
+        pendingPayment = null;  
+		
+		// --- TAMBAHKAN INI: PAKSA TAMPILAN KERANJANG JADI KOSONG ---
+        const cartItemsContainer = document.getElementById('cartItems'); // Sesuaikan dengan ID di HTML Anda
+        if (cartItemsContainer) {
+            cartItemsContainer.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-12 text-gray-500">
+                    <i class="fas fa-shopping-cart text-5xl mb-4 opacity-20"></i>
+                    <p class="text-lg">Keranjang Anda kosong</p>
+                </div>
+            `;
+        }
+        
+        logDebug("✓ KERANJANG BERHASIL DIKOSONGKAN");
+        
+        showToast('Pembayaran Berhasil!', 'success');
+        if (typeof closeModal === 'function') closeModal('paymentModal');
+		
+		setTimeout(() => {
+                switchView('orders');
+                forceRedirectToApp();
+            }, 2000);
+
+        // --- HAPUS RIWAYAT PENDING AGAR TIDAK MUNCUL LAGI ---
+        try {
+            const q = query(collection(db, "pending_payments"), where("paymentId", "==", paymentId));
+            const querySnapshot = await getDocs(q);
             
-            logDebug("Payment completed on server");
-            return true;
+            // Gunakan Promise.all agar penghapusan selesai sebelum lanjut
+            await Promise.all(querySnapshot.docs.map(doc => deleteDoc(doc.ref)));
+            logDebug("✓ Data pending dihapus dari database");
+        } catch (e) {
+            logDebug("! Gagal hapus riwayat pending: " + e.message);
+        }
+        
+        return result;
         } catch (error) {
-            logDebug("Complete payment error: " + error.message);
+            logDebug("✗ Completion error: " + error.message);
+            // Tetap redirect meskipun ada error
+            forceRedirectToApp();
             throw error;
         }
-    }
+}
 
     async function saveOrderToFirebase(orderData) {
         try {
@@ -3077,34 +2473,104 @@
     }
 
     // ============================================
-    // SUCCESS MODAL
-    // ============================================
+// PERBAIKAN: HANDLE INCOMPLETE PAYMENT YANG LEBIH ROBUST
+// ============================================
+
+async function handleIncompletePayment(payment) {
+    logDebug("Handling incomplete payment: " + payment?.identifier);
     
-    function showSuccessModal(title, message) {
-        const existing = document.getElementById('successModal');
-        if (existing) existing.remove();
-        
-        const modal = document.createElement('div');
-        modal.id = 'successModal';
-        modal.className = 'modal active';
-        modal.innerHTML = `
-            <div class="modal-content" style="text-align:center; padding:40px 24px;">
-                <div class="success-circle">
-                    <i class="fas fa-check"></i>
-                </div>
-                <h3 style="font-size:24px; font-weight:800; color:#1F2937; margin-bottom:8px;">${title}</h3>
-                <p style="color:#6B7280; font-size:15px; margin-bottom:24px;">${message}</p>
-                <button onclick="closeModal('successModal')" class="btn-primary">
-                    Lihat Pesanan Saya
-                </button>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        
-        setTimeout(() => {
-            closeModal('successModal');
-        }, 5000);
+    if (!payment || !payment.identifier) {
+        logDebug("Invalid payment object");
+        return;
     }
+
+    try {
+        // Cek apakah payment sudah ada di database lokal
+        const existingOrder = orders.find(o => o.paymentId === payment.identifier);
+        
+        if (existingOrder && existingOrder.status === 'completed') {
+            logDebug("Payment already processed locally, completing on Pi...");
+            // Tetap panggil complete ke server Pi untuk clear status
+            await cancelOrCompletePaymentOnServer(payment.identifier, payment.transaction?.txid);
+            return;
+        }
+
+        // Jika payment sudah punya transaksi (sudah dibayar user)
+        if (payment?.transaction?.txid) {
+            logDebug("Payment has transaction, completing...");
+            
+            // Simpan order dulu kalau belum ada
+            if (!existingOrder) {
+                const orderData = {
+                    paymentId: payment.identifier,
+                    txid: payment.transaction.txid,
+                    amount: parseFloat(payment.amount) || 0,
+                    items: payment.metadata?.items || [],
+                    status: 'paid',
+                    customer: currentUser?.username || 'User',
+                    customerUid: currentUser?.uid || '',
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                    metadata: payment.metadata || {}
+                };
+                await saveOrderToFirebase(orderData);
+            }
+            
+            await completePaymentOnServer(payment.identifier, payment.transaction.txid);
+            showToast('Pembayaran pending berhasil diselesaikan!', 'success');
+            
+        } else {
+            // Payment dibuat tapi belum dibayar (user cancel atau error)
+            // Perlu cancel di server
+            logDebug("Payment has no transaction, cancelling...");
+            await cancelPaymentOnServer(payment.identifier);
+        }
+        
+        // Clear any pending state
+        pendingPayment = null;
+        
+    } catch (err) {
+        logDebug("Handle incomplete payment error: " + err.message);
+        // Tetap coba cancel kalau complete gagal
+        try {
+            await cancelPaymentOnServer(payment.identifier);
+        } catch (cancelErr) {
+            logDebug("Cancel also failed: " + cancelErr.message);
+        }
+    }
+}
+
+// Tambahkan fungsi cancel payment
+async function cancelPaymentOnServer(paymentId) {
+    try {
+        logDebug("Cancelling payment: " + paymentId);
+        
+        const response = await fetch('/api/payments/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentId: paymentId })
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to cancel payment");
+        }
+        
+        logDebug("Payment cancelled successfully");
+        return true;
+    } catch (error) {
+        logDebug("Cancel payment error: " + error.message);
+        throw error;
+    }
+}
+
+// Helper untuk cancel atau complete
+async function cancelOrCompletePaymentOnServer(paymentId, txid) {
+    if (txid) {
+        return completePaymentOnServer(paymentId, txid);
+    } else {
+        return cancelPaymentOnServer(paymentId);
+    }
+}
 
     // ============================================
     // VIEW SWITCHING
@@ -3125,6 +2591,7 @@
             const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
             if (!isAdmin) {
                 showToast('Akses ditolak! Anda bukan admin.', 'error');
+                logDebug("Access denied to admin view: " + view);
                 switchView('account');
                 return;
             }
@@ -3140,6 +2607,7 @@
         
         if (!target) {
             logDebug("ERROR: View element not found: " + targetId);
+            showToast('Halaman tidak ditemukan!', 'error');
             return;
         }
         
@@ -3227,7 +2695,7 @@
         const modal = document.getElementById(id);
         if (modal) {
             modal.classList.remove('active');
-            if (id === 'productDetailModal' || id === 'successModal') {
+            if (id === 'productDetailModal' || id === 'balanceModal') {
                 setTimeout(() => {
                     if (modal.parentNode) modal.remove();
                 }, 300);
@@ -3236,14 +2704,13 @@
     };
 
     // ============================================
-    // RENDER FUNCTIONS
+    // RENDER FUNCTIONS - HANYA TAMPIL HARGA PI
     // ============================================
     
     function updateUI() {
         const userBadge = document.getElementById('userBadge');
         const welcome = document.getElementById('welcomeBanner');
         const welcomeName = document.getElementById('welcomeName');
-        const sgtBadge = document.getElementById('sgtHeaderBadge');
         
         if (currentUser) {
             if (welcome) {
@@ -3263,15 +2730,9 @@
                 userBadge.style.background = isAdmin ? 'linear-gradient(135deg, #F59E0B, #D97706)' : '#DBEAFE';
                 userBadge.style.color = isAdmin ? 'white' : '#1E40AF';
             }
-            
-            // Show SGT badge if user has balance
-            if (sgtBadge && sgtBalance > 0) {
-                sgtBadge.style.display = 'flex';
-            }
         } else {
             if (welcome) welcome.style.display = 'none';
             if (userBadge) userBadge.style.display = 'none';
-            if (sgtBadge) sgtBadge.style.display = 'none';
         }
     }
 
@@ -3305,7 +2766,6 @@
             const stockNum = parseInt(p.stock);
             const isOutOfStock = !p.stock || stockNum <= 0 || isNaN(stockNum);
             const pricePi = parseFloat(p.pricePi) || 0;
-            const sgtReward = Math.floor(pricePi * SGT_REWARD_RATE);
             
             return `
             <div class="product-card fade-in" onclick="showProductDetail('${p.id}')" style="${isOutOfStock ? 'opacity:0.6;' : ''}">
@@ -3316,11 +2776,6 @@
                     ${isOutOfStock ? `
                         <div style="position:absolute; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; border-radius:10px; font-size:14px;">
                             <i class="fas fa-ban" style="margin-right:8px;"></i>HABIS
-                        </div>
-                    ` : ''}
-                    ${!isOutOfStock ? `
-                        <div style="position:absolute; top:8px; right:8px; background:linear-gradient(135deg, #F59E0B, #D97706); color:white; padding:4px 10px; border-radius:20px; font-size:10px; font-weight:800;">
-                            +${sgtReward} SGT
                         </div>
                     ` : ''}
                 </div>
@@ -3346,9 +2801,9 @@
         if (!container) return;
         
         const available = products.filter(p => {
-            const stockNum = parseInt(p.stock);
-            return !isNaN(stockNum) && stockNum > 0;
-        });
+    const stockNum = parseInt(p.stock);
+    return !isNaN(stockNum) && stockNum > 0;
+});
         const featured = available.slice(0, 4);
         
         if (featured.length === 0) {
@@ -3362,15 +2817,9 @@
         
         container.innerHTML = featured.map(p => {
             const pricePi = parseFloat(p.pricePi) || 0;
-            const sgtReward = Math.floor(pricePi * SGT_REWARD_RATE);
             return `
             <div class="product-card fade-in" onclick="showProductDetail('${p.id}')">
-                <div style="position:relative;">
-                    <img src="${p.image || 'https://via.placeholder.com/300x200?text=No+Image'}" alt="${p.name}" loading="lazy">
-                    <div style="position:absolute; top:8px; right:8px; background:linear-gradient(135deg, #F59E0B, #D97706); color:white; padding:4px 10px; border-radius:20px; font-size:10px; font-weight:800;">
-                        +${sgtReward} SGT
-                    </div>
-                </div>
+                <img src="${p.image || 'https://via.placeholder.com/300x200?text=No+Image'}" alt="${p.name}" loading="lazy">
                 <h4 style="font-weight:700; color:#1F2937; font-size:13px; margin-bottom:4px;">${p.name}</h4>
                 <p style="font-weight:800; color:#8B5CF6; font-size:14px;">π ${pricePi.toFixed(8)}</p>
             </div>
@@ -3405,11 +2854,13 @@
         const historyContainer = document.getElementById('transactionHistory');
         if (!historyContainer) return;
 
+        // Update balance display (placeholder karena Pi tidak expose balance)
         const walletBalance = document.getElementById('walletPiBalance');
         if (walletBalance) {
             walletBalance.innerText = 'π --';
         }
 
+        // Ambil 10 transaksi terakhir milik user
         const myTransactions = orders
             .filter(o => o.customer === currentUser?.username)
             .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
@@ -3439,80 +2890,6 @@
                 </div>
             `).join('');
         }
-        
-        // Render connected apps
-        renderConnectedApps();
-        
-        // Render SGT transactions
-        renderSgtTransactions();
-    }
-    
-    function renderConnectedApps() {
-        const container = document.getElementById('connectedAppsList');
-        if (!container) return;
-        
-        container.innerHTML = `
-            <div class="cross-app-card" onclick="window.open('https://hidayatulamin.vercel.app', '_blank')">
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <div style="width:44px; height:44px; background:linear-gradient(135deg, #8B5CF6, #7C3AED); border-radius:12px; display:flex; align-items:center; justify-content:center; color:white; font-size:20px;">
-                        <i class="fas fa-graduation-cap"></i>
-                    </div>
-                    <div style="flex:1;">
-                        <p style="font-weight:700; color:#1E293B; font-size:14px;">Yayasan Hidayatullah Amin</p>
-                        <p style="font-size:12px; color:#64748B;">Portal Pendidikan & Sosial</p>
-                    </div>
-                    <div class="sgt-reward-badge" style="animation:none;">
-                        <i class="fas fa-link"></i> Terhubung
-                    </div>
-                </div>
-            </div>
-            <div class="cross-app-card">
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <div style="width:44px; height:44px; background:linear-gradient(135deg, #F59E0B, #D97706); border-radius:12px; display:flex; align-items:center; justify-content:center; color:white; font-size:20px;">
-                        <i class="fas fa-store"></i>
-                    </div>
-                    <div style="flex:1;">
-                        <p style="font-weight:700; color:#1E293B; font-size:14px;">Sagatama Mart</p>
-                        <p style="font-size:12px; color:#64748B;">Marketplace Pi Native (Aktif)</p>
-                    </div>
-                    <div class="sgt-reward-badge" style="animation:none;">
-                        <i class="fas fa-check-circle"></i> Aktif
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-    
-    function renderSgtTransactions() {
-        const container = document.getElementById('sgtTransactionHistory');
-        if (!container) return;
-        
-        if (sgtTransactions.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state" style="padding:40px 20px;">
-                    <i class="fas fa-coins" style="font-size:48px; margin-bottom:16px; color:#D1D5DB;"></i>
-                    <p style="color:#6B7280; font-weight:600;">Belum ada transaksi SGT</p>
-                </div>
-            `;
-            return;
-        }
-        
-        container.innerHTML = sgtTransactions.slice(0, 10).map(tx => {
-            const isPositive = tx.type === 'earn' || tx.type === 'transfer_in';
-            return `
-            <div class="order-item" style="margin-bottom:8px;">
-                <div style="width:40px; height:40px; background:${isPositive ? '#FEF3C7' : '#FEE2E2'}; border-radius:10px; display:flex; align-items:center; justify-content:center; color:${isPositive ? '#D97706' : '#DC2626'}; flex-shrink:0;">
-                    <i class="fas ${isPositive ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
-                </div>
-                <div style="flex:1; min-width:0;">
-                    <p style="font-weight:700; color:#1F2937; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${tx.description}</p>
-                    <p style="font-size:11px; color:#6B7280;">${formatDate(tx.createdAt)}</p>
-                </div>
-                <div style="text-align:right;">
-                    <p style="font-weight:800; color:${isPositive ? '#059669' : '#DC2626'}; font-size:14px;">${isPositive ? '+' : '-'}${tx.amount} SGT</p>
-                </div>
-            </div>
-        `}).join('');
     }
 
     function formatDate(timestamp) {
@@ -3557,14 +2934,12 @@
 
         container.innerHTML = cart.map((item, idx) => {
             const itemTotalPi = (parseFloat(item.pricePi) || 0) * item.qty;
-            const itemSgtReward = Math.floor(itemTotalPi * SGT_REWARD_RATE);
             return `
             <div style="background:white; border-radius:16px; padding:16px; margin-bottom:12px; display:flex; gap:12px; border:1px solid #e2e8f0; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
                 <img src="${item.image || 'https://via.placeholder.com/80?text=No+Image'}" style="width:80px; height:80px; object-fit:cover; border-radius:12px;">
                 <div style="flex:1;">
                     <h4 style="font-weight:700; color:#1F2937; font-size:14px; margin-bottom:4px;">${item.name}</h4>
                     <p style="font-size:13px; color:#8B5CF6; font-weight:700;">π ${itemTotalPi.toFixed(8)}</p>
-                    <p style="font-size:11px; color:#F59E0B; font-weight:600;">+${itemSgtReward} SGT</p>
                     
                     <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
                         <button onclick="updateQty(${idx}, -1)" style="width:28px; height:28px; border-radius:8px; border:1px solid #E5E7EB; background:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">
@@ -3588,15 +2963,12 @@
     function updateCartSummary() {
         const totalPi = cart.reduce((sum, item) => sum + ((parseFloat(item.pricePi) || 0) * item.qty), 0);
         const itemCount = cart.reduce((sum, item) => sum + item.qty, 0);
-        const totalSgtReward = Math.floor(totalPi * SGT_REWARD_RATE);
         
         const totalEl = document.getElementById('cartTotalPi');
         const countEl = document.getElementById('cartItemCount');
-        const rewardEl = document.getElementById('sgtRewardPreview');
         
         if (totalEl) totalEl.innerText = 'π ' + totalPi.toFixed(8);
         if (countEl) countEl.innerText = itemCount + ' item';
-        if (rewardEl) rewardEl.innerText = '+' + totalSgtReward + ' SGT';
     }
 
     function updateCartUI() {
@@ -3653,15 +3025,11 @@
                     <p style="font-size:12px; color:#9CA3AF;">${formatDate(o.createdAt)}</p>
                     <p style="font-weight:800; color:#8B5CF6; font-size:16px;">π ${o.amount?.toFixed(8) || '0.0000'}</p>
                 </div>
-                ${o.sgtReward ? `
-                <div style="margin-top:8px; padding-top:8px; border-top:1px solid #FDE68A;">
-                    <span style="font-size:11px; color:#D97706; font-weight:700;"><i class="fas fa-coins" style="margin-right:4px;"></i>+${o.sgtReward} SGT Reward</span>
-                </div>
-                ` : ''}
             </div>
         `).join('');
     }
 
+    // RENDER ACCOUNT DENGAN FORM ALAMAT
     function renderAccount() {
         const container = document.getElementById('accountContent');
         if (!container) return;
@@ -3691,15 +3059,10 @@
                 </div>
                 <h3 style="font-size:24px; font-weight:800; margin-bottom:4px;">@${currentUser.username || 'pioneer'}</h3>
                 <p style="font-size:13px; opacity:0.9; margin-bottom:12px;">${isAdmin ? 'Administrator' : 'Pioneer Member'}</p>
-                ${!isAdmin ? `
-                <div style="background:rgba(255,255,255,0.15); border-radius:12px; padding:12px; margin-top:8px;">
-                    <p style="font-size:12px; color:rgba(255,255,255,0.8);">Saldo SGT</p>
-                    <p style="font-size:28px; font-weight:900; color:#FCD34D;">${sgtBalance} SGT</p>
-                </div>
-                ` : ''}
             </div>
 
             ${!isAdmin ? `
+            <!-- FORM ALAMAT PENGIRIMAN -->
             <div class="card fade-in">
                 <h3 style="font-weight:800; margin-bottom:16px; color:#1F2937;">
                     <i class="fas fa-map-marker-alt" style="color:#8B5CF6; margin-right:8px;"></i>
@@ -3735,6 +3098,11 @@
                 <button onclick="saveUserAddress()" class="btn-primary" style="margin-top:10px;">
                     <i class="fas fa-save" style="margin-right:8px;"></i>Simpan Alamat
                 </button>
+                
+                <p style="font-size:11px; color:#6B7280; margin-top:12px; text-align:center;">
+                    <i class="fas fa-info-circle" style="margin-right:4px;"></i>
+                    Alamat ini akan digunakan untuk pengiriman pesanan Anda
+                </p>
             </div>
             ` : ''}
 
@@ -3752,8 +3120,8 @@
                         <i class="fas fa-wallet"></i>
                     </div>
                     <div style="flex:1;">
-                        <p style="font-weight:700; color:#1F2937;">Dompet Pi & SGT</p>
-                        <p style="font-size:12px; color:#6B7280;">${sgtBalance} SGT • Riwayat Transaksi</p>
+                        <p style="font-weight:700; color:#1F2937;">Dompet Pi</p>
+                        <p style="font-size:12px; color:#6B7280;">Riwayat Transaksi</p>
                     </div>
                     <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
                 </div>
@@ -3776,59 +3144,16 @@
         `;
     }
 
-    async function saveUserAddress() {
-        if (!currentUser?.uid) {
-            showToast('Silakan login terlebih dahulu', 'error');
-            return;
-        }
-
-        const addressData = {
-            receiverName: document.getElementById('addrName')?.value.trim(),
-            phoneNumber: document.getElementById('addrPhone')?.value.trim(),
-            fullAddress: document.getElementById('addrFull')?.value.trim(),
-            city: document.getElementById('addrCity')?.value.trim(),
-            postalCode: document.getElementById('addrZip')?.value.trim()
-        };
-
-        if (!addressData.receiverName || !addressData.phoneNumber || !addressData.fullAddress || !addressData.city) {
-            showToast('Mohon lengkapi semua field yang wajib diisi', 'error');
-            return;
-        }
-
-        const phoneRegex = /^[0-9]{10,15}$/;
-        if (!phoneRegex.test(addressData.phoneNumber.replace(/[^0-9]/g, ''))) {
-            showToast('Nomor telepon tidak valid (10-15 digit)', 'error');
-            return;
-        }
-
-        try {
-            const userRef = doc(db, 'users', currentUser.uid);
-            await setDoc(userRef, {
-                address: addressData,
-                updatedAt: serverTimestamp(),
-                createdAt: serverTimestamp()
-            }, { merge: true });
-
-            currentUser.address = addressData;
-            localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
-            showToast('Alamat berhasil disimpan!', 'success');
-        } catch (error) {
-            logDebug("Save address error: " + error.message);
-            if (error.message.includes('permission') || error.code === 'permission-denied') {
-                showToast('Gagal: Izin akses ditolak. Coba login ulang.', 'error');
-            } else {
-                showToast('Gagal menyimpan: ' + error.message, 'error');
-            }
-        }
-    }
-
     function renderAdminDashboard() {
         const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
+        
         if (!isAdmin) {
             showToast('Akses ditolak!', 'error');
             switchView('home');
             return;
         }
+
+        logDebug("Rendering admin dashboard");
         updateAdminStats();
         renderAdminRecentOrders();
     }
@@ -3858,28 +3183,6 @@
             badge.style.display = needsAction > 0 ? 'block' : 'none';
             badge.innerText = needsAction;
         }
-        
-        // Update SGT stats
-        updateSGTAdminStats();
-    }
-    
-    async function updateSGTAdminStats() {
-        if (!db) return;
-        try {
-            const usersQuery = query(collection(db, "users"), where("sgtBalance", ">", 0));
-            const usersSnap = await getDocs(usersQuery);
-            
-            const totalSGT = usersSnap.docs.reduce((sum, doc) => sum + (doc.data().sgtBalance || 0), 0);
-            const activeUsers = usersSnap.docs.length;
-            
-            const issuedEl = document.getElementById('statTotalSGTIssued');
-            if (issuedEl) issuedEl.innerText = totalSGT.toLocaleString('id-ID');
-            
-            const usersEl = document.getElementById('statTotalSGTUsers');
-            if (usersEl) usersEl.innerText = activeUsers;
-        } catch (e) {
-            logDebug("SGT admin stats error: " + e.message);
-        }
     }
 
     function renderAdminRecentOrders() {
@@ -3902,12 +3205,9 @@
                         <p style="font-weight:700; color:#1F2937; font-size:13px;">#${o.orderId || o.id.substring(0, 8).toUpperCase()}</p>
                         <span class="badge badge-${o.status}" style="font-size:10px; padding:2px 8px;">${getStatusLabel(o.status)}</span>
                     </div>
-                    <p style="font-size:11px; color:#6B7280;"><i class="fas fa-user" style="margin-right:4px;"></i>${o.customer || 'Guest'}</p>
+                    <p style="font-size:11px; color:#6B7280;">${o.customer || 'Guest'} • ${formatDate(o.createdAt)}</p>
                 </div>
-                <div style="text-align:right;">
-                    <p style="font-weight:800; color:#8B5CF6; font-size:14px;">π ${o.amount?.toFixed(8) || '0.0000'}</p>
-                    ${o.sgtReward ? `<p style="font-size:10px; color:#F59E0B; font-weight:700;">+${o.sgtReward} SGT</p>` : ''}
-                </div>
+                <p style="font-weight:800; color:#8B5CF6; font-size:14px;">π ${o.amount?.toFixed(8) || '0.0000'}</p>
             </div>
         `).join('');
     }
@@ -3962,7 +3262,6 @@
                     </div>
                     <p style="font-size:12px; color:#6B7280; margin-bottom:4px;">
                         <span style="color:#8B5CF6; font-weight:700;">π ${pricePi.toFixed(8)}</span>
-                        <span style="margin-left:8px; color:#F59E0B; font-size:11px; font-weight:600;">+${Math.floor(pricePi * SGT_REWARD_RATE)} SGT</span>
                     </p>
                     <div style="display:flex; gap:8px; align-items:center;">
                         <span style="font-size:11px; color:#6B7280; background:#F3F4F6; padding:2px 10px; border-radius:8px;">
@@ -4016,10 +3315,7 @@
                         </div>
                         <p style="font-size:12px; color:#6B7280;"><i class="fas fa-user" style="margin-right:4px;"></i>${o.customer || 'Guest'}</p>
                     </div>
-                    <div style="text-align:right;">
-                        <p style="font-weight:800; color:#8B5CF6; font-size:18px;">π ${o.amount?.toFixed(8) || '0.0000'}</p>
-                        ${o.sgtReward ? `<p style="font-size:11px; color:#F59E0B; font-weight:700;">+${o.sgtReward} SGT</p>` : ''}
-                    </div>
+                    <p style="font-weight:800; color:#8B5CF6; font-size:18px;">π ${o.amount?.toFixed(8) || '0.0000'}</p>
                 </div>
                 
                 <div style="background:#F9FAFB; padding:12px; border-radius:8px; margin-bottom:12px;">
@@ -4059,10 +3355,9 @@
         orders.forEach(o => {
             if (o.status === 'completed' || o.status === 'shipped') {
                 o.items?.forEach(item => {
-                    if (!productSales[item.name]) productSales[item.name] = { qty: 0, revenue: 0, sgtIssued: 0 };
+                    if (!productSales[item.name]) productSales[item.name] = { qty: 0, revenue: 0 };
                     productSales[item.name].qty += item.qty;
                     productSales[item.name].revenue += (parseFloat(item.pricePi) || 0) * item.qty;
-                    productSales[item.name].sgtIssued += Math.floor((parseFloat(item.pricePi) || 0) * item.qty * SGT_REWARD_RATE);
                 });
             }
         });
@@ -4081,7 +3376,7 @@
                 <div style="width:36px; height:36px; background:linear-gradient(135deg, #8B5CF6, #7C3AED); color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px;">${idx + 1}</div>
                 <div style="flex:1; min-width:0;">
                     <p style="font-weight:700; color:#1F2937; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name}</p>
-                    <p style="font-size:11px; color:#6B7280;">${data.qty} terjual • π ${data.revenue.toFixed(8)} • ${data.sgtIssued} SGT</p>
+                    <p style="font-size:11px; color:#6B7280;">${data.qty} terjual • π ${data.revenue.toFixed(8)}</p>
                 </div>
                 <div style="text-align:right;">
                     <p style="font-weight:800; color:#8B5CF6; font-size:16px;">#${idx + 1}</p>
@@ -4089,7 +3384,8 @@
             </div>
         `).join('');
     }
-
+	
+	
     // ============================================
     // CART FUNCTIONS
     // ============================================
@@ -4166,8 +3462,7 @@
         saveCart();
         renderCart();
         updateCartUI();
-		
-		};
+    };
 
     window.removeFromCart = function(idx) {
         const item = cart[idx];
@@ -4176,6 +3471,76 @@
         renderCart();
         updateCartUI();
         showToast(`${item?.name || 'Item'} dihapus`, 'info');
+    };
+
+    window.openPayment = function() {
+        if (cart.length === 0) {
+            showToast('Keranjang masih kosong!', 'error');
+            return;
+        }
+        if (!currentUser) {
+            showToast('Silakan login terlebih dahulu', 'warning');
+            openModal('loginOptionsModal');
+            return;
+        }
+        
+        // Hitung total Pi
+        const totalPi = cart.reduce((sum, item) => {
+            const itemPricePi = parseFloat(item.pricePi) || 0;
+            return sum + (itemPricePi * item.qty);
+        }, 0);
+        
+        const amountEl = document.getElementById('paymentAmount');
+        const itemsEl = document.getElementById('paymentItems');
+        const btn = document.getElementById('btnProcessPayment');
+        
+        if (amountEl) amountEl.innerText = 'π ' + totalPi.toFixed(8);
+        
+        if (itemsEl) {
+            itemsEl.innerHTML = cart.map(item => {
+                const itemTotalPi = (parseFloat(item.pricePi) || 0) * item.qty;
+                return `
+                <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #E5E7EB;">
+                    <div>
+                        <span style="font-size:13px; color:#374151; font-weight:500;">${item.name}</span>
+                        <span style="font-size:11px; color:#9CA3AF; margin-left:4px;">x${item.qty}</span>
+                    </div>
+                    <span style="font-size:13px; font-weight:700; color:#1F2937;">π ${itemTotalPi.toFixed(8)}</span>
+                </div>
+            `}).join('');
+        }
+        
+        // Enable button (balance check dilakukan oleh Pi Browser)
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
+            btn.style.background = '';
+            btn.style.cursor = 'pointer';
+        }
+        
+        openModal('paymentModal');
+    };
+
+    window.processPayment = async function() {
+        const btn = document.getElementById('btnProcessPayment');
+        if (btn?.disabled) return;
+        
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Memproses...';
+        }
+        
+        try {
+            await createPiPayment();
+        } catch (error) {
+            logDebug("Process payment error: " + error.message);
+            showToast('Gagal memproses pembayaran: ' + error.message, 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
+            }
+        }
     };
 
     // ============================================
@@ -4240,7 +3605,6 @@
         const stockNum = parseInt(p.stock);
         const isOutOfStock = !p.stock || stockNum <= 0 || isNaN(stockNum);
         const pricePi = parseFloat(p.pricePi) || 0;
-        const sgtReward = Math.floor(pricePi * SGT_REWARD_RATE);
         
         const existing = document.getElementById('productDetailModal');
         if (existing) existing.remove();
@@ -4260,12 +3624,8 @@
                                 <p style="font-size:18px; font-weight:800;">STOK HABIS</p>
                             </div>
                         </div>
-                    ` : `
-                        <div style="position:absolute; top:16px; right:16px; background:linear-gradient(135deg, #F59E0B, #D97706); color:white; padding:8px 16px; border-radius:20px; font-size:12px; font-weight:800;">
-                            <i class="fas fa-gift" style="margin-right:6px;"></i>+${sgtReward} SGT
-                        </div>
-                    `}
-                    <button onclick="closeModal('productDetailModal')" style="position:absolute; top:16px; left:16px; width:40px; height:40px; background:rgba(255,255,255,0.9); border:none; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                    ` : ''}
+                    <button onclick="closeModal('productDetailModal')" style="position:absolute; top:16px; right:16px; width:40px; height:40px; background:rgba(255,255,255,0.9); border:none; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
                         <i class="fas fa-times" style="color:#374151;"></i>
                     </button>
                 </div>
@@ -4290,10 +3650,6 @@
                             <span style="color:#6B7280; font-size:14px; font-weight:500;">Harga dalam Pi</span>
                             <span style="font-size:32px; font-weight:800; color:#8B5CF6;">π ${pricePi.toFixed(8)}</span>
                         </div>
-                        <div style="display:flex; align-items:center; gap:8px; padding-top:12px; border-top:1px dashed #E5E7EB;">
-                            <i class="fas fa-coins" style="color:#F59E0B;"></i>
-                            <span style="font-size:13px; color:#92400E; font-weight:600;">Dapatkan ${sgtReward} SGT setelah pembelian!</span>
-                        </div>
                     </div>
 
                     <div style="display:flex; gap:12px;">
@@ -4312,113 +3668,102 @@
     };
 
     window.showOrderDetail = function(id) {
-        const o = orders.find(x => x.id === id);
-        if (!o) return;
-        
-        const modal = document.getElementById('orderDetailModal');
-        const content = document.getElementById('orderDetailContent');
-        
-        if (!modal || !content) return;
-        
-        const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
-        
-        let addressHtml = '';
-        if (o.shippingAddress) {
-            const sa = o.shippingAddress;
-            addressHtml = `
-                <div style="background:#F0FDF4; border-radius:12px; padding:16px; margin-bottom:16px;">
-                    <p style="font-size:12px; font-weight:700; color:#065F46; margin-bottom:8px;">
-                        <i class="fas fa-truck" style="margin-right:6px;"></i>Alamat Pengiriman
-                    </p>
-                    <p style="font-size:13px; color:#374151; line-height:1.6;">
-                        <strong>${sa.receiverName}</strong><br>
-                        ${sa.phoneNumber}<br>
-                        ${sa.fullAddress}<br>
-                        ${sa.city}${sa.postalCode ? ', ' + sa.postalCode : ''}
-                    </p>
-                </div>
-            `;
-        }
-        
-        content.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h3 style="font-size:20px; font-weight:800; color:#1F2937;">Detail Pesanan</h3>
-                <button onclick="closeModal('orderDetailModal')" style="background:#F3F4F6; border:none; width:36px; height:36px; border-radius:50%; cursor:pointer;">
-                    <i class="fas fa-times"></i>
-                </button>
+    const o = orders.find(x => x.id === id);
+    if (!o) return;
+    
+    const modal = document.getElementById('orderDetailModal');
+    const content = document.getElementById('orderDetailContent');
+    
+    if (!modal || !content) return;
+    
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
+    
+    // Render alamat pengiriman jika ada
+    let addressHtml = '';
+    if (o.shippingAddress) {
+        const sa = o.shippingAddress;
+        addressHtml = `
+            <div style="background:#F0FDF4; border-radius:12px; padding:16px; margin-bottom:16px;">
+                <p style="font-size:12px; font-weight:700; color:#065F46; margin-bottom:8px;">
+                    <i class="fas fa-truck" style="margin-right:6px;"></i>Alamat Pengiriman
+                </p>
+                <p style="font-size:13px; color:#374151; line-height:1.6;">
+                    <strong>${sa.receiverName}</strong><br>
+                    ${sa.phoneNumber}<br>
+                    ${sa.fullAddress}<br>
+                    ${sa.city}${sa.postalCode ? ', ' + sa.postalCode : ''}
+                </p>
             </div>
-            
-            <div style="text-align:center; margin-bottom:20px;">
-                <span class="badge badge-${o.status}">${getStatusLabel(o.status)}</span>
-                <p style="font-size:12px; color:#9CA3AF; margin-top:8px;">#${o.orderId || o.id.substring(0, 8).toUpperCase()}</p>
-            </div>
-
-            ${addressHtml}
-
-            <div style="background:#F9FAFB; padding:16px; border-radius:12px; margin-bottom:20px;">
-                <p style="font-size:12px; font-weight:700; color:#374151; margin-bottom:12px;">ITEMS</p>
-                ${o.items?.map(item => {
-                    const itemTotalPi = (parseFloat(item.pricePi) || 0) * item.qty;
-                    return `
-                    <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #E5E7EB;">
-                        <div>
-                            <p style="font-weight:600; color:#1F2937; font-size:14px;">${item.name}</p>
-                            <p style="font-size:12px; color:#6B7280;">x${item.qty}</p>
-                        </div>
-                        <p style="font-weight:700; color:#8B5CF6; font-size:14px;">π ${itemTotalPi.toFixed(8)}</p>
-                    </div>
-                `}).join('') || '<p style="color:#9CA3AF;">Tidak ada item</p>'}
-            </div>
-
-            <div style="background:linear-gradient(135deg, #F5F3FF 0%, #ffffff 100%); padding:20px; border-radius:16px; border:2px solid #8B5CF6; margin-bottom:16px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-weight:700; color:#1F2937; font-size:14px;">Total</span>
-                    <span style="font-size:32px; font-weight:800; color:#8B5CF6;">π ${o.amount?.toFixed(8) || '0.0000'}</span>
-                </div>
-            </div>
-
-            ${o.sgtReward ? `
-            <div style="background:linear-gradient(135deg, #FEF9EE, #FEF3C7); border:2px solid #F59E0B; border-radius:12px; padding:16px; margin-bottom:16px;">
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <i class="fas fa-coins" style="color:#D97706; font-size:24px;"></i>
-                    <div>
-                        <p style="font-size:12px; color:#92400E; font-weight:700;">SGT Reward</p>
-                        <p style="font-size:24px; font-weight:900; color:#D97706;">+${o.sgtReward} SGT</p>
-                    </div>
-                </div>
-            </div>
-            ` : ''}
-
-            ${o.txid ? `
-            <div style="background:#ECFDF5; border-radius:12px; padding:16px; margin-bottom:16px;">
-                <p style="font-size:11px; color:#059669; font-weight:600; margin-bottom:8px;">Transaksi Berhasil</p>
-                <p style="font-size:12px; color:#065F46; font-family:monospace; word-break:break-all; background:#D1FAE5; padding:10px; border-radius:8px;">${o.txid}</p>
-            </div>
-            ` : ''}
-
-            ${isAdmin && (o.status === 'paid' || o.status === 'processing' || o.status === 'shipped') ? `
-            <div style="display:flex; gap:10px;">
-                ${o.status === 'paid' ? `
-                    <button onclick="updateOrderStatus('${o.id}', 'processing'); closeModal('orderDetailModal');" class="btn-primary">
-                        Proses Pesanan
-                    </button>
-                ` : ''}
-                ${o.status === 'processing' ? `
-                    <button onclick="updateOrderStatus('${o.id}', 'shipped'); closeModal('orderDetailModal');" class="btn-primary" style="background:#3B82F6;">
-                        Kirim Pesanan
-                    </button>
-                ` : ''}
-                ${o.status === 'shipped' ? `
-                    <button onclick="updateOrderStatus('${o.id}', 'completed'); closeModal('orderDetailModal');" class="btn-primary" style="background:#059669;">
-                        Selesaikan
-                    </button>
-                ` : ''}
-            </div>
-            ` : ''}
         `;
+    }
+    
+    content.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="font-size:20px; font-weight:800; color:#1F2937;">Detail Pesanan</h3>
+            <button onclick="closeModal('orderDetailModal')" style="background:#F3F4F6; border:none; width:36px; height:36px; border-radius:50%; cursor:pointer;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
         
-        openModal('orderDetailModal');
-    };
+        <div style="text-align:center; margin-bottom:20px;">
+            <span class="badge badge-${o.status}">${getStatusLabel(o.status)}</span>
+            <p style="font-size:12px; color:#9CA3AF; margin-top:8px;">#${o.orderId || o.id.substring(0, 8).toUpperCase()}</p>
+        </div>
+
+        ${addressHtml}
+
+        <div style="background:#F9FAFB; padding:16px; border-radius:12px; margin-bottom:20px;">
+            <p style="font-size:12px; font-weight:700; color:#374151; margin-bottom:12px;">ITEMS</p>
+            ${o.items?.map(item => {
+                const itemTotalPi = (parseFloat(item.pricePi) || 0) * item.qty;
+                return `
+                <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #E5E7EB;">
+                    <div>
+                        <p style="font-weight:600; color:#1F2937; font-size:14px;">${item.name}</p>
+                        <p style="font-size:12px; color:#6B7280;">x${item.qty}</p>
+                    </div>
+                    <p style="font-weight:700; color:#8B5CF6; font-size:14px;">π ${itemTotalPi.toFixed(8)}</p>
+                </div>
+            `}).join('') || '<p style="color:#9CA3AF;">Tidak ada item</p>'}
+        </div>
+
+        <div style="background:linear-gradient(135deg, #F5F3FF 0%, #ffffff 100%); padding:20px; border-radius:16px; border:2px solid #8B5CF6; margin-bottom:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:700; color:#1F2937; font-size:14px;">Total</span>
+                <span style="font-size:32px; font-weight:800; color:#8B5CF6;">π ${o.amount?.toFixed(8) || '0.0000'}</span>
+            </div>
+        </div>
+
+        ${o.txid ? `
+        <div style="background:#ECFDF5; border-radius:12px; padding:16px; margin-bottom:16px;">
+            <p style="font-size:11px; color:#059669; font-weight:600; margin-bottom:8px;">Transaksi Berhasil</p>
+            <p style="font-size:12px; color:#065F46; font-family:monospace; word-break:break-all; background:#D1FAE5; padding:10px; border-radius:8px;">${o.txid}</p>
+        </div>
+        ` : ''}
+
+        ${isAdmin && (o.status === 'paid' || o.status === 'processing' || o.status === 'shipped') ? `
+        <div style="display:flex; gap:10px;">
+            ${o.status === 'paid' ? `
+                <button onclick="updateOrderStatus('${o.id}', 'processing'); closeModal('orderDetailModal');" class="btn-primary">
+                    Proses Pesanan
+                </button>
+            ` : ''}
+            ${o.status === 'processing' ? `
+                <button onclick="updateOrderStatus('${o.id}', 'shipped'); closeModal('orderDetailModal');" class="btn-primary" style="background:#3B82F6;">
+                    Kirim Pesanan
+                </button>
+            ` : ''}
+            ${o.status === 'shipped' ? `
+                <button onclick="updateOrderStatus('${o.id}', 'completed'); closeModal('orderDetailModal');" class="btn-primary" style="background:#059669;">
+                    Selesaikan
+                </button>
+            ` : ''}
+        </div>
+        ` : ''}
+    `;
+    
+    openModal('orderDetailModal');
+};
 
     // ============================================
     // PRODUCT FORM FUNCTIONS
@@ -4438,6 +3783,7 @@
         
         title.innerText = id ? 'Edit Produk' : 'Tambah Produk Baru';
         
+        // Reset form
         const fields = ['productName', 'productPricePi', 'productStock', 'productCategory', 'productDesc'];
         fields.forEach(field => {
             const el = document.getElementById(field);
@@ -4454,6 +3800,7 @@
         
         tempProductImage = null;
         
+        // Load data jika edit
         if (id) {
             const p = products.find(x => x.id === id);
             if (p) {
@@ -4588,87 +3935,6 @@
     };
 
     // ============================================
-    // EXCHANGE RATE MODAL (ADMIN ONLY)
-    // ============================================
-    
-    let adminExchangeRate = 15000;
-    
-    window.openExchangeRateModal = function() {
-        const modal = document.createElement('div');
-        modal.id = 'exchangeRateModal';
-        modal.className = 'modal active';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <h3 style="font-size:20px; font-weight:800; margin-bottom:20px; color:#1F2937;">
-                    <i class="fas fa-calculator" style="color:#8B5CF6; margin-right:8px;"></i>Kalkulator Pi (Admin)
-                </h3>
-                
-                <div style="background:#F5F3FF; border-radius:12px; padding:16px; margin-bottom:20px;">
-                    <p style="font-size:12px; color:#6B7280; margin-bottom:8px;">Rate Referensi (1 Pi = Rp)</p>
-                    <input type="number" id="adminRateInput" class="form-input" value="${adminExchangeRate}" min="1" step="1000" oninput="updateAdminCalculator()">
-                    <p style="font-size:11px; color:#9CA3AF; margin-top:6px;">
-                        <i class="fas fa-info-circle" style="margin-right:4px;"></i>
-                        Rate ini hanya untuk referensi admin
-                    </p>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Jumlah Pi</label>
-                    <input type="number" id="adminCalcPi" class="form-input" placeholder="0.0000" step="0.0001" oninput="updateAdminCalculator()">
-                </div>
-                
-                <div style="text-align:center; margin:16px 0;">
-                    <i class="fas fa-arrow-down" style="color:#8B5CF6; font-size:24px;"></i>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Hasil IDR (Referensi)</label>
-                    <div style="background:#F3F4F6; padding:16px; border-radius:12px; font-size:24px; font-weight:800; color:#1F2937; text-align:center;">
-                        Rp <span id="adminCalcResult">0</span>
-                    </div>
-                </div>
-
-                <div style="background:#FEF3C7; border:1px solid #FCD34D; border-radius:12px; padding:12px; margin-bottom:20px;">
-                    <p style="font-size:12px; color:#92400E;">
-                        <i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>
-                        <strong>Catatan:</strong> Kalkulator ini hanya untuk referensi admin. 
-                        User hanya melihat harga dalam Pi.
-                    </p>
-                </div>
-
-                <button onclick="closeAndRemoveModal('exchangeRateModal')" class="btn-primary">
-                    Tutup
-                </button>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        setTimeout(updateAdminCalculator, 100);
-    };
-
-    window.updateAdminCalculator = function() {
-        const rate = parseInt(document.getElementById('adminRateInput')?.value || 15000);
-        const piAmount = parseFloat(document.getElementById('adminCalcPi')?.value || 0);
-        const resultEl = document.getElementById('adminCalcResult');
-        
-        adminExchangeRate = rate;
-        
-        if (resultEl) {
-            const idrResult = Math.round(piAmount * rate);
-            resultEl.innerText = idrResult.toLocaleString('id-ID');
-        }
-    };
-
-    window.closeAndRemoveModal = function(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.classList.remove('active');
-            setTimeout(() => {
-                if (modal.parentNode) modal.remove();
-            }, 300);
-        }
-    };
-
-    // ============================================
     // UTILITY FUNCTIONS
     // ============================================
     
@@ -4710,15 +3976,6 @@
 
     window.searchProducts = function() {
         renderProducts();
-    };
-
-    window.handleStartShopping = function() {
-        logDebug("Navigasi ke Pasar Pi...");
-        switchView('products');
-        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        const navProducts = document.getElementById('nav-products');
-        if (navProducts) navProducts.classList.add('active');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     // ============================================
@@ -4767,8 +4024,30 @@
         get currentUser() { return currentUser; },
         get isPiAuthenticated() { return isPiAuthenticated; },
         get isPiSDKReady() { return isPiSDKReady; },
-        get pendingPayment() { return pendingPayment; },
-        get sgtBalance() { return sgtBalance; }
+        get pendingPayment() { return pendingPayment; }
+    };
+	
+	    window.updateAdminCalculator = function() {
+        const rate = parseInt(document.getElementById('adminRateInput')?.value || 15000);
+        const piAmount = parseFloat(document.getElementById('adminCalcPi')?.value || 0);
+        const resultEl = document.getElementById('adminCalcResult');
+        
+        adminExchangeRate = rate;
+        
+        if (resultEl) {
+            const idrResult = Math.round(piAmount * rate);
+            resultEl.innerText = idrResult.toLocaleString('id-ID');
+        }
+    };
+
+    window.closeAndRemoveModal = function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove('active');
+            setTimeout(() => {
+                if (modal.parentNode) modal.remove();
+            }, 300);
+        }
     };
     
     </script>
