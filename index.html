@@ -1435,6 +1435,33 @@
                     <p class="stat-value" id="statTotalSGTIssued" style="color:#D97706;">0</p>
                     <p class="stat-label">SGT Diterbitkan</p>
                 </div>
+				<div class="grid grid-cols-2 gap-4 mb-6">
+    <div class="bg-gradient-to-br from-purple-600 to-indigo-700 p-4 rounded-2xl text-white shadow-lg">
+        <p class="text-xs opacity-80">Total SGT Beredar</p>
+        <h3 id="admin-total-sgt" class="text-xl font-bold">0 SGT</h3>
+    </div>
+    <div class="bg-gradient-to-br from-pink-600 to-red-700 p-4 rounded-2xl text-white shadow-lg">
+        <p class="text-xs opacity-80">Total User Pemegang SGT</p>
+        <h3 id="admin-total-holders" class="text-xl font-bold">0 User</h3>
+    </div>
+</div>
+
+<div class="bg-white rounded-2xl shadow-sm p-4 mt-6">
+    <h4 class="font-bold text-gray-800 mb-3 text-sm">Riwayat Distribusi Terakhir</h4>
+    <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+            <thead>
+                <tr class="border-b">
+                    <th class="py-2">Waktu</th>
+                    <th class="py-2">Username</th>
+                    <th class="py-2 text-right">Jumlah</th>
+                </tr>
+            </thead>
+            <tbody id="sgt-logs-body">
+                </tbody>
+        </table>
+    </div>
+</div>
             </div>
 
             <!-- Quick Actions -->
@@ -2018,7 +2045,7 @@ let pendingPayment = null;
 let paymentTimeout = null;
 
 // SGT Token State
-let sgtBalance = 1000000;
+let sgtBalance = 0;
 let sgtTransactions = [];
 let sgtRatePerPi = 100;
 let sgtMinPurchase = 0.1;
@@ -2358,14 +2385,60 @@ window.saveSGTSettings = function() {
     showToast(`Pengaturan disimpan! Rate: 1 Pi = ${sgtRatePerPi} SGT`, 'success');
 };
 
-window.distributeSGTManual = function() {
+window._real_.distributeSGTManual = async function() {
     const targetUser = document.getElementById('sgtDistUser')?.value.trim();
     const amount = parseInt(document.getElementById('sgtDistAmount')?.value);
+    
+    // Validasi Awal
     if (!targetUser) { showToast('Masukkan username penerima', 'error'); return; }
     if (!amount || amount <= 0) { showToast('Jumlah SGT tidak valid', 'error'); return; }
-    showToast(`${amount} SGT berhasil didistribusikan ke @${targetUser}`, 'success');
-    if (document.getElementById('sgtDistUser')) document.getElementById('sgtDistUser').value = '';
-    if (document.getElementById('sgtDistAmount')) document.getElementById('sgtDistAmount').value = '';
+
+    try {
+        // Tampilkan loading toast jika ada
+        showToast('Sedang memproses distribusi...', 'info');
+
+        // Gunakan batch untuk memastikan saldo dan log tersimpan bersamaan
+        const batch = db.batch();
+        
+        // Cari user berdasarkan ID (dalam kasus Pi App, biasanya ID dokumen adalah username atau Pi ID)
+        const userRef = db.collection('users').doc(targetUser);
+        const logRef = db.collection('sgt_logs').doc();
+
+        // 1. Perintah Update Saldo (Increment)
+        batch.set(userRef, {
+            sgtBalance: firebase.firestore.FieldValue.increment(amount),
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true }); // Merge: true agar data user lain tidak terhapus
+
+        // 2. Perintah Simpan Log Riwayat
+        batch.set(logRef, {
+            adminId: auth.currentUser ? auth.currentUser.uid : 'admin_manual',
+            targetUser: targetUser,
+            amount: amount,
+            type: 'manual_distribution',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Eksekusi ke Firestore
+        await batch.commit();
+
+        // Feedback sukses yang sesungguhnya
+        showToast(`${amount} SGT berhasil dikirim ke @${targetUser}`, 'success');
+        
+        // Reset Form
+        if (document.getElementById('sgtDistUser')) document.getElementById('sgtDistUser').value = '';
+        if (document.getElementById('sgtDistAmount')) document.getElementById('sgtDistAmount').value = '';
+
+        // Update tampilan statistik & log di dashboard admin
+        if (typeof window._real_.refreshAdminSGTStats === 'function') {
+            window._real_.refreshAdminSGTStats();
+            window._real_.loadSGTLogs();
+        }
+
+    } catch (error) {
+        console.error("Distribusi Gagal:", error);
+        showToast('Gagal memproses ke database. Cek koneksi/izin.', 'error');
+    }
 };
 
 window.burnSGT = function() {
@@ -2374,6 +2447,54 @@ window.burnSGT = function() {
     if (!confirm(`Apakah Anda yakin ingin burn ${amount} SGT? Tindakan ini tidak dapat dibatalkan.`)) return;
     showToast(`${amount} SGT berhasil di-burn dari sirkulasi`, 'success');
     if (document.getElementById('sgtBurnAmount')) document.getElementById('sgtBurnAmount').value = '';
+};
+
+window._real_.refreshAdminSGTStats = async function() {
+    try {
+        const userSnapshot = await db.collection('users').get();
+        let totalSGT = 0;
+        let totalHolders = 0;
+
+        userSnapshot.forEach(doc => {
+            const userData = doc.data();
+            if (userData.sgtBalance && userData.sgtBalance > 0) {
+                totalSGT += userData.sgtBalance;
+                totalHolders++;
+            }
+        });
+
+        document.getElementById('admin-total-sgt').innerText = totalSGT.toLocaleString() + " SGT";
+        document.getElementById('admin-total-holders').innerText = totalHolders + " User";
+        
+        logDebug("Statistik SGT berhasil diperbarui");
+    } catch (error) {
+        logDebug("Gagal mengambil statistik: " + error.message);
+    }
+};
+
+window._real_.loadSGTLogs = async function() {
+    try {
+        const logsSnapshot = await db.collection('sgt_logs')
+            .orderBy('timestamp', 'desc')
+            .limit(10) // Tampilkan 10 transaksi terakhir
+            .get();
+
+        let html = '';
+        logsSnapshot.forEach(doc => {
+            const log = doc.data();
+            const date = log.timestamp ? log.timestamp.toDate().toLocaleString('id-ID') : 'Pending';
+            html += `
+                <tr class="border-b opacity-80">
+                    <td class="py-2 text-[10px]">${date}</td>
+                    <td class="py-2 font-medium">${log.targetUser}</td>
+                    <td class="py-2 text-right text-green-600 font-bold">+${log.amount}</td>
+                </tr>
+            `;
+        });
+        document.getElementById('sgt-logs-body').innerHTML = html || '<tr><td colspan="3" class="text-center py-4">Belum ada riwayat.</td></tr>';
+    } catch (error) {
+        logDebug("Gagal load logs: " + error.message);
+    }
 };
 
 // Autosave SGT tiap 30 detik
