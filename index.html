@@ -4698,15 +4698,64 @@ if (typeof window._registerReal === 'function') {
 }
 
 
-window._real_ = window._real_ || {};
+async function distributeSGTManual() {
+    console.log("🔥 DISTRIBUSI DIKLIK");
 
-// function kamu
-window._real_.distributeSGTManual = async function() {
-    console.log("🔥 DISTRIBUSI JALAN");
-};
+    const targetUser = document.getElementById('sgtDistUser')?.value.trim();
+    const amount = parseInt(document.getElementById('sgtDistAmount')?.value);
 
-// 🔥 INI WAJIB (LETAR DI SINI)
-window.distributeSGTManual = window._real_.distributeSGTManual;
+    if (!targetUser) {
+        showToast('Masukkan username', 'error');
+        return;
+    }
+
+    if (!amount || amount <= 0) {
+        showToast('Jumlah tidak valid', 'error');
+        return;
+    }
+
+    showToast('Memproses distribusi...', 'info');
+
+    try {
+        if (!db) throw new Error('Database tidak siap');
+
+        const usersSnap = await getDocs(
+            query(collection(db, 'users'), where('username', '==', targetUser))
+        );
+
+        if (usersSnap.empty) {
+            showToast('User tidak ditemukan', 'error');
+            return;
+        }
+
+        const userDoc = usersSnap.docs[0];
+        const userId = userDoc.id;
+        const userData = userDoc.data();
+
+        const currentBal = userData.sgtBalance || 0;
+        const currentTxs = Array.isArray(userData.sgtTransactions) ? userData.sgtTransactions : [];
+
+        const newTx = {
+            type: 'earn',
+            amount,
+            description: 'Distribusi manual',
+            date: new Date().toISOString(),
+            userId
+        };
+
+        await setDoc(doc(db, 'users', userId), {
+            sgtBalance: currentBal + amount,
+            sgtTransactions: [newTx, ...currentTxs].slice(0, 50),
+            sgtUpdatedAt: serverTimestamp()
+        }, { merge: true });
+
+        showToast(`✅ ${amount} SGT terkirim`, 'success');
+
+    } catch (err) {
+        console.error(err);
+        showToast('Error: ' + err.message, 'error');
+    }
+}
 
     </script>
 </body>
