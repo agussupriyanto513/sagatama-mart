@@ -2459,6 +2459,8 @@ window.redeemSGT = function(rewardType) {
     showToast(`Reward "${reward.label}" berhasil ditukar! 🎁`, 'success');
 };
 
+window.distributeSGTManual = window._real_.distributeSGTManual;
+
 window.saveSGTSettings = function() {
     const rate = parseInt(document.getElementById('sgtAdminRate')?.value);
     const minPurchase = parseFloat(document.getElementById('sgtAdminMinPurchase')?.value);
