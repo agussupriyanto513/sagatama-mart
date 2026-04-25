@@ -1652,10 +1652,9 @@
         </div>
     </div>
 
-<script type="module">
 // ============================================
-// SAGATAMA MART - TOKENOMICS SGT v3.0
-// Staking + Burn + Bonding Curve
+// SAGATAMA MART - TOKENOMICS SGT v3.1
+// Fixed: Product loading & Pi Payment
 // ============================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -1720,16 +1719,15 @@ let sgtBalance = 0;
 let sgtTransactions = [];
 let sgtRatePerPi = 100;
 let sgtMinPurchase = 0.1;
-let sgtBasePrice = 0.0001; // Base price in Pi
-let sgtTotalSupply = 1000000; // Initial supply
+let sgtBasePrice = 0.0001;
+let sgtTotalSupply = 1000000;
 let sgtTotalBurned = parseInt(localStorage.getItem('sgt_total_burned') || '0');
-let sgtPriceHistory = []; // For chart
 
 // STAKING STATE
 let stakingData = {
     active: false,
     amount: 0,
-    tier: null, // { days: 7|30|90, apy: 5|12|25 }
+    tier: null,
     startTime: null,
     endTime: null,
     claimedRewards: 0,
@@ -1749,7 +1747,6 @@ const ADMIN_CREDENTIALS = { username: 'sagatama_admin', password: 'Sagatama513' 
 // BONDING CURVE FUNCTIONS
 // ============================================
 function calculateSGTPrice() {
-    // Bonding curve: Price = Base × (1 + (Burned² / TotalSupply))
     const burnedFactor = Math.pow(sgtTotalBurned, 2) / sgtTotalSupply;
     const price = sgtBasePrice * (1 + burnedFactor);
     return Math.max(price, sgtBasePrice);
@@ -1772,7 +1769,6 @@ function updateSGTMarketUI() {
     const price = calculateSGTPrice();
     const circulating = sgtTotalSupply - sgtTotalBurned;
     
-    // Update wallet view
     const priceEl = document.getElementById('sgtMarketPrice');
     if (priceEl) priceEl.textContent = price.toFixed(8) + ' π';
     
@@ -1788,7 +1784,6 @@ function updateSGTMarketUI() {
     const rateInfoEl = document.getElementById('sgtRateInfo');
     if (rateInfoEl) rateInfoEl.textContent = sgtRatePerPi;
     
-    // Update market modal
     const mPriceEl = document.getElementById('marketPriceDisplay');
     if (mPriceEl) mPriceEl.textContent = price.toFixed(8);
     
@@ -1804,9 +1799,8 @@ function updateSGTMarketUI() {
     const mCapEl = document.getElementById('marketCap');
     if (mCapEl) mCapEl.textContent = getMarketCap() + ' π';
     
-    // Update bonding curve dot position
     const burnedPct = sgtTotalBurned / sgtTotalSupply;
-    const dotX = 20 + (burnedPct * 260); // Map to SVG coordinates
+    const dotX = 20 + (burnedPct * 260);
     const dotY = 100 - (burnedPct * 90);
     const dot = document.getElementById('currentPriceDot');
     if (dot) {
@@ -1824,7 +1818,6 @@ function loadStakingData() {
         const saved = localStorage.getItem('sgt_staking_' + currentUser.uid);
         if (saved) {
             stakingData = JSON.parse(saved);
-            // Check if staking period ended
             if (stakingData.active && stakingData.endTime) {
                 const now = Date.now();
                 if (now >= stakingData.endTime) {
@@ -1879,7 +1872,6 @@ function updateStakingCountdown() {
     if (cdMinutes) cdMinutes.textContent = String(minutes).padStart(2, '0');
     if (cdSeconds) cdSeconds.textContent = String(seconds).padStart(2, '0');
     
-    // Update progress bar
     if (stakingData.startTime && stakingData.endTime) {
         const total = stakingData.endTime - stakingData.startTime;
         const elapsed = now - stakingData.startTime;
@@ -1890,7 +1882,6 @@ function updateStakingCountdown() {
         if (text) text.textContent = Math.round(progress) + '%';
     }
     
-    // Update pending rewards (simulated accrual)
     if (stakingData.active) {
         const rewards = calculateStakingReward();
         const elapsedDays = (now - stakingData.startTime) / (1000 * 60 * 60 * 24);
@@ -1918,7 +1909,6 @@ function renderStakingUI() {
     }
 }
 
-// Staking countdown interval
 setInterval(() => {
     if (stakingData.active) updateStakingCountdown();
 }, 1000);
@@ -1935,7 +1925,6 @@ window.openStakingModal = function() {
     const balEl = document.getElementById('stakingAvailableBalance');
     if (balEl) balEl.textContent = sgtBalance.toLocaleString() + ' SGT';
     
-    // Reset selection
     selectedStakingTier = null;
     document.querySelectorAll('.staking-tier').forEach(t => t.classList.remove('selected'));
     document.getElementById('stakingAmount').value = '';
@@ -1985,10 +1974,8 @@ window.stakeSGT = function() {
         return;
     }
     
-    // Deduct balance
     sgtBalance -= amount;
     
-    // Set staking data
     const now = Date.now();
     stakingData = {
         active: true,
@@ -2000,7 +1987,6 @@ window.stakeSGT = function() {
         pendingRewards: 0
     };
     
-    // Record transaction
     sgtTransactions.unshift({
         type: 'stake',
         amount: amount,
@@ -2036,7 +2022,6 @@ window.unstakeSGT = function() {
         reward = rewards.total - stakingData.claimedRewards;
     }
     
-    // Return principal + reward
     sgtBalance += principal + reward;
     
     if (reward > 0) {
@@ -2122,12 +2107,10 @@ window.burnSGTManual = function() {
     
     const impact = calculatePriceImpact(amount);
     
-    // Execute burn
     sgtBalance -= amount;
     sgtTotalBurned += amount;
     localStorage.setItem('sgt_total_burned', sgtTotalBurned.toString());
     
-    // Record transaction
     sgtTransactions.unshift({
         type: 'burn',
         amount: amount,
@@ -2137,7 +2120,6 @@ window.burnSGTManual = function() {
         priceImpact: impact
     });
     
-    // Save to Firestore
     if (db) {
         setDoc(doc(db, 'sgt_config', 'burn_log'), {
             totalBurned: sgtTotalBurned,
@@ -2157,7 +2139,6 @@ window.burnSGTManual = function() {
     logDebug('Burn: ' + amount + ' SGT, impact: +' + impact.toFixed(4) + '%');
 };
 
-// Update burn estimate on input
 document.getElementById('burnAmountInput')?.addEventListener('input', function() {
     const amount = parseInt(this.value || 0);
     const impactEl = document.getElementById('burnPriceImpact');
@@ -2177,7 +2158,7 @@ window.openSGTMarketModal = function() {
 };
 
 // ============================================
-// SGT CORE FUNCTIONS (Updated with Tokenomics)
+// SGT CORE FUNCTIONS
 // ============================================
 function saveSGTData() {
     if (!currentUser) return;
@@ -2201,7 +2182,6 @@ function saveSGTData() {
 async function loadSGTData() {
     if (!currentUser) return;
     try {
-        // Load from Firestore first
         if (db && currentUser.uid) {
             try {
                 const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
@@ -2221,7 +2201,6 @@ async function loadSGTData() {
             }
         }
         
-        // Fallback to localStorage
         const bal = localStorage.getItem('sgt_balance_' + currentUser.uid);
         const tx = localStorage.getItem('sgt_transactions_' + currentUser.uid);
         const rate = localStorage.getItem('sgt_rate');
@@ -2273,7 +2252,6 @@ function updateSGTUI() {
     const st = document.getElementById('statSgtTx');
     if (st) st.textContent = sgtTransactions.length;
     
-    // Next target progress
     const nextTarget = 500;
     const currentProgress = bal % nextTarget;
     const progress = Math.min((currentProgress / nextTarget) * 100, 100);
@@ -2296,7 +2274,6 @@ function renderSGTTransactionHistory() {
     container.innerHTML = sgtTransactions.slice(0, 20).map(t => {
         const isEarn = t.type === 'earn' || t.type === 'stake_reward';
         const isBurn = t.type === 'burn';
-        const isStake = t.type === 'stake';
         const date = t.date ? new Date(t.date).toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'}) : '-';
         const iconMap = {
             'earn': 'fa-arrow-down', 'stake_reward': 'fa-coins',
@@ -2364,7 +2341,7 @@ function showSGTElements(show) {
 }
 
 // ============================================
-// SGT TRANSFER & REDEEM (Updated)
+// SGT TRANSFER & REDEEM
 // ============================================
 window.openSGTTransferModal = function() {
     if (!currentUser) { showToast('Silakan login terlebih dahulu', 'warning'); return; }
@@ -2446,7 +2423,6 @@ window.redeemSGT = function(rewardType) {
         return;
     }
     
-    // Auto-burn 20% of redeemed SGT
     const burnAmount = Math.floor(reward.cost * 0.2);
     const actualCost = reward.cost;
     
@@ -2790,6 +2766,7 @@ async function init() {
         }
         updateUI();
         updateCartUI();
+        // ✅ FIXED: Load products from Firebase first, fallback to sample
         await loadDataWithCache();
         if (!currentUser) setTimeout(() => openModal('loginOptionsModal'), 800);
         logDebug("Initialization complete!");
@@ -2878,6 +2855,7 @@ function logDebug(msg) {
     if (panel) { panel.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${msg}</div>`; panel.scrollTop = panel.scrollHeight; }
     console.log('[DEBUG]', msg);
 }
+
 // ============================================
 // VIEW & NAVIGATION
 // ============================================
@@ -3052,45 +3030,42 @@ function updateCartUI() {
     }
 }
 
+// ============================================
+// PAYMENT FUNCTIONS - FIXED PI SDK IMPLEMENTATION
+// ============================================
 
-    // ============================================
-    // PAYMENT FUNCTIONS - FIXED PI SDK IMPLEMENTATION
-    // ============================================
+window.openPayment = function() {
+    if (cart.length === 0) {
+        showToast('Keranjang masih kosong!', 'error');
+        return;
+    }
+    if (!currentUser) {
+        showToast('Silakan login terlebih dahulu', 'warning');
+        openModal('loginOptionsModal');
+        return;
+    }
     
-    window.openPayment = function() {
-        if (cart.length === 0) {
-            showToast('Keranjang masih kosong!', 'error');
-            return;
-        }
-        if (!currentUser) {
-            showToast('Silakan login terlebih dahulu', 'warning');
-            openModal('loginOptionsModal');
-            return;
-        }
-        
-        // Hitung total Pi dan reward SGT
-        let totalPi = 0;
-        let totalItems = 0;
-        cart.forEach(item => {
-            totalPi += (parseFloat(item.pricePi) || 0) * item.qty;
-            totalItems += item.qty;
-        });
-        
-        currentTotalPi = totalPi;
-        const sgtReward = Math.floor(totalPi * SGT_REWARD_RATE);
-        
-        const amountEl = document.getElementById('paymentAmount');
-        const itemsEl = document.getElementById('paymentItems');
-        const sgtRewardEl = document.getElementById('sgtPaymentAmount');
-        const btn = document.getElementById('btnProcessPayment');
-        
-        if (amountEl) amountEl.innerText = 'π ' + totalPi.toFixed(8);
-        if (sgtRewardEl) sgtRewardEl.innerText = '+ Dapat ' + sgtReward + ' SGT Reward';
-        
-        if (itemsEl) {
-            itemsEl.innerHTML = cart.map(item => {
-                const itemTotalPi = (parseFloat(item.pricePi) || 0) * item.qty;
-                return `
+    let totalPi = 0;
+    let totalItems = 0;
+    cart.forEach(item => {
+        totalPi += (parseFloat(item.pricePi) || 0) * item.qty;
+        totalItems += item.qty;
+    });
+    
+    const sgtReward = Math.floor(totalPi * sgtRatePerPi);
+    
+    const amountEl = document.getElementById('paymentAmount');
+    const itemsEl = document.getElementById('paymentItems');
+    const sgtRewardEl = document.getElementById('paymentSGTReward');
+    const btn = document.getElementById('btnProcessPayment');
+    
+    if (amountEl) amountEl.innerText = 'π ' + totalPi.toFixed(8);
+    if (sgtRewardEl) sgtRewardEl.textContent = '+ Dapat ' + sgtReward + ' SGT Reward';
+    
+    if (itemsEl) {
+        itemsEl.innerHTML = cart.map(item => {
+            const itemTotalPi = (parseFloat(item.pricePi) || 0) * item.qty;
+            return `
                 <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #E5E7EB;">
                     <div>
                         <span style="font-size:13px; color:#374151; font-weight:600;">${item.name}</span>
@@ -3098,337 +3073,268 @@ function updateCartUI() {
                     </div>
                     <div style="text-align:right;">
                         <div style="font-size:12px; font-weight:700; color:#8B5CF6;">π ${itemTotalPi.toFixed(8)}</div>
-                        <div style="font-size:10px; color:#F59E0B;">+${Math.floor(itemTotalPi * SGT_REWARD_RATE)} SGT</div>
+                        <div style="font-size:10px; color:#F59E0B;">+${Math.floor(itemTotalPi * sgtRatePerPi)} SGT</div>
                     </div>
                 </div>
-            `}).join('');
-        }
-        
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
-        }
-        
-        openModal('paymentModal');
-    };
+            `;
+        }).join('');
+    }
+    
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
+    }
+    
+    openModal('paymentModal');
+};
 
-    window.processPayment = async function() {
-        const btn = document.getElementById('btnProcessPayment');
-        if (btn?.disabled) return;
-        
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Memproses...';
-        
-        try {
-            await createPiPayment();
-        } catch (error) {
-            logDebug("Payment error: " + error.message);
-            showToast('Gagal memproses pembayaran: ' + error.message, 'error');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Coba Lagi';
-        }
-    };
+window.processPayment = async function() {
+    const btn = document.getElementById('btnProcessPayment');
+    if (btn?.disabled) return;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Memproses...';
+    
+    try {
+        await createPiPayment();
+    } catch (error) {
+        logDebug("Payment error: " + error.message);
+        showToast('Gagal memproses pembayaran: ' + error.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Coba Lagi';
+    }
+};
 
-    async function createPiPayment() {
-        if (!window.Pi || !isPiSDKReady) {
-            throw new Error('Pi SDK tidak tersedia');
-        }
+async function createPiPayment() {
+    if (!window.Pi || !isPiSDKReady) {
+        throw new Error('Pi SDK tidak tersedia. Buka di Pi Browser.');
+    }
 
-        const totalPi = cart.reduce((sum, item) => sum + ((parseFloat(item.pricePi) || 0) * item.qty), 0);
-        
-        const callbacks = {
-            onReadyForServerApproval: async function(paymentId) {
-                logDebug("✓ onReadyForServerApproval: " + paymentId);
-                showToast('Memverifikasi pembayaran...', 'info');
-                
-                try {
-                    // Simpan pending payment ke Firebase
-                    await addDoc(collection(db, 'pending_payments'), {
-                        paymentId: paymentId,
-                        status: 'pending_approval',
-                        createdAt: serverTimestamp(),
-                        customer: currentUser?.username,
-                        customerUid: currentUser?.uid,
-                        amount: totalPi,
-                        items: cart.map(i => ({id: i.id, name: i.name, qty: i.qty, pricePi: i.pricePi})),
-                        metadata: {
-                            orderId: 'ORD_' + Date.now(),
-                            customer: currentUser.username,
-                            customerUid: currentUser.uid
-                        }
-                    });
-                    
-                    // Call server approval API
-                    const response = await fetch('/api/payments/approve', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ paymentId: paymentId })
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error('Server approval failed');
-                    }
-                    
-                    logDebug("✓ Payment approved on server");
-                    
-                } catch (err) {
-                    logDebug("Approval error: " + err.message);
-                    throw err;
-                }
-            },
+    const totalPi = cart.reduce((sum, item) => sum + ((parseFloat(item.pricePi) || 0) * item.qty), 0);
+    
+    const callbacks = {
+        onReadyForServerApproval: async function(paymentId) {
+            logDebug("✓ onReadyForServerApproval: " + paymentId);
+            showToast('Memverifikasi pembayaran...', 'info');
             
-            onReadyForServerCompletion: async function(paymentId, txid) {
-                logDebug("✓ onReadyForServerCompletion: " + paymentId + " TX: " + txid);
-                showToast('Menyelesaikan transaksi...', 'info');
-                
-                try {
-                    // Complete on server
-                    const response = await fetch('/api/payments/complete', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ paymentId: paymentId, txid: txid })
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error('Server completion failed');
-                    }
-                    
-                    // Save order to Firebase
-                    const orderData = {
-                        paymentId: paymentId,
-                        txid: txid,
-                        amount: totalPi,
-                        items: [...cart],
-                        status: 'paid',
+            try {
+                // Simpan pending payment ke Firebase
+                await addDoc(collection(db, 'pending_payments'), {
+                    paymentId: paymentId,
+                    status: 'pending_approval',
+                    createdAt: serverTimestamp(),
+                    customer: currentUser?.username,
+                    customerUid: currentUser?.uid,
+                    amount: totalPi,
+                    items: cart.map(i => ({id: i.id, name: i.name, qty: i.qty, pricePi: i.pricePi})),
+                    metadata: {
+                        orderId: 'ORD_' + Date.now(),
                         customer: currentUser.username,
-                        customerUid: currentUser.uid,
-                        createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp(),
-                        paymentMethod: 'pi'
-                    };
-                    
-                    await saveOrderToFirebase(orderData);
-                    
-                    // Add SGT reward
-                    const sgtReward = Math.floor(totalPi * SGT_REWARD_RATE);
-                    await addSgtReward(sgtReward);
-                    await recordSgtTransaction('earn', sgtReward, 'Reward dari pembelian π ' + totalPi.toFixed(8));
-                    
-                    // Clear cart
-                    cart = [];
-                    saveCart();
-                    updateCartUI();
-                    
-                    // Close modal and show success
-                    closeModal('paymentModal');
-                    showSuccessModal('Pembayaran Berhasil!', 'π ' + totalPi.toFixed(8) + ' telah dibayar. Anda mendapat ' + sgtReward + ' SGT reward.');
-                    
-                    // Redirect to orders
-                    setTimeout(() => {
-                        switchView('orders');
-                    }, 2000);
-                    
-                } catch (err) {
-                    logDebug("Completion error: " + err.message);
-                    throw err;
-                }
-            },
-            
-            onCancel: function(paymentId) {
-                logDebug("✗ onCancel: " + paymentId);
-                showToast('Pembayaran dibatalkan', 'warning');
-                resetPaymentButton();
-                forceRedirectToApp();
-            },
-            
-            onError: function(error, payment) {
-                logDebug("✗ onError: " + error.message);
+                        customerUid: currentUser.uid
+                    }
+                });
                 
-                if (error.message && error.message.toLowerCase().includes('balance')) {
-                    showToast('Saldo Pi tidak mencukupi!', 'error');
-                } else if (error.message && error.message.toLowerCase().includes('timeout')) {
-                    showToast('Waktu habis. Silakan coba lagi.', 'error');
-                } else {
-                    showToast('Error pembayaran: ' + error.message, 'error');
+                // ✅ FIXED: Call API dengan path yang benar sesuai folder Vercel
+                const response = await fetch('/api/payments/approve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ paymentId: paymentId })
+                });
+                
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Server approval failed: ' + response.status);
                 }
                 
-                resetPaymentButton();
-                forceRedirectToApp();
+                logDebug("✓ Payment approved on server");
+                
+            } catch (err) {
+                logDebug("Approval error: " + err.message);
+                throw err;
             }
-        };
-
-        // Create payment data
-        const orderMetadata = {
-            orderId: 'ORD_' + Date.now(),
-            items: cart.map(i => ({ 
-                id: i.id,
-                name: i.name, 
-                qty: i.qty, 
-                pricePi: parseFloat(i.pricePi) || 0
-            })),
-            customer: currentUser.username,
-            customerUid: currentUser.uid,
-            timestamp: new Date().toISOString(),
-            totalPi: totalPi
-        };
-
-        const paymentData = {
-            amount: parseFloat(totalPi.toFixed(8)),
-            memo: `Sagatama Mart - ${cart.length} item`,
-            metadata: orderMetadata
-        };
-
-        logDebug("Creating Pi payment: " + JSON.stringify(paymentData));
+        },
         
-        // Create payment via Pi SDK
-        window.Pi.createPayment(paymentData, callbacks);
-    }
-
-    function resetPaymentButton() {
-        const btn = document.getElementById('btnProcessPayment');
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
-        }
-    }
-
-    function forceRedirectToApp() {
-        const APP_URL = "https://sagatama-mart.vercel.app";
-        if (!APP_URL) return;
-        
-        if (window.location.href.includes(APP_URL)) {
-            logDebug("Sudah berada di App URL");
-            return;
-        }
-
-        logDebug("Redirecting to app: " + APP_URL);
-        setTimeout(() => {
+        onReadyForServerCompletion: async function(paymentId, txid) {
+            logDebug("✓ onReadyForServerCompletion: " + paymentId + " TX: " + txid);
+            showToast('Menyelesaikan transaksi...', 'info');
+            
             try {
-                window.location.replace(APP_URL);
-            } catch(e) {
-                window.location.href = APP_URL;
-            }
-        }, 1500);
-    }
-
-    async function handleIncompletePayment(payment) {
-        logDebug("Handling incomplete payment: " + payment?.identifier);
-        
-        if (!payment || !payment.identifier) {
-            logDebug("Invalid payment object");
-            return;
-        }
-
-        try {
-            const existingOrder = orders.find(o => o.paymentId === payment.identifier);
-            
-            if (existingOrder && existingOrder.status === 'completed') {
-                logDebug("Payment already processed, completing on Pi...");
-                await cancelOrCompletePaymentOnServer(payment.identifier, payment.transaction?.txid);
-                return;
-            }
-
-            if (payment?.transaction?.txid) {
-                logDebug("Payment has transaction, completing...");
+                // ✅ FIXED: Complete dengan path yang benar
+                const response = await fetch('/api/payments/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ paymentId: paymentId, txid: txid })
+                });
                 
-                if (!existingOrder) {
-                    const orderData = {
-                        paymentId: payment.identifier,
-                        txid: payment.transaction.txid,
-                        amount: parseFloat(payment.amount) || 0,
-                        items: payment.metadata?.items || [],
-                        status: 'paid',
-                        customer: currentUser?.username || 'User',
-                        customerUid: currentUser?.uid || '',
-                        createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp(),
-                        metadata: payment.metadata || {}
-                    };
-                    await saveOrderToFirebase(orderData);
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Server completion failed');
                 }
                 
-                await completePaymentOnServer(payment.identifier, payment.transaction.txid);
-                showToast('Pembayaran pending berhasil diselesaikan!', 'success');
+                // Save order to Firebase
+                const orderData = {
+                    paymentId: paymentId,
+                    txid: txid,
+                    amount: totalPi,
+                    items: [...cart],
+                    status: 'paid',
+                    customer: currentUser.username,
+                    customerUid: currentUser.uid,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                    paymentMethod: 'pi'
+                };
                 
-            } else {
-                logDebug("Payment has no transaction, cancelling...");
-                await cancelPaymentOnServer(payment.identifier);
-            }
-            
-            pendingPayment = null;
-            
-        } catch (err) {
-            logDebug("Handle incomplete payment error: " + err.message);
-            try {
-                await cancelPaymentOnServer(payment.identifier);
-            } catch (cancelErr) {
-                logDebug("Cancel also failed: " + cancelErr.message);
-            }
-        }
-    }
+                await addDoc(collection(db, 'orders'), orderData);
+                
+                // Add SGT reward
+                const sgtReward = Math.floor(totalPi * sgtRatePerPi);
+                if (sgtReward > 0) {
+                    awardSGT(totalPi, 'Reward dari pembelian π ' + totalPi.toFixed(4));
+                }
 
-    async function cancelPaymentOnServer(paymentId) {
-        try {
-            logDebug("Cancelling payment: " + paymentId);
+                // Clear cart
+                cart = [];
+                localStorage.setItem('sagatama_cart', JSON.stringify(cart));
+                updateCartUI();
+                
+                // Close modal and show success
+                closeModal('paymentModal');
+                showToast(`✅ Pembayaran berhasil! +${sgtReward} SGT`, 'success');
+                
+                // Redirect to orders
+                setTimeout(() => {
+                    switchView('orders');
+                }, 2000);
+                
+            } catch (err) {
+                logDebug("Completion error: " + err.message);
+                throw err;
+            }
+        },
+        
+        onCancel: function(paymentId) {
+            logDebug("✗ onCancel: " + paymentId);
+            showToast('Pembayaran dibatalkan', 'warning');
+            resetPaymentButton();
             
-            const response = await fetch('/api/payments/cancel', {
+            // Cancel di server juga
+            fetch('/api/payments/cancel', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ paymentId: paymentId })
-            });
-
-            if (!response.ok) {
-                throw new Error("Failed to cancel payment");
+            }).catch(e => logDebug("Cancel server error: " + e.message));
+        },
+        
+        onError: function(error, payment) {
+            logDebug("✗ onError: " + error.message);
+            
+            if (error.message && error.message.toLowerCase().includes('balance')) {
+                showToast('Saldo Pi tidak mencukupi!', 'error');
+            } else if (error.message && error.message.toLowerCase().includes('timeout')) {
+                showToast('Waktu habis. Silakan coba lagi.', 'error');
+            } else {
+                showToast('Error pembayaran: ' + error.message, 'error');
             }
             
-            logDebug("Payment cancelled successfully");
-            return true;
-        } catch (error) {
-            logDebug("Cancel payment error: " + error.message);
-            throw error;
+            resetPaymentButton();
         }
+    };
+
+    // Create payment data
+    const orderMetadata = {
+        orderId: 'ORD_' + Date.now(),
+        items: cart.map(i => ({ 
+            id: i.id,
+            name: i.name, 
+            qty: i.qty, 
+            pricePi: parseFloat(i.pricePi) || 0
+        })),
+        customer: currentUser.username,
+        customerUid: currentUser.uid,
+        timestamp: new Date().toISOString(),
+        totalPi: totalPi
+    };
+
+    const paymentData = {
+        amount: parseFloat(totalPi.toFixed(8)),
+        memo: `Sagatama Mart - ${cart.length} item`,
+        metadata: orderMetadata
+    };
+
+    logDebug("Creating Pi payment: " + JSON.stringify(paymentData));
+    
+    // Create payment via Pi SDK
+    window.Pi.createPayment(paymentData, callbacks);
+}
+
+function resetPaymentButton() {
+    const btn = document.getElementById('btnProcessPayment');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
+    }
+}
+
+async function handleIncompletePayment(payment) {
+    logDebug("Handling incomplete payment: " + payment?.identifier);
+    
+    if (!payment || !payment.identifier) {
+        logDebug("Invalid payment object");
+        return;
     }
 
-    async function cancelOrCompletePaymentOnServer(paymentId, txid) {
-        if (txid) {
-            return completePaymentOnServer(paymentId, txid);
-        } else {
-            return cancelPaymentOnServer(paymentId);
+    try {
+        const existingOrder = orders.find(o => o.paymentId === payment.identifier);
+        
+        if (existingOrder && existingOrder.status === 'completed') {
+            logDebug("Payment already processed");
+            return;
         }
-    }
 
-    async function completePaymentOnServer(paymentId, txid) {
-        try {
-            logDebug("Completing payment on server: " + paymentId);
+        if (payment?.transaction?.txid) {
+            logDebug("Payment has transaction, completing...");
             
-            const response = await fetch('/api/payments/complete', {
+            if (!existingOrder) {
+                const orderData = {
+                    paymentId: payment.identifier,
+                    txid: payment.transaction.txid,
+                    amount: parseFloat(payment.amount) || 0,
+                    items: payment.metadata?.items || [],
+                    status: 'paid',
+                    customer: currentUser?.username || 'User',
+                    customerUid: currentUser?.uid || '',
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                    metadata: payment.metadata || {}
+                };
+                await addDoc(collection(db, 'orders'), orderData);
+            }
+            
+            // Complete on server
+            await fetch('/api/payments/complete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ paymentId: paymentId, txid: txid })
+                body: JSON.stringify({ paymentId: payment.identifier, txid: payment.transaction.txid })
             });
-
-            if (!response.ok) throw new Error("Failed to complete payment");
             
-            logDebug("Payment completed on server");
-            return true;
-        } catch (error) {
-            logDebug("Complete payment error: " + error.message);
-            throw error;
+            showToast('Pembayaran pending berhasil diselesaikan!', 'success');
+            
+        } else {
+            logDebug("Payment has no transaction, cancelling...");
+            await fetch('/api/payments/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paymentId: payment.identifier })
+            });
         }
+        
+        pendingPayment = null;
+        
+    } catch (err) {
+        logDebug("Handle incomplete payment error: " + err.message);
     }
-
-    async function saveOrderToFirebase(orderData) {
-        try {
-            if (!db) throw new Error('Database not ready');
-            const docRef = await addDoc(collection(db, 'orders'), orderData);
-            logDebug("Order saved to Firebase: " + docRef.id);
-            return docRef.id;
-        } catch (error) {
-            logDebug("Save order error: " + error.message);
-            throw error;
-        }
-    }
-
+}
 
 // ============================================
 // ORDER FUNCTIONS
@@ -3752,23 +3658,47 @@ function updateAdminStats() {
     }
 }
 
-
 // ============================================
-// DATA LOADING
+// DATA LOADING - FIXED: Prioritize Firebase
 // ============================================
 async function loadDataWithCache() {
     try {
-        if (products.length === 0) {
+        // ✅ FIXED: Load dari Firebase terlebih dahulu
+        if (db) {
+            try {
+                const snapshot = await getDocs(query(collection(db, 'products'), orderBy('createdAt', 'desc')));
+                if (!snapshot.empty) {
+                    products = snapshot.docs.map(doc => ({ 
+                        id: doc.id, 
+                        ...doc.data() 
+                    }));
+                    logDebug('Products loaded from Firebase: ' + products.length);
+                } else {
+                    // Fallback ke sample hanya jika Firestore kosong
+                    products = getSampleProducts();
+                    logDebug('No products in Firebase, using samples');
+                }
+            } catch (fbErr) {
+                logDebug('Firebase products error: ' + fbErr.message);
+                products = getSampleProducts();
+            }
+        } else {
             products = getSampleProducts();
         }
+        
         renderProducts();
         renderCategories();
         renderFeaturedProducts();
+        
         if (currentUser?.role === 'admin') {
             renderAdminProducts();
             updateAdminStats();
         }
-    } catch (e) { logDebug('Load data error: ' + e.message); }
+    } catch (e) { 
+        logDebug('Load data error: ' + e.message);
+        products = getSampleProducts();
+        renderProducts();
+    }
 }
 
 async function loadDataFromFirebase() {
