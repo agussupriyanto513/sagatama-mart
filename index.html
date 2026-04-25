@@ -3033,23 +3033,27 @@ function updateCartUI() {
 }
 
 // ============================================
-// PAYMENT FUNCTIONS - FIXED TIMEOUT HANDLING
+// PAYMENT FUNCTIONS - FIXED PI SDK IMPLEMENTATION
 // ============================================
 
-let paymentInProgress = false;
-let paymentTimeoutId = null;
-const PAYMENT_TIMEOUT_MS = 60000;
-
 window.openPayment = function() {
-    if (cart.length === 0) { showToast('Keranjang masih kosong!', 'error'); return; }
-    if (!currentUser) { showToast('Silakan login terlebih dahulu', 'warning'); openModal('loginOptionsModal'); return; }
-    
-    // ✅ Cek Pi SDK
-    if (!window.Pi) { showToast('Buka di Pi Browser.', 'error'); return; }
-    if (!isPiSDKReady) { showToast('Pi SDK belum siap...', 'warning'); return; }
+    if (cart.length === 0) {
+        showToast('Keranjang masih kosong!', 'error');
+        return;
+    }
+    if (!currentUser) {
+        showToast('Silakan login terlebih dahulu', 'warning');
+        openModal('loginOptionsModal');
+        return;
+    }
     
     let totalPi = 0;
-    cart.forEach(item => { totalPi += (parseFloat(item.pricePi) || 0) * item.qty; });
+    let totalItems = 0;
+    cart.forEach(item => {
+        totalPi += (parseFloat(item.pricePi) || 0) * item.qty;
+        totalItems += item.qty;
+    });
+    
     const sgtReward = Math.floor(totalPi * sgtRatePerPi);
     
     const amountEl = document.getElementById('paymentAmount');
@@ -3059,172 +3063,279 @@ window.openPayment = function() {
     
     if (amountEl) amountEl.innerText = 'π ' + totalPi.toFixed(8);
     if (sgtRewardEl) sgtRewardEl.textContent = '+ Dapat ' + sgtReward + ' SGT Reward';
+    
     if (itemsEl) {
         itemsEl.innerHTML = cart.map(item => {
             const itemTotalPi = (parseFloat(item.pricePi) || 0) * item.qty;
-            return `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #E5E7EB;"><div><span style="font-size:13px; color:#374151; font-weight:600;">${item.name}</span><span style="font-size:11px; color:#9CA3AF; margin-left:4px;">x${item.qty}</span></div><div style="text-align:right;"><div style="font-size:12px; font-weight:700; color:#8B5CF6;">π ${itemTotalPi.toFixed(8)}</div><div style="font-size:10px; color:#F59E0B;">+${Math.floor(itemTotalPi * sgtRatePerPi)} SGT</div></div></div>`;
+            return `
+                <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #E5E7EB;">
+                    <div>
+                        <span style="font-size:13px; color:#374151; font-weight:600;">${item.name}</span>
+                        <span style="font-size:11px; color:#9CA3AF; margin-left:4px;">x${item.qty}</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:12px; font-weight:700; color:#8B5CF6;">π ${itemTotalPi.toFixed(8)}</div>
+                        <div style="font-size:10px; color:#F59E0B;">+${Math.floor(itemTotalPi * sgtRatePerPi)} SGT</div>
+                    </div>
+                </div>
+            `;
         }).join('');
     }
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi'; }
+    
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
+    }
+    
     openModal('paymentModal');
 };
 
 window.processPayment = async function() {
-    if (paymentInProgress) { showToast('Pembayaran sedang berlangsung...', 'warning'); return; }
     const btn = document.getElementById('btnProcessPayment');
     if (btn?.disabled) return;
-    if (!window.Pi || !isPiSDKReady) { showToast('Pi SDK tidak tersedia.', 'error'); return; }
     
-    paymentInProgress = true;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Memproses...';
-    
-    paymentTimeoutId = setTimeout(() => {
-        paymentInProgress = false;
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Coba Lagi (Timeout)';
-        showToast('Waktu habis. Silakan coba lagi.', 'error');
-        logDebug("Payment timeout");
-    }, PAYMENT_TIMEOUT_MS);
     
     try {
         await createPiPayment();
     } catch (error) {
         logDebug("Payment error: " + error.message);
-        showToast('Gagal: ' + error.message, 'error');
-        btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Coba Lagi';
-    } finally {
-        paymentInProgress = false;
-        if (paymentTimeoutId) { clearTimeout(paymentTimeoutId); paymentTimeoutId = null; }
+        showToast('Gagal memproses pembayaran: ' + error.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Coba Lagi';
     }
 };
 
 async function createPiPayment() {
+    if (!window.Pi || !isPiSDKReady) {
+        throw new Error('Pi SDK tidak tersedia. Buka di Pi Browser.');
+    }
+
     const totalPi = cart.reduce((sum, item) => sum + ((parseFloat(item.pricePi) || 0) * item.qty), 0);
     
-    return new Promise((resolve, reject) => {
-        let isResolved = false;
-        const internalTimeout = setTimeout(() => {
-            if (!isResolved) { isResolved = true; reject(new Error('Pi payment timeout. User tidak merespons.')); }
-        }, 55000);
-        
-        const callbacks = {
-            onReadyForServerApproval: async function(paymentId) {
-                if (isResolved) return;
-                logDebug("✓ Approval: " + paymentId);
-                showToast('Memverifikasi...', 'info');
-                try {
-                    await addDoc(collection(db, 'pending_payments'), {
-                        paymentId, status: 'pending_approval', createdAt: serverTimestamp(),
-                        amount: totalPi, items: cart.map(i => ({id: i.id, name: i.name, qty: i.qty, pricePi: i.pricePi})),
-                        customer: currentUser?.username, customerUid: currentUser?.uid
-                    });
-                    
-                    const controller = new AbortController();
-                    const fetchTimeout = setTimeout(() => controller.abort(), 15000);
-                    const response = await fetch('/api/payments/approve', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ paymentId }), signal: controller.signal
-                    });
-                    clearTimeout(fetchTimeout);
-                    
-                    if (!response.ok) {
-                        const errData = await response.json().catch(() => ({}));
-                        throw new Error(errData.error || 'Approval failed: ' + response.status);
+    const callbacks = {
+        onReadyForServerApproval: async function(paymentId) {
+            logDebug("✓ onReadyForServerApproval: " + paymentId);
+            showToast('Memverifikasi pembayaran...', 'info');
+            
+            try {
+                // Simpan pending payment ke Firebase
+                await addDoc(collection(db, 'pending_payments'), {
+                    paymentId: paymentId,
+                    status: 'pending_approval',
+                    createdAt: serverTimestamp(),
+                    customer: currentUser?.username,
+                    customerUid: currentUser?.uid,
+                    amount: totalPi,
+                    items: cart.map(i => ({id: i.id, name: i.name, qty: i.qty, pricePi: i.pricePi})),
+                    metadata: {
+                        orderId: 'ORD_' + Date.now(),
+                        customer: currentUser.username,
+                        customerUid: currentUser.uid
                     }
-                    logDebug("✓ Approved");
-                } catch (err) {
-                    logDebug("Approval err: " + err.message);
-                    if (!isResolved) { isResolved = true; clearTimeout(internalTimeout); reject(err); }
+                });
+                
+                // ✅ FIXED: Call API dengan path yang benar sesuai folder Vercel
+                const response = await fetch('/api/payments/approve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ paymentId: paymentId })
+                });
+                
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Server approval failed: ' + response.status);
                 }
-            },
-            
-            onReadyForServerCompletion: async function(paymentId, txid) {
-                if (isResolved) return;
-                logDebug("✓ Complete: " + paymentId);
-                showToast('Menyelesaikan...', 'info');
-                try {
-                    const controller = new AbortController();
-                    const fetchTimeout = setTimeout(() => controller.abort(), 15000);
-                    const response = await fetch('/api/payments/complete', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ paymentId, txid }), signal: controller.signal
-                    });
-                    clearTimeout(fetchTimeout);
-                    
-                    if (!response.ok) {
-                        const errData = await response.json().catch(() => ({}));
-                        throw new Error(errData.error || 'Completion failed');
-                    }
-                    
-                    await addDoc(collection(db, 'orders'), {
-                        paymentId, txid, amount: totalPi, items: [...cart], status: 'paid',
-                        customer: currentUser.username, customerUid: currentUser.uid,
-                        createdAt: serverTimestamp(), updatedAt: serverTimestamp(), paymentMethod: 'pi'
-                    });
-                    
-                    const sgtReward = Math.floor(totalPi * sgtRatePerPi);
-                    if (sgtReward > 0) awardSGT(totalPi, 'Reward dari pembelian π ' + totalPi.toFixed(4));
-                    
-                    cart = []; localStorage.setItem('sagatama_cart', JSON.stringify(cart)); updateCartUI();
-                    closeModal('paymentModal');
-                    showToast(`✅ Berhasil! +${sgtReward} SGT`, 'success');
-                    
-                    isResolved = true; clearTimeout(internalTimeout); resolve(true);
-                    setTimeout(() => switchView('orders'), 2000);
-                } catch (err) {
-                    logDebug("Complete err: " + err.message);
-                    if (!isResolved) { isResolved = true; clearTimeout(internalTimeout); reject(err); }
-                }
-            },
-            
-            onCancel: function(paymentId) {
-                logDebug("✗ Cancel: " + paymentId);
-                showToast('Dibatalkan', 'warning');
-                if (!isResolved) { isResolved = true; clearTimeout(internalTimeout); resolve(false); }
-                resetPaymentButton();
-                fetch('/api/payments/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentId }) }).catch(e => {});
-            },
-            
-            onError: function(error, payment) {
-                logDebug("✗ Error: " + error.message);
-                if (!isResolved) { isResolved = true; clearTimeout(internalTimeout); reject(new Error(error.message)); }
-                showToast('Error: ' + error.message, 'error');
-                resetPaymentButton();
+                
+                logDebug("✓ Payment approved on server");
+                
+            } catch (err) {
+                logDebug("Approval error: " + err.message);
+                throw err;
             }
-        };
+        },
         
-        const paymentData = {
-            amount: parseFloat(totalPi.toFixed(8)),
-            memo: `Sagatama Mart - ${cart.length} item`,
-            metadata: { orderId: 'ORD_' + Date.now(), items: cart.map(i => ({ id: i.id, name: i.name, qty: i.qty, pricePi: parseFloat(i.pricePi) || 0 })), customer: currentUser.username, customerUid: currentUser.uid, timestamp: new Date().toISOString(), totalPi }
-        };
+        onReadyForServerCompletion: async function(paymentId, txid) {
+            logDebug("✓ onReadyForServerCompletion: " + paymentId + " TX: " + txid);
+            showToast('Menyelesaikan transaksi...', 'info');
+            
+            try {
+                // ✅ FIXED: Complete dengan path yang benar
+                const response = await fetch('/api/payments/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ paymentId: paymentId, txid: txid })
+                });
+                
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Server completion failed');
+                }
+                
+                // Save order to Firebase
+                const orderData = {
+                    paymentId: paymentId,
+                    txid: txid,
+                    amount: totalPi,
+                    items: [...cart],
+                    status: 'paid',
+                    customer: currentUser.username,
+                    customerUid: currentUser.uid,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                    paymentMethod: 'pi'
+                };
+                
+                await addDoc(collection(db, 'orders'), orderData);
+                
+                // Add SGT reward
+                const sgtReward = Math.floor(totalPi * sgtRatePerPi);
+                if (sgtReward > 0) {
+                    awardSGT(totalPi, 'Reward dari pembelian π ' + totalPi.toFixed(4));
+                }
+
+                // Clear cart
+                cart = [];
+                localStorage.setItem('sagatama_cart', JSON.stringify(cart));
+                updateCartUI();
+                
+                // Close modal and show success
+                closeModal('paymentModal');
+                showToast(`✅ Pembayaran berhasil! +${sgtReward} SGT`, 'success');
+                
+                // Redirect to orders
+                setTimeout(() => {
+                    switchView('orders');
+                }, 2000);
+                
+            } catch (err) {
+                logDebug("Completion error: " + err.message);
+                throw err;
+            }
+        },
         
-        logDebug("Creating payment: π " + totalPi.toFixed(8));
-        try { window.Pi.createPayment(paymentData, callbacks); }
-        catch (e) { if (!isResolved) { isResolved = true; clearTimeout(internalTimeout); reject(new Error('Create failed: ' + e.message)); } }
-    });
+        onCancel: function(paymentId) {
+            logDebug("✗ onCancel: " + paymentId);
+            showToast('Pembayaran dibatalkan', 'warning');
+            resetPaymentButton();
+            
+            // Cancel di server juga
+            fetch('/api/payments/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paymentId: paymentId })
+            }).catch(e => logDebug("Cancel server error: " + e.message));
+        },
+        
+        onError: function(error, payment) {
+            logDebug("✗ onError: " + error.message);
+            
+            if (error.message && error.message.toLowerCase().includes('balance')) {
+                showToast('Saldo Pi tidak mencukupi!', 'error');
+            } else if (error.message && error.message.toLowerCase().includes('timeout')) {
+                showToast('Waktu habis. Silakan coba lagi.', 'error');
+            } else {
+                showToast('Error pembayaran: ' + error.message, 'error');
+            }
+            
+            resetPaymentButton();
+        }
+    };
+
+    // Create payment data
+    const orderMetadata = {
+        orderId: 'ORD_' + Date.now(),
+        items: cart.map(i => ({ 
+            id: i.id,
+            name: i.name, 
+            qty: i.qty, 
+            pricePi: parseFloat(i.pricePi) || 0
+        })),
+        customer: currentUser.username,
+        customerUid: currentUser.uid,
+        timestamp: new Date().toISOString(),
+        totalPi: totalPi
+    };
+
+    const paymentData = {
+        amount: parseFloat(totalPi.toFixed(8)),
+        memo: `Sagatama Mart - ${cart.length} item`,
+        metadata: orderMetadata
+    };
+
+    logDebug("Creating Pi payment: " + JSON.stringify(paymentData));
+    
+    // Create payment via Pi SDK
+    window.Pi.createPayment(paymentData, callbacks);
 }
 
 function resetPaymentButton() {
     const btn = document.getElementById('btnProcessPayment');
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi'; }
-    paymentInProgress = false;
-    if (paymentTimeoutId) { clearTimeout(paymentTimeoutId); paymentTimeoutId = null; }
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
+    }
 }
 
 async function handleIncompletePayment(payment) {
-    logDebug("Incomplete: " + payment?.identifier);
-    if (!payment?.identifier) return;
+    logDebug("Handling incomplete payment: " + payment?.identifier);
+    
+    if (!payment || !payment.identifier) {
+        logDebug("Invalid payment object");
+        return;
+    }
+
     try {
-        if (payment?.transaction?.txid) {
-            await fetch('/api/payments/complete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentId: payment.identifier, txid: payment.transaction.txid }) });
-            await addDoc(collection(db, 'orders'), { paymentId: payment.identifier, txid: payment.transaction.txid, amount: parseFloat(payment.amount) || 0, items: payment.metadata?.items || [], status: 'paid', customer: currentUser?.username || 'User', customerUid: currentUser?.uid || '', createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-            showToast('Pending payment selesai!', 'success');
-        } else {
-            await fetch('/api/payments/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentId: payment.identifier }) });
+        const existingOrder = orders.find(o => o.paymentId === payment.identifier);
+        
+        if (existingOrder && existingOrder.status === 'completed') {
+            logDebug("Payment already processed");
+            return;
         }
-    } catch (err) { logDebug("Incomplete err: " + err.message); }
+
+        if (payment?.transaction?.txid) {
+            logDebug("Payment has transaction, completing...");
+            
+            if (!existingOrder) {
+                const orderData = {
+                    paymentId: payment.identifier,
+                    txid: payment.transaction.txid,
+                    amount: parseFloat(payment.amount) || 0,
+                    items: payment.metadata?.items || [],
+                    status: 'paid',
+                    customer: currentUser?.username || 'User',
+                    customerUid: currentUser?.uid || '',
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                    metadata: payment.metadata || {}
+                };
+                await addDoc(collection(db, 'orders'), orderData);
+            }
+            
+            // Complete on server
+            await fetch('/api/payments/complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paymentId: payment.identifier, txid: payment.transaction.txid })
+            });
+            
+            showToast('Pembayaran pending berhasil diselesaikan!', 'success');
+            
+        } else {
+            logDebug("Payment has no transaction, cancelling...");
+            await fetch('/api/payments/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paymentId: payment.identifier })
+            });
+        }
+        
+        pendingPayment = null;
+        
+    } catch (err) {
+        logDebug("Handle incomplete payment error: " + err.message);
+    }
 }
 
 // ============================================
