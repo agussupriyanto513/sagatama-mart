@@ -32,7 +32,7 @@
             'openExchangeRateModal','updateAdminCalculator','closeAndRemoveModal',
             'handleStartShopping','adminLogin','loginAdmin','continueAsGuest',
             'togglePasswordVisibility','filterByCategory','filterOrders',
-            'openProductModal','previewProductImage','saveProduct','searchProducts','showToast',
+            'openProductModal','previewProductImage','saveProduct','saveProduct','searchProducts','showToast','updateSGTAdminStats',
             'logDebug','showOrderDetail'
         ];
 
@@ -1435,35 +1435,50 @@
                     <p class="stat-value" id="statTotalSGTIssued" style="color:#D97706;">0</p>
                     <p class="stat-label">SGT Diterbitkan</p>
                 </div>
-				<div class="grid grid-cols-2 gap-4 mb-6">
-    <div class="bg-gradient-to-br from-purple-600 to-indigo-700 p-4 rounded-2xl text-white shadow-lg">
-        <p class="text-xs opacity-80">Total SGT Beredar</p>
-        <h3 id="admin-total-sgt" class="text-xl font-bold">0 SGT</h3>
-    </div>
-    <div class="bg-gradient-to-br from-pink-600 to-red-700 p-4 rounded-2xl text-white shadow-lg">
-        <p class="text-xs opacity-80">Total User Pemegang SGT</p>
-        <h3 id="admin-total-holders" class="text-xl font-bold">0 User</h3>
-    </div>
-</div>
+				<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+                <div style="background:linear-gradient(135deg,#8B5CF6,#7C3AED);padding:16px;border-radius:16px;color:white;box-shadow:0 4px 12px rgba(139,92,246,0.3);">
+                    <p style="font-size:11px;opacity:0.85;margin-bottom:6px;font-weight:600;">₴ Total SGT Beredar</p>
+                    <h3 id="admin-total-sgt" style="font-size:20px;font-weight:900;">0 SGT</h3>
+                    <p style="font-size:10px;opacity:0.7;margin-top:4px;">Semua SGT aktif</p>
+                </div>
+                <div style="background:linear-gradient(135deg,#EC4899,#BE185D);padding:16px;border-radius:16px;color:white;box-shadow:0 4px 12px rgba(236,72,153,0.3);">
+                    <p style="font-size:11px;opacity:0.85;margin-bottom:6px;font-weight:600;"><i class="fas fa-users" style="margin-right:4px;"></i>Total Holders</p>
+                    <h3 id="admin-total-holders" style="font-size:20px;font-weight:900;">0 User</h3>
+                    <p style="font-size:10px;opacity:0.7;margin-top:4px;">Pemegang SGT aktif</p>
+                </div>
+                <div style="background:linear-gradient(135deg,#F59E0B,#D97706);padding:16px;border-radius:16px;color:white;box-shadow:0 4px 12px rgba(245,158,11,0.3);">
+                    <p style="font-size:11px;opacity:0.85;margin-bottom:6px;font-weight:600;"><i class="fas fa-paper-plane" style="margin-right:4px;"></i>SGT Didistribusi</p>
+                    <h3 id="admin-total-distributed" style="font-size:20px;font-weight:900;">0 SGT</h3>
+                    <p style="font-size:10px;opacity:0.7;margin-top:4px;">Total terdistribusi manual</p>
+                </div>
+                <div style="background:linear-gradient(135deg,#EF4444,#DC2626);padding:16px;border-radius:16px;color:white;box-shadow:0 4px 12px rgba(239,68,68,0.3);">
+                    <p style="font-size:11px;opacity:0.85;margin-bottom:6px;font-weight:600;"><i class="fas fa-fire" style="margin-right:4px;"></i>SGT Di-Burn</p>
+                    <h3 id="admin-total-burned" style="font-size:20px;font-weight:900;">0 SGT</h3>
+                    <p style="font-size:10px;opacity:0.7;margin-top:4px;">Total dibakar</p>
+                </div>
+            </div>
 
-<button onclick="processSGTTransfer()" id="btnTransferSGT">
-
-<div class="bg-white rounded-2xl shadow-sm p-4 mt-6">
-    <h4 class="font-bold text-gray-800 mb-3 text-sm">Riwayat Distribusi Terakhir</h4>
-    <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs">
-            <thead>
-                <tr class="border-b">
-                    <th class="py-2">Waktu</th>
-                    <th class="py-2">Username</th>
-                    <th class="py-2 text-right">Jumlah</th>
-                </tr>
-            </thead>
-            <tbody id="sgt-logs-body">
-                </tbody>
-        </table>
-    </div>
-</div>
+            <!-- Riwayat Distribusi SGT -->
+            <div class="card" style="margin-bottom:0;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h4 style="font-weight:800;color:#1F2937;font-size:14px;"><i class="fas fa-history" style="color:#F59E0B;margin-right:8px;"></i>Riwayat Distribusi SGT</h4>
+                    <button onclick="openModal('sgtAdminModal')" style="background:#FEF3C7;color:#D97706;border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Kelola</button>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;font-size:12px;border-collapse:collapse;">
+                        <thead>
+                            <tr style="border-bottom:2px solid #F3F4F6;">
+                                <th style="padding:8px 4px;text-align:left;color:#6B7280;font-weight:700;">Waktu</th>
+                                <th style="padding:8px 4px;text-align:left;color:#6B7280;font-weight:700;">Username</th>
+                                <th style="padding:8px 4px;text-align:right;color:#6B7280;font-weight:700;">Jumlah</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sgt-logs-body">
+                            <tr><td colspan="3" style="text-align:center;padding:16px;color:#9CA3AF;font-style:italic;">Belum ada riwayat distribusi</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             </div>
 
             <!-- Quick Actions -->
@@ -1937,9 +1952,25 @@
     <!-- ===== MODAL: SGT ADMIN ===== -->
     <div id="sgtAdminModal" class="modal">
         <div class="modal-content">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                 <h3 style="font-size:20px; font-weight:900; color:#1E293B;">Kelola SGT Token</h3>
                 <button onclick="closeModal('sgtAdminModal')" style="background:none; border:none; color:#64748B; cursor:pointer; font-size:20px;"><i class="fas fa-times"></i></button>
+            </div>
+
+            <!-- Mini Stats di Modal -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
+                <div style="background:linear-gradient(135deg,#8B5CF6,#7C3AED);padding:12px;border-radius:12px;text-align:center;color:white;">
+                    <p style="font-size:9px;opacity:0.8;font-weight:600;">BEREDAR</p>
+                    <p id="modal-sgt-beredar" style="font-size:14px;font-weight:900;">--</p>
+                </div>
+                <div style="background:linear-gradient(135deg,#EC4899,#BE185D);padding:12px;border-radius:12px;text-align:center;color:white;">
+                    <p style="font-size:9px;opacity:0.8;font-weight:600;">HOLDERS</p>
+                    <p id="modal-sgt-holders" style="font-size:14px;font-weight:900;">--</p>
+                </div>
+                <div style="background:linear-gradient(135deg,#F59E0B,#D97706);padding:12px;border-radius:12px;text-align:center;color:white;">
+                    <p style="font-size:9px;opacity:0.8;font-weight:600;">DISTRIBUSI</p>
+                    <p id="modal-sgt-dist" style="font-size:14px;font-weight:900;">--</p>
+                </div>
             </div>
 
             <div style="background:#F8FAFC; border-radius:14px; padding:16px; margin-bottom:16px; border:1px solid #E2E8F0;">
@@ -2055,10 +2086,7 @@ let pendingPayment = null;
 let paymentTimeout = null;
 
 
-const btn = document.getElementById('btnTransferSGT');
-if (btn) btn.disabled = true;
-
-if (btn) btn.disabled = false;
+// SGT Transfer button managed by processSGTTransfer()
 
 // SGT Token State
 let sgtBalance = 0;
@@ -2335,89 +2363,54 @@ let isProcessingTransfer = false;
 window.processSGTTransfer = async function() {
     if (isProcessingTransfer) return;
     isProcessingTransfer = true;
-
+    const btn = document.querySelector('#sgtTransferModal button[onclick="processSGTTransfer()"]');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...'; }
     try {
         const targetUserInput = document.getElementById('transferTargetUser')?.value.trim();
         const amount = parseInt(document.getElementById('sgtTransferAmount')?.value);
         const targetApp = document.getElementById('transferTargetApp')?.value;
-
-        if (!currentUser || !currentUser.uid) {
-            throw new Error('User belum login');
-        }
-
-        if (!targetUserInput) {
-            throw new Error('Masukkan username tujuan');
-        }
-
-        if (!amount || amount <= 0) {
-            throw new Error('Jumlah SGT tidak valid');
-        }
+        if (!currentUser?.uid) throw new Error('User belum login');
+        if (!targetUserInput) throw new Error('Masukkan username tujuan');
+        if (!amount || amount <= 0) throw new Error('Jumlah SGT tidak valid');
+        if (amount > sgtBalance) throw new Error('Saldo SGT tidak mencukupi');
+        if (!db) throw new Error('Database tidak siap');
 
         showToast('Memproses transfer...', 'info');
 
-        // 🔥 Cari user berdasarkan username (BENERAN)
-        const userQuery = await db.collection('users')
-            .where('username', '==', targetUserInput)
-            .limit(1)
-            .get();
+        // Cari penerima
+        const receiverSnap = await getDocs(query(collection(db, 'users'), where('username', '==', targetUserInput)));
+        if (receiverSnap.empty) throw new Error('User penerima tidak ditemukan');
+        const receiverDoc = receiverSnap.docs[0];
+        if (receiverDoc.id === currentUser.uid) throw new Error('Tidak bisa transfer ke diri sendiri');
 
-        if (userQuery.empty) {
-            throw new Error('User penerima tidak ditemukan');
-        }
+        const receiverData = receiverDoc.data();
+        // Update pengirim
+        sgtBalance -= amount;
+        const newTxSender = { type:'transfer', amount, description:`Transfer ke @${targetUserInput}`, date:new Date().toISOString(), userId:currentUser.uid };
+        sgtTransactions.unshift(newTxSender);
+        await setDoc(doc(db, 'users', currentUser.uid), {
+            sgtBalance, sgtTransactions: sgtTransactions.slice(0,50), sgtUpdatedAt: serverTimestamp()
+        }, { merge: true });
+        // Update penerima
+        const receiverBal = (receiverData.sgtBalance || 0) + amount;
+        const receiverTxs = receiverData.sgtTransactions || [];
+        await setDoc(doc(db, 'users', receiverDoc.id), {
+            sgtBalance: receiverBal,
+            sgtTransactions: [{ type:'earn', amount, description:`Transfer dari @${currentUser.username}`, date:new Date().toISOString() }, ...receiverTxs].slice(0,50),
+            sgtUpdatedAt: serverTimestamp()
+        }, { merge: true });
 
-        const receiverDocSnap = userQuery.docs[0];
-        const receiverId = receiverDocSnap.id;
-
-        if (receiverId === currentUser.uid) {
-            throw new Error('Tidak bisa transfer ke diri sendiri');
-        }
-
-        const senderRef = db.collection('users').doc(currentUser.uid);
-        const receiverRef = db.collection('users').doc(receiverId);
-        const txRef = db.collection('sgt_transactions').doc();
-
-        await db.runTransaction(async (tx) => {
-            const senderDoc = await tx.get(senderRef);
-            const receiverDoc = await tx.get(receiverRef);
-
-            if (!senderDoc.exists) throw new Error("User pengirim tidak ditemukan");
-
-            const senderBalance = senderDoc.data().sgtBalance || 0;
-
-            if (senderBalance < amount) {
-                throw new Error("Saldo tidak mencukupi");
-            }
-
-            tx.update(senderRef, {
-                sgtBalance: senderBalance - amount,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-
-            tx.update(receiverRef, {
-                sgtBalance: (receiverDoc.data().sgtBalance || 0) + amount,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-
-            tx.set(txRef, {
-                type: 'transfer',
-                from: currentUser.uid,
-                to: receiverId,
-                toUsername: targetUserInput,
-                amount,
-                targetApp,
-                status: 'completed',
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-        });
-
-        showToast(`Transfer ${amount} SGT berhasil ke @${targetUserInput}`, 'success');
+        saveSGTData();
+        updateSGTUI();
         closeModal('sgtTransferModal');
-
-    } catch (err) {
-        console.error(err);
-        showToast(err.message || 'Transfer gagal', 'error');
+        showToast(`✅ ${amount} SGT berhasil dikirim ke @${targetUserInput}!`, 'success');
+        logDebug("SGT transfer success: " + amount + " to " + targetUserInput);
+    } catch(e) {
+        logDebug("Transfer error: " + e.message);
+        showToast('Gagal transfer: ' + e.message, 'error');
     } finally {
         isProcessingTransfer = false;
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Kirim SGT'; }
     }
 };
 window.redeemSGT = function(rewardType) {
@@ -2470,65 +2463,72 @@ window.saveSGTSettings = function() {
 window._real_.distributeSGTManual = async function() {
     const targetUser = document.getElementById('sgtDistUser')?.value.trim();
     const amount = parseInt(document.getElementById('sgtDistAmount')?.value);
-    
-    // Validasi Awal
     if (!targetUser) { showToast('Masukkan username penerima', 'error'); return; }
     if (!amount || amount <= 0) { showToast('Jumlah SGT tidak valid', 'error'); return; }
 
+    showToast('Sedang memproses distribusi...', 'info');
     try {
-        // Tampilkan loading toast jika ada
-        showToast('Sedang memproses distribusi...', 'info');
-
-        // Gunakan batch untuk memastikan saldo dan log tersimpan bersamaan
-        const batch = db.batch();
-        
-        // Cari user berdasarkan ID (dalam kasus Pi App, biasanya ID dokumen adalah username atau Pi ID)
-        const userRef = db.collection('users').doc(targetUser);
-        const logRef = db.collection('sgt_logs').doc();
-
-        // 1. Perintah Update Saldo (Increment)
-        batch.set(userRef, {
-            sgtBalance: firebase.firestore.FieldValue.increment(amount),
-            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }); // Merge: true agar data user lain tidak terhapus
-
-        // 2. Perintah Simpan Log Riwayat
-        batch.set(logRef, {
-            adminId: auth.currentUser ? auth.currentUser.uid : 'admin_manual',
-            targetUser: targetUser,
-            amount: amount,
-            type: 'manual_distribution',
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        if (!db) throw new Error('Database tidak siap');
+        // Cari user berdasarkan username
+        const usersSnap = await getDocs(query(collection(db, 'users'), where('username', '==', targetUser)));
+        if (usersSnap.empty) {
+            // Jika tidak ada, coba cari berdasarkan uid/doc id
+            showToast(`User @${targetUser} tidak ditemukan di database`, 'error');
+            return;
+        }
+        const userDocRef = doc(db, 'users', usersSnap.docs[0].id);
+        const userData = usersSnap.docs[0].data();
+        const currentBal = userData.sgtBalance || 0;
+        const currentTxs = userData.sgtTransactions || [];
+        const newTx = {
+            type: 'earn', amount, description: 'Distribusi manual dari Admin',
+            date: new Date().toISOString(), userId: usersSnap.docs[0].id
+        };
+        // Update saldo user
+        await setDoc(userDocRef, {
+            sgtBalance: currentBal + amount,
+            sgtTransactions: [newTx, ...currentTxs].slice(0, 50),
+            sgtUpdatedAt: serverTimestamp()
+        }, { merge: true });
+        // Simpan log distribusi
+        await addDoc(collection(db, 'sgt_logs'), {
+            adminId: currentUser?.uid || 'admin_manual',
+            targetUser, targetUserId: usersSnap.docs[0].id,
+            amount, type: 'manual_distribution',
+            timestamp: serverTimestamp()
         });
-
-        // Eksekusi ke Firestore
-        await batch.commit();
-
-        // Feedback sukses yang sesungguhnya
-        showToast(`${amount} SGT berhasil dikirim ke @${targetUser}`, 'success');
-        
-        // Reset Form
+        showToast(`✅ ${amount} SGT berhasil dikirim ke @${targetUser}`, 'success');
         if (document.getElementById('sgtDistUser')) document.getElementById('sgtDistUser').value = '';
         if (document.getElementById('sgtDistAmount')) document.getElementById('sgtDistAmount').value = '';
-
-        // Update tampilan statistik & log di dashboard admin
-        if (typeof window._real_.refreshAdminSGTStats === 'function') {
-            window._real_.refreshAdminSGTStats();
-            window._real_.loadSGTLogs();
-        }
-
+        updateSGTAdminStats();
     } catch (error) {
-        console.error("Distribusi Gagal:", error);
-        showToast('Gagal memproses ke database. Cek koneksi/izin.', 'error');
+        logDebug("Distribusi error: " + error.message);
+        showToast('Gagal mendistribusikan: ' + error.message, 'error');
     }
 };
 
-window.burnSGT = function() {
+window.burnSGT = async function() {
     const amount = parseInt(document.getElementById('sgtBurnAmount')?.value);
     if (!amount || amount <= 0) { showToast('Masukkan jumlah SGT yang akan di-burn', 'error'); return; }
     if (!confirm(`Apakah Anda yakin ingin burn ${amount} SGT? Tindakan ini tidak dapat dibatalkan.`)) return;
-    showToast(`${amount} SGT berhasil di-burn dari sirkulasi`, 'success');
+    // Simpan total burned ke localStorage
+    const prevBurned = parseInt(localStorage.getItem('sgt_total_burned') || '0');
+    localStorage.setItem('sgt_total_burned', (prevBurned + amount).toString());
+    // Simpan ke Firestore untuk persistensi
+    if (db) {
+        try {
+            await setDoc(doc(db, 'sgt_config', 'burn_log'), {
+                totalBurned: prevBurned + amount,
+                lastBurnAmount: amount,
+                lastBurnAt: serverTimestamp(),
+                burnedBy: currentUser?.username || 'admin'
+            }, { merge: true });
+        } catch(e) { logDebug("Burn log save error: " + e.message); }
+    }
+    showToast(`${amount} SGT berhasil di-burn dari sirkulasi 🔥`, 'success');
     if (document.getElementById('sgtBurnAmount')) document.getElementById('sgtBurnAmount').value = '';
+    // Refresh stats
+    updateSGTAdminStats();
 };
 
 window._real_.refreshAdminSGTStats = async function() {
@@ -2713,18 +2713,32 @@ window.quickFilter = function(category) {
 async function init() {
     logDebug("Starting initialization...");
 
-    // Restore cart
+    // Restore cart dari localStorage dulu (instant, tidak perlu tunggu DB)
     try {
         cart = JSON.parse(localStorage.getItem('sagatama_cart') || '[]');
     } catch (e) { cart = []; }
 
-    // Restore user session
+    // Restore user session dari localStorage (instant, UI langsung tampil)
     try {
         const savedUser = localStorage.getItem('sagatama_user');
         if (savedUser) {
             currentUser = JSON.parse(savedUser);
             userRole = currentUser.role || 'user';
-            logDebug("Restored user: " + currentUser.username);
+            logDebug("Restored user session: " + currentUser.username);
+            // Langsung update UI dengan data cache - tidak perlu tunggu network
+            updateUI();
+            updateCartUI();
+            // Restore SGT dari localStorage (instant)
+            const savedRate = localStorage.getItem('sgt_rate');
+            const savedMin  = localStorage.getItem('sgt_min_purchase');
+            if (savedRate) sgtRatePerPi = parseInt(savedRate);
+            if (savedMin)  sgtMinPurchase = parseFloat(savedMin);
+            const savedBal  = localStorage.getItem('sgt_balance_' + currentUser.uid);
+            const savedTxs  = localStorage.getItem('sgt_transactions_' + currentUser.uid);
+            if (savedBal) sgtBalance = parseInt(savedBal);
+            if (savedTxs) try { sgtTransactions = JSON.parse(savedTxs); } catch(e) {}
+            updateSGTUI();
+            showSGTElements(currentUser.role !== 'admin');
         }
     } catch (e) {
         currentUser = null;
@@ -2732,24 +2746,27 @@ async function init() {
     }
 
     const loading = document.getElementById('loadingOverlay');
-    if (loading) loading.style.display = 'flex';
+    // Tampilkan loading hanya jika belum ada user cache (first time load)
+    if (!currentUser && loading) loading.style.display = 'flex';
 
     try {
         detectPiEnv();
-        await initPiSDK();
-        await initFirebase();
+
+        // Pi SDK dan Firebase jalan paralel untuk lebih cepat
+        const [, firebaseOk] = await Promise.allSettled([
+            initPiSDK(),
+            initFirebase()
+        ]);
 
         // Tangani SSO setelah Firebase siap
         await handleSSO();
 
-        // Muat SGT setelah user dan DB siap
-        if (currentUser) {
-            const savedRate = localStorage.getItem('sgt_rate');
-            const savedMin = localStorage.getItem('sgt_min_purchase');
-            if (savedRate) sgtRatePerPi = parseInt(savedRate);
-            if (savedMin) sgtMinPurchase = parseFloat(savedMin);
-            await loadSGTData();
-            showSGTElements(currentUser.role !== 'admin');
+        // Jika ada user session, refresh data dari Firestore di background
+        if (currentUser && db) {
+            // Refresh SGT dari Firestore (background, tidak block UI)
+            loadSGTData().catch(e => logDebug("BGround SGT load: " + e.message));
+            // Verifikasi user masih valid di Firestore
+            verifyUserSession().catch(e => logDebug("User verify: " + e.message));
         }
 
         updateUI();
@@ -2757,14 +2774,13 @@ async function init() {
         await loadDataWithCache();
 
         if (!currentUser) {
-            setTimeout(() => openModal('loginOptionsModal'), 1000);
+            setTimeout(() => openModal('loginOptionsModal'), 800);
         }
 
         logDebug("Initialization complete!");
     } catch (e) {
         logDebug("Init error: " + e.message);
         console.error("INIT ERROR:", e);
-        // Tampilkan pesan error ke user alih-alih loading selamanya
         if (loading) {
             loading.innerHTML = `
                 <div style="text-align:center; padding:20px;">
@@ -2780,6 +2796,24 @@ async function init() {
         if (loading && loading.innerHTML.includes('Memuat...')) {
             loading.style.display = 'none';
         }
+    }
+}
+
+// Verifikasi sesi user masih valid di Firestore (background check)
+async function verifyUserSession() {
+    if (!currentUser?.uid || !db) return;
+    try {
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        if (userDoc.exists()) {
+            const data = userDoc.data();
+            // Update data terbaru ke currentUser
+            currentUser.address = data.address || currentUser.address;
+            currentUser.fullName = data.fullName || currentUser.fullName;
+            localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
+            logDebug("User session verified: @" + currentUser.username);
+        }
+    } catch (e) {
+        logDebug("verifyUserSession error: " + e.message);
     }
 }
 
@@ -2961,6 +2995,51 @@ function loadDataFromFirebase() {
         }, (err) => logDebug("Orders error: " + err.message));
     } catch (e) {
         logDebug("Orders query error: " + e.message);
+    }
+
+    // Real-time listener untuk users SGT stats (admin only)
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
+    if (isAdmin) {
+        try {
+            unsubscribers.users = onSnapshot(collection(db, 'users'), (snapshot) => {
+                // Hitung stats SGT secara realtime
+                let totalSGT = 0, totalHolders = 0, totalDistributed = 0;
+                const logRows = [];
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    const bal = data.sgtBalance || 0;
+                    if (bal > 0) { totalSGT += bal; totalHolders++; }
+                    (data.sgtTransactions || []).forEach(tx => {
+                        if (tx.type === 'earn') {
+                            totalDistributed += tx.amount || 0;
+                            if (logRows.length < 10) logRows.push({ date: tx.date, username: data.username || docSnap.id, amount: tx.amount });
+                        }
+                    });
+                });
+                const totalBurned = parseInt(localStorage.getItem('sgt_total_burned') || '0');
+                const upd = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+                upd('admin-total-sgt', totalSGT.toLocaleString() + ' SGT');
+                upd('admin-total-holders', totalHolders + ' User');
+                upd('admin-total-distributed', totalDistributed.toLocaleString() + ' SGT');
+                upd('admin-total-burned', totalBurned.toLocaleString() + ' SGT');
+                upd('statTotalSGTIssued', totalDistributed.toLocaleString());
+                // Render log
+                const tbody = document.getElementById('sgt-logs-body');
+                if (tbody && logRows.length > 0) {
+                    logRows.sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+                    tbody.innerHTML = logRows.map(r => {
+                        const d = r.date ? new Date(r.date).toLocaleDateString('id-ID',{day:'numeric',month:'short'}) : '-';
+                        return `<tr style="border-bottom:1px solid #F3F4F6;">
+                            <td style="padding:8px 4px;color:#6B7280;font-size:11px;">${d}</td>
+                            <td style="padding:8px 4px;font-weight:600;color:#1F2937;">@${r.username}</td>
+                            <td style="padding:8px 4px;text-align:right;color:#D97706;font-weight:700;">+${(r.amount||0).toLocaleString()}</td>
+                        </tr>`;
+                    }).join('');
+                }
+            }, (err) => logDebug("Users listener error: " + err.message));
+        } catch (e) {
+            logDebug("Users query error: " + e.message);
+        }
     }
 }
 
@@ -3416,23 +3495,30 @@ async function saveOrderToFirebase(orderData, paymentId) {
 }
 
 function listenSGTTransactions(userId) {
-    return db.collection('sgt_transactions')
-        .where('from', '==', userId)
-        .onSnapshot((snapshot) => {
-            const container = document.getElementById('sgtTransactionHistory');
-            container.innerHTML = '';
-
-            snapshot.forEach(doc => {
-                const tx = doc.data();
-
-                container.innerHTML += `
-                    <div class="card">
-                        <p><b>Transfer:</b> ${tx.amount} SGT</p>
-                        <p>Ke: ${tx.to}</p>
-                    </div>
-                `;
-            });
-        });
+    if (!db || !userId) return;
+    const q = query(collection(db, 'sgt_transactions'), where('from', '==', userId));
+    return onSnapshot(q, (snapshot) => {
+        const container = document.getElementById('sgtTransactionHistory');
+        if (!container) return;
+        if (snapshot.empty) {
+            renderSGTTransactionHistory();
+            return;
+        }
+        container.innerHTML = snapshot.docs.map(docSnap => {
+            const tx = docSnap.data();
+            const date = tx.timestamp?.toDate ? tx.timestamp.toDate().toLocaleDateString('id-ID',{day:'numeric',month:'short'}) : '-';
+            return `<div style="background:white;border-radius:12px;padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;border:1px solid #E2E8F0;">
+                <div style="width:40px;height:40px;background:#FEE2E2;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#DC2626;font-size:16px;">
+                    <i class="fas fa-arrow-up"></i>
+                </div>
+                <div style="flex:1;">
+                    <p style="font-weight:700;color:#1F2937;font-size:13px;">Transfer ke @${tx.to || '-'}</p>
+                    <p style="font-size:11px;color:#64748B;">${date}</p>
+                </div>
+                <p style="font-weight:800;font-size:15px;color:#DC2626;">-${tx.amount || 0} SGT</p>
+            </div>`;
+        }).join('');
+    }, (err) => logDebug("SGT tx listener error: " + err.message));
 }
 
 // ============================================
@@ -3558,6 +3644,19 @@ window.toggleWallet = function() {
 
 window.openModal = function(modalId) {
     document.getElementById(modalId)?.classList.add('active');
+    // Sync SGT stats ke modal saat dibuka
+    if (modalId === 'sgtAdminModal') {
+        setTimeout(() => {
+            const sync = (from, to) => {
+                const fromEl = document.getElementById(from);
+                const toEl   = document.getElementById(to);
+                if (fromEl && toEl) toEl.innerText = fromEl.innerText;
+            };
+            sync('admin-total-sgt', 'modal-sgt-beredar');
+            sync('admin-total-holders', 'modal-sgt-holders');
+            sync('admin-total-distributed', 'modal-sgt-dist');
+        }, 100);
+    }
 };
 
 window.closeModal = function(id) {
@@ -3930,6 +4029,74 @@ function updateAdminStats() {
     upd('statPendingOrders', orders.filter(o => ['pending','paid','processing'].includes(o.status)).length);
     upd('statCompletedOrders', orders.filter(o => ['completed','shipped'].includes(o.status)).length);
     upd('statTotalRevenue', totalRevenue.toFixed(8));
+    // Update SGT stats dari Firestore secara async
+    updateSGTAdminStats();
+}
+
+async function updateSGTAdminStats() {
+    try {
+        if (!db) return;
+        // Ambil semua user dari Firestore untuk hitung SGT stats
+        const usersSnap = await getDocs(collection(db, 'users'));
+        let totalSGT = 0;
+        let totalHolders = 0;
+        let totalDistributed = 0;
+        const logRows = [];
+
+        usersSnap.forEach(docSnap => {
+            const data = docSnap.data();
+            const bal = data.sgtBalance || 0;
+            if (bal > 0) {
+                totalSGT += bal;
+                totalHolders++;
+            }
+            // Hitung total distribusi manual dari transactions
+            const txs = data.sgtTransactions || [];
+            txs.forEach(tx => {
+                if (tx.type === 'earn') {
+                    totalDistributed += tx.amount || 0;
+                    if (logRows.length < 10) {
+                        logRows.push({
+                            date: tx.date,
+                            username: data.username || docSnap.id,
+                            amount: tx.amount
+                        });
+                    }
+                }
+            });
+        });
+
+        // Baca total burned dari localStorage admin (sementara)
+        const totalBurned = parseInt(localStorage.getItem('sgt_total_burned') || '0');
+
+        const upd = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+        upd('admin-total-sgt', totalSGT.toLocaleString() + ' SGT');
+        upd('admin-total-holders', totalHolders + ' User');
+        upd('admin-total-distributed', totalDistributed.toLocaleString() + ' SGT');
+        upd('admin-total-burned', totalBurned.toLocaleString() + ' SGT');
+        upd('statTotalSGTIssued', totalDistributed.toLocaleString());
+
+        // Render log distribusi
+        const tbody = document.getElementById('sgt-logs-body');
+        if (tbody) {
+            if (logRows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:16px;color:#9CA3AF;font-style:italic;">Belum ada riwayat distribusi</td></tr>';
+            } else {
+                logRows.sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+                tbody.innerHTML = logRows.map(r => {
+                    const d = r.date ? new Date(r.date).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '-';
+                    return `<tr style="border-bottom:1px solid #F3F4F6;">
+                        <td style="padding:8px 4px;color:#6B7280;">${d}</td>
+                        <td style="padding:8px 4px;font-weight:600;color:#1F2937;">@${r.username}</td>
+                        <td style="padding:8px 4px;text-align:right;color:#D97706;font-weight:700;">+${(r.amount||0).toLocaleString()} SGT</td>
+                    </tr>`;
+                }).join('');
+            }
+        }
+        logDebug("SGT Admin stats updated: " + totalHolders + " holders, " + totalSGT + " SGT beredar");
+    } catch (e) {
+        logDebug("SGT admin stats error: " + e.message);
+    }
 }
 
 function renderAdminRecentOrders() {
@@ -4319,6 +4486,10 @@ window.saveProduct = async function() {
     if (!pricePi || pricePi <= 0) { showToast('Harga Pi harus lebih dari 0!', 'error'); return; }
     if (!category) { showToast('Kategori wajib dipilih!', 'error'); return; }
 
+    // Disable tombol simpan agar tidak double-click
+    const saveBtn = document.querySelector('#productFormModal button[onclick="saveProduct()"]');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Menyimpan...'; }
+
     const data = {
         name, pricePi, stock: stock || 0, category,
         description: description || '',
@@ -4328,12 +4499,34 @@ window.saveProduct = async function() {
 
     try {
         if (editingProductId) {
+            // OPTIMISTIC UPDATE: Update local array dulu sebelum tunggu Firestore
+            const localIdx = products.findIndex(p => p.id === editingProductId);
+            if (localIdx !== -1) {
+                products[localIdx] = { ...products[localIdx], ...data, updatedAt: { seconds: Date.now()/1000 } };
+                localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+                renderAdminProducts(); // Render langsung tanpa tunggu Firestore
+            }
             await updateDoc(doc(db, 'products', editingProductId), data);
-            showToast('Produk berhasil diperbarui!', 'success');
+            showToast('Produk berhasil diperbarui! ✅', 'success');
         } else {
+            // Untuk produk baru, tutup modal dulu lalu proses background
+            const tempId = 'temp_' + Date.now();
+            const newProduct = { id: tempId, ...data, createdAt: { seconds: Date.now()/1000 } };
+            products.unshift(newProduct);
+            localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+            renderAdminProducts();
+            closeModal('productFormModal');
+            editingProductId = null;
+            tempProductImage = null;
+            showToast('Menyimpan produk...', 'info');
             data.createdAt = serverTimestamp();
-            await addDoc(collection(db, 'products'), data);
-            showToast('Produk berhasil ditambahkan!', 'success');
+            const docRef = await addDoc(collection(db, 'products'), data);
+            // Ganti tempId dengan id asli
+            const tIdx = products.findIndex(p => p.id === tempId);
+            if (tIdx !== -1) products[tIdx].id = docRef.id;
+            localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+            showToast('Produk berhasil ditambahkan! ✅', 'success');
+            return;
         }
         closeModal('productFormModal');
         editingProductId = null;
@@ -4341,6 +4534,10 @@ window.saveProduct = async function() {
     } catch (error) {
         logDebug("Save product error: " + error.message);
         showToast('Gagal menyimpan: ' + error.message, 'error');
+        // Rollback: reload dari Firestore
+        loadDataFromFirebase();
+    } finally {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = 'Simpan Produk'; }
     }
 };
 
@@ -4445,6 +4642,7 @@ if (typeof window._registerReal === 'function') {
         filterOrders: window.filterOrders, openProductModal: window.openProductModal,
         saveProduct: window.saveProduct, searchProducts: window.searchProducts,
         showToast, logDebug,
+        updateSGTAdminStats: typeof updateSGTAdminStats !== 'undefined' ? updateSGTAdminStats : function(){},
     });
 }
     </script>
