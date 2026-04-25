@@ -2109,15 +2109,6 @@ let adminExchangeRate = 15000;
 const USE_SANDBOX = false;
 const ADMIN_CREDENTIALS = { username: 'sagatama_admin', password: 'Sagatama513' };
 
-window._real_ = window._real_ || {};
-
-window._real_.distributeSGTManual = async function() {
-    console.log("JALAN");
-};
-
-// 🔥 INI YANG PENTING
-window.distributeSGTManual = window._real_.distributeSGTManual;
-
 // ============================================
 // IMAGE HELPER - Fallback inline SVG, tidak pernah 404
 // ============================================
@@ -4705,6 +4696,18 @@ if (typeof window._registerReal === 'function') {
         updateSGTAdminStats: typeof updateSGTAdminStats !== 'undefined' ? updateSGTAdminStats : function(){},
     });
 }
+
+
+window._real_ = window._real_ || {};
+
+// function kamu
+window._real_.distributeSGTManual = async function() {
+    console.log("🔥 DISTRIBUSI JALAN");
+};
+
+// 🔥 INI WAJIB (LETAR DI SINI)
+window.distributeSGTManual = window._real_.distributeSGTManual;
+
     </script>
 </body>
 </html>
