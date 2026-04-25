@@ -3630,11 +3630,27 @@ function renderAdminOrders() {
 }
 
 function updateAdminStats() {
-    document.getElementById('statTotalProducts').textContent = products.length;
-    document.getElementById('statPendingOrders').textContent = orders.filter(o => o.status === 'pending').length;
-    document.getElementById('statCompletedOrders').textContent = orders.filter(o => o.status === 'completed').length;
-    document.getElementById('statTotalRevenue').textContent = orders.reduce((s, o) => s + parseFloat(o.totalPi || 0), 0).toFixed(4);
+    // Hitung dari array orders yang sudah di-load
+    const totalProducts = products.length;
+    const pendingOrders = orders.filter(o => o.status === 'pending' || o.status === 'paid').length;
+    const completedOrders = orders.filter(o => o.status === 'completed' || o.status === 'shipped').length;
+    const totalRevenue = orders.reduce((s, o) => s + (parseFloat(o.amount || o.totalPi || 0)), 0);
+    
+    // Update DOM dengan cek null
+    const setText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    };
+    
+    setText('statTotalProducts', totalProducts);
+    setText('statPendingOrders', pendingOrders);
+    setText('statCompletedOrders', completedOrders);
+    setText('statTotalRevenue', totalRevenue.toFixed(4));
+    
+    // Update SGT stats juga
     updateSGTAdminStats();
+    
+    // Recent orders
     const recentContainer = document.getElementById('adminRecentOrders');
     if (recentContainer) {
         const recent = orders.slice(0, 5);
@@ -3644,20 +3660,23 @@ function updateAdminStats() {
             recentContainer.innerHTML = recent.map(o => `
                 <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #F3F4F6;">
                     <div>
-                        <p style="font-weight:700; font-size:13px;">${o.orderId || o.id}</p>
-                        <p style="font-size:11px; color:#6B7280;">@${o.username || 'Tamu'}</p>
+                        <p style="font-weight:700; font-size:13px;">${o.orderId || o.id || 'ORD-' + Math.random().toString(36).substr(2,6).toUpperCase()}</p>
+                        <p style="font-size:11px; color:#6B7280;">@${o.customer || o.username || 'Tamu'}</p>
                     </div>
-                    <span style="font-weight:800; color:#8B5CF6;">π ${parseFloat(o.totalPi || 0).toFixed(4)}</span>
+                    <span style="font-weight:800; color:#8B5CF6;">π ${parseFloat(o.amount || o.totalPi || 0).toFixed(4)}</span>
                 </div>
             `).join('');
         }
     }
+    
+    // Badge pending
     const badge = document.getElementById('adminOrderBadge');
-    const pendingCount = orders.filter(o => o.status === 'pending').length;
     if (badge) {
-        badge.textContent = pendingCount;
-        badge.style.display = pendingCount > 0 ? 'block' : 'none';
+        badge.textContent = pendingOrders;
+        badge.style.display = pendingOrders > 0 ? 'block' : 'none';
     }
+    
+    logDebug("Admin stats updated: Products=" + totalProducts + ", Pending=" + pendingOrders + ", Revenue=" + totalRevenue.toFixed(4));
 }
 
 // ============================================
@@ -3704,34 +3723,63 @@ async function loadDataWithCache() {
 }
 
 async function loadDataFromFirebase() {
-    if (!db) return;
+    if (!db) {
+        logDebug("Firebase not ready, skipping real-time load");
+        return;
+    }
+    
     try {
+        // Products listener
         const productsQuery = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
         if (unsubscribers.products) unsubscribers.products();
+        
         unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
-            products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            products = snapshot.docs.map(doc => ({ 
+                id: doc.id, 
+                ...doc.data() 
+            }));
+            logDebug('Products updated: ' + products.length);
             renderProducts();
             renderCategories();
             renderFeaturedProducts();
-            if (currentUser?.role === 'admin') renderAdminProducts();
-        }, (err) => { logDebug('Products listener error: ' + err.message); });
+            if (currentUser?.role === 'admin') {
+                renderAdminProducts();
+                updateAdminStats(); // ✅ Update stats saat produk berubah
+            }
+        }, (err) => { 
+            logDebug('Products listener error: ' + err.message); 
+        });
 
+        // Orders listener - PENTING: ini yang membuat stats real-time
         const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
         if (unsubscribers.orders) unsubscribers.orders();
+        
         unsubscribers.orders = onSnapshot(ordersQuery, (snapshot) => {
-            orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            orders = snapshot.docs.map(doc => ({ 
+                id: doc.id, 
+                ...doc.data() 
+            }));
+            logDebug('Orders updated: ' + orders.length);
+            
+            // ✅ SELALU update stats saat orders berubah
             if (currentUser?.role === 'admin') {
                 updateAdminStats();
                 renderAdminOrders();
             }
+            
+            // Update user orders juga
             if (currentUser) {
-                myOrders = orders.filter(o => o.userId === currentUser.uid);
+                myOrders = orders.filter(o => o.customerUid === currentUser.uid || o.userId === currentUser.uid);
                 renderOrders();
             }
-        }, (err) => { logDebug('Orders listener error: ' + err.message); });
+        }, (err) => { 
+            logDebug('Orders listener error: ' + err.message); 
+        });
 
+        // SGT logs listener
         const logsQuery = query(collection(db, 'sgt_logs'), orderBy('timestamp', 'desc'));
         if (unsubscribers.sgtLogs) unsubscribers.sgtLogs();
+        
         unsubscribers.sgtLogs = onSnapshot(logsQuery, (snapshot) => {
             const logs = snapshot.docs.map(doc => doc.data());
             const tbody = document.getElementById('sgt-logs-body');
@@ -3751,7 +3799,9 @@ async function loadDataFromFirebase() {
             }
         }, (err) => { logDebug('SGT logs error: ' + err.message); });
 
-    } catch (e) { logDebug('Firebase load error: ' + e.message); }
+    } catch (e) { 
+        logDebug('Firebase load error: ' + e.message); 
+    }
 }
 
 function getSampleProducts() {
