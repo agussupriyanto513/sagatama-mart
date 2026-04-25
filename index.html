@@ -2470,52 +2470,73 @@ window.saveSGTSettings = function() {
     showToast(`Pengaturan disimpan! Rate: 1 Pi = ${sgtRatePerPi} SGT`, 'success');
 };
 
+window._real_ = window._real_ || {};
+
 window._real_.distributeSGTManual = async function() {
     const targetUser = document.getElementById('sgtDistUser')?.value.trim();
     const amount = parseInt(document.getElementById('sgtDistAmount')?.value);
+
     if (!targetUser) { showToast('Masukkan username penerima', 'error'); return; }
     if (!amount || amount <= 0) { showToast('Jumlah SGT tidak valid', 'error'); return; }
 
     showToast('Sedang memproses distribusi...', 'info');
+
     try {
         if (!db) throw new Error('Database tidak siap');
-        // Cari user berdasarkan username
-        const usersSnap = await getDocs(query(collection(db, 'users'), where('username', '==', targetUser)));
+
+        const usersSnap = await getDocs(
+            query(collection(db, 'users'), where('username', '==', targetUser))
+        );
+
         if (usersSnap.empty) {
-            // Jika tidak ada, coba cari berdasarkan uid/doc id
             showToast(`User @${targetUser} tidak ditemukan di database`, 'error');
             return;
         }
+
         const userDocRef = doc(db, 'users', usersSnap.docs[0].id);
         const userData = usersSnap.docs[0].data();
+
         const currentBal = userData.sgtBalance || 0;
-        const currentTxs = userData.sgtTransactions || [];
+        const currentTxs = Array.isArray(userData.sgtTransactions) ? userData.sgtTransactions : [];
+
         const newTx = {
-            type: 'earn', amount, description: 'Distribusi manual dari Admin',
-            date: new Date().toISOString(), userId: usersSnap.docs[0].id
+            type: 'earn',
+            amount,
+            description: 'Distribusi manual dari Admin',
+            date: new Date().toISOString(),
+            userId: usersSnap.docs[0].id
         };
-        // Update saldo user
+
         await setDoc(userDocRef, {
             sgtBalance: currentBal + amount,
             sgtTransactions: [newTx, ...currentTxs].slice(0, 50),
             sgtUpdatedAt: serverTimestamp()
         }, { merge: true });
-        // Simpan log distribusi
+
         await addDoc(collection(db, 'sgt_logs'), {
             adminId: currentUser?.uid || 'admin_manual',
-            targetUser, targetUserId: usersSnap.docs[0].id,
-            amount, type: 'manual_distribution',
+            targetUser,
+            targetUserId: usersSnap.docs[0].id,
+            amount,
+            type: 'manual_distribution',
             timestamp: serverTimestamp()
         });
+
         showToast(`✅ ${amount} SGT berhasil dikirim ke @${targetUser}`, 'success');
-        if (document.getElementById('sgtDistUser')) document.getElementById('sgtDistUser').value = '';
-        if (document.getElementById('sgtDistAmount')) document.getElementById('sgtDistAmount').value = '';
+
+        document.getElementById('sgtDistUser').value = '';
+        document.getElementById('sgtDistAmount').value = '';
+
         updateSGTAdminStats();
+
     } catch (error) {
         logDebug("Distribusi error: " + error.message);
         showToast('Gagal mendistribusikan: ' + error.message, 'error');
     }
 };
+
+// 🔥 INI WAJIB (JANGAN SAMPAI GAK ADA)
+window.distributeSGTManual = window._real_.distributeSGTManual;
 
 window.burnSGT = async function() {
     const amount = parseInt(document.getElementById('sgtBurnAmount')?.value);
@@ -4697,65 +4718,6 @@ if (typeof window._registerReal === 'function') {
     });
 }
 
-
-async function distributeSGTManual() {
-    console.log("🔥 DISTRIBUSI DIKLIK");
-
-    const targetUser = document.getElementById('sgtDistUser')?.value.trim();
-    const amount = parseInt(document.getElementById('sgtDistAmount')?.value);
-
-    if (!targetUser) {
-        showToast('Masukkan username', 'error');
-        return;
-    }
-
-    if (!amount || amount <= 0) {
-        showToast('Jumlah tidak valid', 'error');
-        return;
-    }
-
-    showToast('Memproses distribusi...', 'info');
-
-    try {
-        if (!db) throw new Error('Database tidak siap');
-
-        const usersSnap = await getDocs(
-            query(collection(db, 'users'), where('username', '==', targetUser))
-        );
-
-        if (usersSnap.empty) {
-            showToast('User tidak ditemukan', 'error');
-            return;
-        }
-
-        const userDoc = usersSnap.docs[0];
-        const userId = userDoc.id;
-        const userData = userDoc.data();
-
-        const currentBal = userData.sgtBalance || 0;
-        const currentTxs = Array.isArray(userData.sgtTransactions) ? userData.sgtTransactions : [];
-
-        const newTx = {
-            type: 'earn',
-            amount,
-            description: 'Distribusi manual',
-            date: new Date().toISOString(),
-            userId
-        };
-
-        await setDoc(doc(db, 'users', userId), {
-            sgtBalance: currentBal + amount,
-            sgtTransactions: [newTx, ...currentTxs].slice(0, 50),
-            sgtUpdatedAt: serverTimestamp()
-        }, { merge: true });
-
-        showToast(`✅ ${amount} SGT terkirim`, 'success');
-
-    } catch (err) {
-        console.error(err);
-        showToast('Error: ' + err.message, 'error');
-    }
-}
 
     </script>
 </body>
