@@ -2192,19 +2192,6 @@ function logDebug(msg) {
     console.log('[DEBUG]', msg);
 }
 
-console.log("SEND DATA:", data);
-
-fetch('/api/approve', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(data)
-})
-.then(res => res.json())
-.then(res => console.log("RESPONSE:", res))
-.catch(err => console.error(err));
-
 // ============================================
 // SGT TOKEN FUNCTIONS
 // ============================================
