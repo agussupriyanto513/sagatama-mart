@@ -2727,68 +2727,124 @@ window.logout = function() {
 // INITIALIZATION
 // ============================================
 async function init() {
-    logDebug("Starting initialization...");
+    logDebug("Starting FAST initialization...");
+    
+    // ✅ STEP 1: Load cart dari localStorage (instant)
     try { cart = JSON.parse(localStorage.getItem('sagatama_cart') || '[]'); } catch (e) { cart = []; }
+    
+    // ✅ STEP 2: Restore user session (instant)
     try {
         const savedUser = localStorage.getItem('sagatama_user');
         if (savedUser) {
             currentUser = JSON.parse(savedUser);
             userRole = currentUser.role || 'user';
-            logDebug("Restored user session: " + currentUser.username);
-            updateUI();
-            updateCartUI();
-            const savedRate = localStorage.getItem('sgt_rate');
-            const savedMin = localStorage.getItem('sgt_min_purchase');
-            const savedBasePrice = localStorage.getItem('sgt_base_price');
-            const savedBurned = localStorage.getItem('sgt_total_burned');
-            if (savedRate) sgtRatePerPi = parseInt(savedRate);
-            if (savedMin) sgtMinPurchase = parseFloat(savedMin);
-            if (savedBasePrice) sgtBasePrice = parseFloat(savedBasePrice);
-            if (savedBurned) sgtTotalBurned = parseInt(savedBurned);
-            const savedBal = localStorage.getItem('sgt_balance_' + currentUser.uid);
-            const savedTxs = localStorage.getItem('sgt_transactions_' + currentUser.uid);
-            if (savedBal) sgtBalance = parseInt(savedBal);
-            if (savedTxs) try { sgtTransactions = JSON.parse(savedTxs); } catch(e) {}
-            updateSGTUI();
-            updateSGTMarketUI();
-            showSGTElements(currentUser.role !== 'admin');
+            logDebug("Restored session: " + currentUser.username);
         }
-    } catch (e) { currentUser = null; logDebug("Session restore error: " + e.message); }
-
-    const loading = document.getElementById('loadingOverlay');
-    if (!currentUser && loading) loading.style.display = 'flex';
-
+    } catch (e) { currentUser = null; }
+    
+    // ✅ STEP 3: Load produk INSTANT (tidak blocking!)
+    loadProductsInstant();
+    updateCartUI();
+    updateUI();
+    
+    // ✅ STEP 4: Setup skeleton timeout
+    const skeletonTimeout = setTimeout(() => {
+        if (!productsLoaded) {
+            logDebug('Skeleton timeout, forcing render...');
+            if (products.length === 0) {
+                products = getSampleProducts();
+                renderProducts();
+            }
+        }
+    }, SKELETON_MAX_MS);
+    
+    // ✅ STEP 5: Parallel init (tidak blocking produk!)
     try {
         detectPiEnv();
-        const [, firebaseOk] = await Promise.allSettled([initPiSDK(), initFirebase()]);
-        await handleSSO();
-        if (currentUser && db) {
-            loadSGTData().catch(e => logDebug("BGround SGT load: " + e.message));
-            verifyUserSession().catch(e => logDebug("User verify: " + e.message));
+        
+        // Jalankan semua init secara parallel
+        const initPromises = [
+            initPiSDK().catch(e => { logDebug("Pi SDK init failed (non-kritis)"); return false; }),
+            initFirebase().catch(e => { logDebug("Firebase init failed (non-kritis)"); return false; }),
+            handleSSO().catch(e => { logDebug("SSO failed (non-kritis)"); })
+        ];
+        
+        await Promise.allSettled(initPromises);
+        
+        // ✅ STEP 6: Background sync setelah Firebase siap
+        if (db) {
+            logDebug("Firebase ready, starting background sync...");
+            
+            // Sync produk di background (tidak blocking UI)
+            syncProductsFromFirebase().then(() => {
+                clearTimeout(skeletonTimeout);
+                setupRealtimeListeners(); // Setup onSnapshot setelah sync pertama
+            });
+            
+            // Sync orders di background
+            syncOrdersFromFirebase();
+            
+            // Load SGT data
+            if (currentUser) {
+                loadSGTData().catch(e => logDebug("SGT load: " + e.message));
+                verifyUserSession().catch(e => logDebug("User verify: " + e.message));
+            }
         }
-        updateUI();
-        updateCartUI();
-        // ✅ FIXED: Load products from Firebase first, fallback to sample
-        await loadDataWithCache();
-        if (!currentUser) setTimeout(() => openModal('loginOptionsModal'), 800);
-        logDebug("Initialization complete!");
+        
+        // ✅ STEP 7: Show login modal jika belum login (setelah produk muncul)
+        if (!currentUser) {
+            setTimeout(() => openModal('loginOptionsModal'), 1000);
+        }
+        
+        logDebug("Fast init complete! Products already visible.");
+        
     } catch (e) {
         logDebug("Init error: " + e.message);
-        if (loading) {
-            loading.innerHTML = `
-                <div style="text-align:center; padding:20px;">
-                    <i class="fas fa-exclamation-circle" style="font-size:48px; color:#EF4444; margin-bottom:16px; display:block;"></i>
-                    <p style="font-size:16px; font-weight:700; color:#1F2937; margin-bottom:8px;">Gagal Memuat</p>
-                    <p style="font-size:13px; color:#6B7280; margin-bottom:20px;">${e.message}</p>
-                    <button onclick="location.reload()" style="background:#8B5CF6; color:white; border:none; padding:12px 24px; border-radius:10px; font-weight:700; cursor:pointer; font-size:14px;">
-                        <i class="fas fa-redo" style="margin-right:8px;"></i>Muat Ulang
-                    </button>
-                </div>`;
-        }
-    } finally {
-        if (loading && loading.innerHTML.includes('Memuat...')) loading.style.display = 'none';
+        clearTimeout(skeletonTimeout);
     }
 }
+
+// ============================================
+// REALTIME LISTENERS (Background)
+// ============================================
+
+function setupRealtimeListeners() {
+    if (!db) return;
+    
+    try {
+        // Products listener - update real-time tanpa loading
+        const productsQuery = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
+        if (unsubscribers.products) unsubscribers.products();
+        
+        unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
+            const newProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Hanya update jika data berbeda
+            if (JSON.stringify(products.map(p => p.id)) !== JSON.stringify(newProducts.map(p => p.id))) {
+                products = newProducts;
+                setCachedData(CACHE_KEY_PRODUCTS, products);
+                renderProducts();
+                renderCategories();
+                renderFeaturedProducts();
+                if (currentUser?.role === 'admin') renderAdminProducts();
+                logDebug('Products real-time updated: ' + products.length);
+            }
+        }, (err) => { logDebug('Products listener: ' + err.message); });
+
+        // Orders listener
+        const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+        if (unsubscribers.orders) unsubscribers.orders();
+        
+        unsubscribers.orders = onSnapshot(ordersQuery, (snapshot) => {
+            orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setCachedData(CACHE_KEY_ORDERS, orders);
+            myOrders = currentUser ? orders.filter(o => o.customerUid === currentUser.uid || o.userId === currentUser.uid) : [];
+            if (currentUser?.role === 'admin') updateAdminStats();
+        }, (err) => { logDebug('Orders listener: ' + err.message); });
+
+    } catch (e) { logDebug('Setup listeners error: ' + e.message); }
+}
+
 
 async function verifyUserSession() {
     if (!currentUser?.uid || !db) return;
@@ -3682,43 +3738,148 @@ function updateAdminStats() {
 // ============================================
 // DATA LOADING - FIXED: Prioritize Firebase
 // ============================================
-async function loadDataWithCache() {
+
+// ============================================
+// DATA LOADING - ULTRA FAST PERFORMANCE
+// ============================================
+
+const CACHE_KEY_PRODUCTS = 'sagatama_products_cache';
+const CACHE_KEY_ORDERS = 'sagatama_orders_cache';
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit cache
+const SKELETON_MAX_MS = 2000; // Skeleton maksimal 2 detik
+
+let productsLoaded = false;
+let ordersLoaded = false;
+
+// ✅ CACHE HELPER
+function getCachedData(key) {
     try {
-        // ✅ FIXED: Load dari Firebase terlebih dahulu
-        if (db) {
-            try {
-                const snapshot = await getDocs(query(collection(db, 'products'), orderBy('createdAt', 'desc')));
-                if (!snapshot.empty) {
-                    products = snapshot.docs.map(doc => ({ 
-                        id: doc.id, 
-                        ...doc.data() 
-                    }));
-                    logDebug('Products loaded from Firebase: ' + products.length);
-                } else {
-                    // Fallback ke sample hanya jika Firestore kosong
-                    products = getSampleProducts();
-                    logDebug('No products in Firebase, using samples');
-                }
-            } catch (fbErr) {
-                logDebug('Firebase products error: ' + fbErr.message);
-                products = getSampleProducts();
-            }
-        } else {
-            products = getSampleProducts();
+        const cached = localStorage.getItem(key);
+        if (!cached) return null;
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp > CACHE_TTL_MS) {
+            localStorage.removeItem(key);
+            return null;
         }
-        
+        return data;
+    } catch (e) { return null; }
+}
+
+function setCachedData(key, data) {
+    try {
+        localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+    } catch (e) { logDebug("Cache save error: " + e.message); }
+}
+
+// ✅ INSTANT LOAD: Tampilkan dari cache LOKAL dulu (tidak blocking)
+function loadProductsInstant() {
+    // 1. Coba dari cache localStorage (instant < 50ms)
+    const cached = getCachedData(CACHE_KEY_PRODUCTS);
+    if (cached && cached.length > 0) {
+        products = cached;
+        logDebug('Products loaded from LOCAL CACHE: ' + products.length);
         renderProducts();
         renderCategories();
         renderFeaturedProducts();
+        productsLoaded = true;
+        return true;
+    }
+    
+    // 2. Fallback ke sample products (juga instant)
+    products = getSampleProducts();
+    logDebug('Products loaded from SAMPLES (fallback)');
+    renderProducts();
+    renderCategories();
+    renderFeaturedProducts();
+    productsLoaded = true;
+    return true;
+}
+
+// ✅ BACKGROUND SYNC: Update dari Firebase di belakang layar
+async function syncProductsFromFirebase() {
+    if (!db) {
+        logDebug('Firebase not ready for sync');
+        return;
+    }
+    
+    try {
+        logDebug('Syncing products from Firebase...');
+        const snapshot = await getDocs(query(collection(db, 'products'), orderBy('createdAt', 'desc')));
         
-        if (currentUser?.role === 'admin') {
-            renderAdminProducts();
-            updateAdminStats();
+        if (!snapshot.empty) {
+            const firebaseProducts = snapshot.docs.map(doc => ({ 
+                id: doc.id, 
+                ...doc.data() 
+            }));
+            
+            // Cek apakah data berbeda dari cache
+            const isDifferent = JSON.stringify(products.map(p => p.id)) !== JSON.stringify(firebaseProducts.map(p => p.id));
+            
+            if (isDifferent || products.length !== firebaseProducts.length) {
+                products = firebaseProducts;
+                setCachedData(CACHE_KEY_PRODUCTS, products);
+                logDebug('Products UPDATED from Firebase: ' + products.length);
+                
+                // Re-render tanpa loading spinner
+                renderProducts();
+                renderCategories();
+                renderFeaturedProducts();
+                
+                if (currentUser?.role === 'admin') {
+                    renderAdminProducts();
+                    updateAdminStats();
+                }
+            } else {
+                logDebug('Products unchanged, no re-render needed');
+            }
         }
-    } catch (e) { 
-        logDebug('Load data error: ' + e.message);
-        products = getSampleProducts();
-        renderProducts();
+    } catch (err) {
+        logDebug('Firebase sync error: ' + err.message);
+    }
+}
+
+// ✅ INSTANT LOAD untuk orders juga
+function loadOrdersInstant() {
+    const cached = getCachedData(CACHE_KEY_ORDERS);
+    if (cached) {
+        orders = cached;
+        myOrders = currentUser ? orders.filter(o => o.customerUid === currentUser.uid || o.userId === currentUser.uid) : [];
+        logDebug('Orders loaded from LOCAL CACHE: ' + orders.length);
+        if (currentUser?.role === 'admin') updateAdminStats();
+        return true;
+    }
+    return false;
+}
+
+async function syncOrdersFromFirebase() {
+    if (!db) return;
+    try {
+        const snapshot = await getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc')));
+        if (!snapshot.empty) {
+            orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setCachedData(CACHE_KEY_ORDERS, orders);
+            myOrders = currentUser ? orders.filter(o => o.customerUid === currentUser.uid || o.userId === currentUser.uid) : [];
+            logDebug('Orders synced: ' + orders.length);
+            if (currentUser?.role === 'admin') updateAdminStats();
+        }
+    } catch (err) {
+        logDebug('Orders sync error: ' + err.message);
+    }
+}
+// ============================================
+// FALLBACK: loadDataWithCache (legacy support)
+// ============================================
+
+async function loadDataWithCache() {
+    // ✅ Sudah tidak perlu blocking - produk sudah muncul dari init
+    logDebug('loadDataWithCache called (legacy, products already visible)');
+    
+    if (!productsLoaded) {
+        loadProductsInstant();
+    }
+    
+    if (db && !unsubscribers.products) {
+        syncProductsFromFirebase();
     }
 }
 
