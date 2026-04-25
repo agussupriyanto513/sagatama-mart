@@ -35,6 +35,24 @@
             'claimStakingReward','openBurnModal','burnSGTManual','openSGTMarketModal'
         ];
         _globalFns.forEach(function(name) { window[name] = _makeStub(name); });
+		
+// ============================================
+// FALLBACK PRODUCT DATA (agar produk muncul)
+// ============================================
+function getSampleProducts() {
+    return [
+        { id: 'p1', name: 'Madu Hutan Asli', pricePi: 0.5, stock: 20, category: 'Herbal', description: 'Madu hutan murni dari pegunungan', image: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=400' },
+        { id: 'p2', name: 'Beras Organik 5kg', pricePi: 0.3, stock: 50, category: 'Sembako', description: 'Beras organik premium', image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400' },
+        { id: 'p3', name: 'Buku Islami', pricePi: 0.15, stock: 30, category: 'Literasi', description: 'Buku kajian islam terbaik', image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400' },
+        { id: 'p4', name: 'Koko Premium', pricePi: 0.25, stock: 15, category: 'Busana', description: 'Baju koko bahan katun premium', image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=400' },
+        { id: 'p5', name: 'Vitamin C 1000mg', pricePi: 0.2, stock: 100, category: 'Kesehatan', description: 'Suplemen vitamin C', image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=400' },
+        { id: 'p6', name: 'Kopi Arabika', pricePi: 0.18, stock: 40, category: 'Kuliner', description: 'Kopi arabika single origin', image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=400' },
+        { id: 'p7', name: 'Power Bank 10000mAh', pricePi: 0.4, stock: 10, category: 'Elektronik', description: 'Power bank fast charging', image: 'https://images.unsplash.com/photo-1609592809794-8534f7d1677e?w=400' },
+        { id: 'p8', name: 'Tas Rajut Handmade', pricePi: 0.22, stock: 8, category: 'Lainnya', description: 'Tas rajut handmade berkualitas', image: 'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?w=400' }
+    ];
+}
+		
+		
         window._registerReal = function(fns) {
             Object.keys(fns).forEach(function(name) {
                 window._real_[name] = fns[name];
