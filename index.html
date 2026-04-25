@@ -2109,6 +2109,15 @@ let adminExchangeRate = 15000;
 const USE_SANDBOX = false;
 const ADMIN_CREDENTIALS = { username: 'sagatama_admin', password: 'Sagatama513' };
 
+window._real_ = window._real_ || {};
+
+window._real_.distributeSGTManual = async function() {
+    console.log("JALAN");
+};
+
+// 🔥 INI YANG PENTING
+window.distributeSGTManual = window._real_.distributeSGTManual;
+
 // ============================================
 // IMAGE HELPER - Fallback inline SVG, tidak pernah 404
 // ============================================
@@ -2459,7 +2468,6 @@ window.redeemSGT = function(rewardType) {
     showToast(`Reward "${reward.label}" berhasil ditukar! 🎁`, 'success');
 };
 
-window.distributeSGTManual = window._real_.distributeSGTManual;
 
 window.saveSGTSettings = function() {
     const rate = parseInt(document.getElementById('sgtAdminRate')?.value);
