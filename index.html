@@ -4719,6 +4719,16 @@ if (typeof window._registerReal === 'function') {
 }
 
 
+window._real_ = window._real_ || {};
+
+// function kamu
+window._real_.distributeSGTManual = async function() {
+    console.log("🔥 DISTRIBUSI JALAN");
+};
+
+// 🔥 INI WAJIB (LETAR DI SINI)
+window.distributeSGTManual = window._real_.distributeSGTManual;
+
     </script>
 </body>
 </html>
