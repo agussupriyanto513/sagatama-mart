@@ -4195,13 +4195,14 @@ async function cancelPaymentOnServer(paymentId) {
 // ============================================
 window.switchView = function(view) {
     const validViews = ['home', 'products', 'cart', 'orders', 'account', 'wallet',
-                        'admin-dashboard', 'admin-products', 'admin-orders', 'admin-analytics'];
+                        'admin-dashboard', 'admin-products', 'admin-orders', 'admin-analytics',
+                        'sgt-sosial', 'admin-sgt-sosial'];
     if (!validViews.includes(view)) {
         logDebug("Invalid view: " + view);
         return;
     }
 
-    const adminViews = ['admin-dashboard', 'admin-products', 'admin-orders', 'admin-analytics'];
+    const adminViews = ['admin-dashboard', 'admin-products', 'admin-orders', 'admin-analytics', 'admin-sgt-sosial'];
     if (adminViews.includes(view)) {
         const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
         if (!isAdmin) {
@@ -4227,7 +4228,8 @@ window.switchView = function(view) {
         'home': 'nav-home', 'products': 'nav-products', 'cart': 'nav-cart',
         'orders': 'nav-orders', 'account': 'nav-account', 'wallet': 'nav-account',
         'admin-dashboard': 'nav-account', 'admin-products': 'nav-account',
-        'admin-orders': 'nav-account', 'admin-analytics': 'nav-account'
+        'admin-orders': 'nav-account', 'admin-analytics': 'nav-account',
+        'sgt-sosial': 'nav-sgt-sosial', 'admin-sgt-sosial': 'nav-account'
     };
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     const navId = navMap[view];
@@ -4245,6 +4247,8 @@ window.switchView = function(view) {
             case 'admin-products': currentAdminProductFilter = 'all'; renderAdminProducts(); break;
             case 'admin-orders': currentAdminOrderFilter = 'all'; renderAdminOrders(); break;
             case 'admin-analytics': renderAdminAnalytics(); break;
+            case 'sgt-sosial': if(typeof updateSosialUI==='function'){updateSosialUI(); if(typeof switchSosialTab==='function') switchSosialTab('rewards',null);} break;
+            case 'admin-sgt-sosial': if(typeof switchAdminSosialTab==='function') switchAdminSosialTab('beasiswa',null); if(typeof updateAdminSosialBadge==='function') updateAdminSosialBadge(); break;
         }
     }, 50);
 };
@@ -5800,17 +5804,9 @@ async function updateAdminSosialBadge() {
     } catch {}
 }
 
-// Hook: extend switchView untuk SGT Sosial module
-const _origSwitchViewSosial = window.switchView;
-window.switchView = function(view) {
-    if (typeof _origSwitchViewSosial === 'function') _origSwitchViewSosial(view);
-    // Sosial view
-    if (view === 'sgt-sosial') { updateSosialUI(); switchSosialTab('rewards', null); }
-    if (view === 'admin-sgt-sosial') { switchAdminSosialTab('beasiswa', null); updateAdminSosialBadge(); }
-    // Nav highlight
-    const navSosial = document.getElementById('nav-sgt-sosial');
-    if (navSosial) navSosial.classList.toggle('active', view==='sgt-sosial');
-};
+// switchView sudah dipatch langsung di atas (validViews, navMap, switch cases)
+// Tidak perlu override tambahan - hook ini hanya untuk kompatibilitas
+// Nav sosial highlight sudah ditangani navMap di switchView utama
 
 // On login, also refresh sosial data
 window.loadSGTDataWithSosial = async function() {
