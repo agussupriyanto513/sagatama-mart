@@ -6164,26 +6164,33 @@ if (typeof window._registerReal === 'function') {
 // ============================================================
 window.updateMintRate = async function() {
     const val = parseInt(document.getElementById('newMintRate')?.value);
-    if (!val || val < 1 || val > 10000) { showToast('Rate harus antara 1–10000 SGT/Pi', 'error'); return; }
+    if (!val || val < 1 || val > 10000) { 
+        showToast('Rate harus antara 1–10000 SGT/Pi', 'error'); 
+        return; 
+    }
+    
     if (!confirm(`Ubah rate mint menjadi ${val} SGT per Pi? Semua transaksi baru akan menggunakan rate ini.`)) return;
-    sgtRatePerPi = val;
-    // Save to Firestore
+    
+    // Pastikan variabel global terupdate
+    sgtRatePerPi = val; 
+    
     try {
         await setDoc(doc(db, 'sgt_config', 'supply'), {
             mintRate: val,
             mintRateUpdatedAt: serverTimestamp(),
-            mintRateUpdatedBy: currentUser?.username || 'admin'
+            mintRateUpdatedBy: currentUser?.displayName || currentUser?.email || 'admin'
         }, { merge: true });
-    } catch(e) {}
-    const el = document.getElementById('currentMintRateDisplay');
-    if (el) el.textContent = val;
-    showToast(`✅ Rate mint diubah ke ${val} SGT/Pi`, 'success');
-    logDebug('Mint rate updated to: ' + val);
-};
 
-// loadMintRateFromFirestore hoisted above — see definition near loadSupplyStats
-    } catch(e) {}
-}
+        const el = document.getElementById('currentMintRateDisplay');
+        if (el) el.textContent = val;
+        
+        showToast(`✅ Rate mint diubah ke ${val} SGT/Pi`, 'success');
+        logDebug('Mint rate updated to: ' + val);
+    } catch(e) {
+        showToast('Gagal update rate: ' + e.message, 'error');
+        logDebug('Update rate error: ' + e.message);
+    }
+}; // Penutup fungsi yang benar
 
 // Sync admin modal supply panel when opened
 const _origOpenModal = window.openModal;
