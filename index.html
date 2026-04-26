@@ -3404,7 +3404,7 @@ window.loadMintRateFromFirestore = async function loadMintRateFromFirestore() {
 
 window._real_.refreshAdminSGTStats = async function() {
     try {
-        const userSnapshot = await db.collection('users').get();
+        const userSnapshot = await getDocs(collection(db, 'users'));
         let totalSGT = 0;
         let totalHolders = 0;
 
@@ -3427,10 +3427,9 @@ window._real_.refreshAdminSGTStats = async function() {
 
 window._real_.loadSGTLogs = async function() {
     try {
-        const logsSnapshot = await db.collection('sgt_logs')
-            .orderBy('timestamp', 'desc')
-            .limit(10) // Tampilkan 10 transaksi terakhir
-            .get();
+        const logsSnapshot = await getDocs(
+            query(collection(db, 'sgt_logs'), orderBy('timestamp', 'desc'), limit(10))
+        );
 
         let html = '';
         logsSnapshot.forEach(doc => {
@@ -3463,29 +3462,25 @@ function listenUserSGTBalance(userId) {
         unsubscribeSGT();
     }
 
-    unsubscribeSGT = db.collection('users').doc(userId)
-        .onSnapshot((doc) => {
-            if (!doc.exists) {
+    unsubscribeSGT = onSnapshot(
+        doc(db, 'users', userId),
+        (docSnap) => {
+            if (!docSnap.exists()) {
                 console.warn('User doc tidak ditemukan');
                 return;
             }
-
-            const data = doc.data();
+            const data = docSnap.data();
             const balance = data.sgtBalance || 0;
-
-            // update global state
             sgtBalance = balance;
-
-            // update UI (AMAN)
             const walletEl = document.getElementById('walletSgtBalance');
             const headerEl = document.getElementById('sgtHeaderBalance');
-
             if (walletEl) walletEl.innerText = balance;
             if (headerEl) headerEl.innerText = balance + ' SGT';
-
-        }, (error) => {
-            console.error('Listener SGT error:', error);
-        });
+        },
+        (error) => {
+            logDebug('Listener SGT error: ' + error.message);
+        }
+    );
 
     return unsubscribeSGT;
 }
@@ -3890,7 +3885,7 @@ function loadDataFromFirebase() {
                         }
                     });
                 });
-                const totalBurned = parseInt(localStorage.getItem('sgt_total_burned') || '0');
+                const totalBurned = sgtTotalBurned || 0; // from Firestore via loadSupplyStats
                 const upd = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
                 upd('admin-total-sgt', totalSGT.toLocaleString() + ' SGT');
                 upd('admin-total-holders', totalHolders + ' User');
@@ -4976,7 +4971,7 @@ async function updateSGTAdminStats() {
         });
 
         // Baca total burned dari localStorage admin (sementara)
-        const totalBurned = parseInt(localStorage.getItem('sgt_total_burned') || '0');
+        const totalBurned = sgtTotalBurned || 0; // from Firestore via loadSupplyStats
 
         const upd = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
         upd('admin-total-sgt', totalSGT.toLocaleString() + ' SGT');
