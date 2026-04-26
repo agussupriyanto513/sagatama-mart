@@ -3024,7 +3024,7 @@ function renderSGTTransactionHistory() {
 // ============================================
 // CORE MINT — respects hard cap & genesis allocation
 // ============================================
-async function mintSGT(amount, recipientUserId) {
+window.mintSGT = async function mintSGT(amount, recipientUserId) {
     if (!db) return false;
     try {
         const configSnap = await getDoc(doc(db, 'sgt_config', 'supply'));
@@ -3047,7 +3047,7 @@ async function mintSGT(amount, recipientUserId) {
 // ============================================
 // CORE BURN — reduces circulating supply
 // ============================================
-async function burnSGTFromSupply(amount, reason) {
+window.burnSGTFromSupply = async function burnSGTFromSupply(amount, reason) {
     if (!db || amount <= 0) return;
     try {
         const configSnap = await getDoc(doc(db, 'sgt_config', 'supply'));
@@ -3345,7 +3345,7 @@ window.burnSGT = async function() {
 };
 
 // Auto-burn saat SGT dipakai redeem/transfer (2% burn)
-async function autoBurnOnSpend(amount) {
+window.autoBurnOnSpend = async function autoBurnOnSpend(amount) {
     const burnAmt = Math.floor(amount * SGT_AUTOBURN_RATE);
     if (burnAmt > 0) {
         await burnSGTFromSupply(burnAmt, 'auto_spend');
@@ -3355,7 +3355,7 @@ async function autoBurnOnSpend(amount) {
 }
 
 // Load circulating supply stats from Firestore
-async function loadSupplyStats() {
+window.loadSupplyStats = async function loadSupplyStats() {
     if (!db) return;
     try {
         const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
@@ -3387,6 +3387,18 @@ async function loadSupplyStats() {
         if (wbar) wbar.style.width = pct + '%';
     } catch(e) { logDebug('loadSupplyStats error: ' + e.message); }
 }
+
+
+// Load mint rate from Firestore on startup
+window.loadMintRateFromFirestore = async function loadMintRateFromFirestore() {
+    try {
+        const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        if (snap.exists() && snap.data().mintRate) {
+            sgtRatePerPi = snap.data().mintRate;
+            const el = document.getElementById('currentMintRateDisplay');
+            if (el) el.textContent = sgtRatePerPi;
+            logDebug('Mint rate loaded: ' + sgtRatePerPi + ' SGT/Pi');
+        }
 
 window._real_.refreshAdminSGTStats = async function() {
     try {
@@ -4525,7 +4537,6 @@ window.switchView = function(view) {
             case 'admin-dashboard': renderAdminDashboard(); break;
             case 'admin-products': currentAdminProductFilter = 'all'; renderAdminProducts(); break;
             case 'admin-orders': currentAdminOrderFilter = 'all'; renderAdminOrders(); break;
-            case 'wallet': loadSupplyStats().catch(()=>{}); break;
             case 'admin-analytics': renderAdminAnalytics(); break;
             case 'sgt-sosial': if(typeof updateSosialUI==='function'){updateSosialUI(); if(typeof switchSosialTab==='function') switchSosialTab('rewards',null);} break;
             case 'admin-sgt-sosial': if(typeof switchAdminSosialTab==='function') switchAdminSosialTab('beasiswa',null); if(typeof updateAdminSosialBadge==='function') updateAdminSosialBadge(); break;
@@ -6146,16 +6157,7 @@ window.updateMintRate = async function() {
     logDebug('Mint rate updated to: ' + val);
 };
 
-// Load mint rate from Firestore on startup
-async function loadMintRateFromFirestore() {
-    try {
-        const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
-        if (snap.exists() && snap.data().mintRate) {
-            sgtRatePerPi = snap.data().mintRate;
-            const el = document.getElementById('currentMintRateDisplay');
-            if (el) el.textContent = sgtRatePerPi;
-            logDebug('Mint rate loaded: ' + sgtRatePerPi + ' SGT/Pi');
-        }
+// loadMintRateFromFirestore hoisted above — see definition near loadSupplyStats
     } catch(e) {}
 }
 
