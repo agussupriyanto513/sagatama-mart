@@ -5767,12 +5767,13 @@ async function loadBaitulStats() {
     } catch(e) { logDebug('loadBaitulStats err: '+e.message); }
 }
 
+// --- FITUR STAKING ---
 async function loadActiveStaking() {
     if (!currentUser || !db) return;
     const c = document.getElementById('activeStakingList');
     if (!c) return;
     try {
-        const q = query(collection(db, 'sgt_stakings'), where('userId','==',currentUser.uid), where('status','==','active'));
+        const q = query(collection(db, 'sgt_stakings'), where('userId', '==', currentUser.uid), where('status', '==', 'active'));
         const snap = await getDocs(q);
         if (snap.empty) {
             c.innerHTML = '<div class="empty-state" style="padding:24px 0;"><i class="fas fa-lock-open" style="font-size:36px;"></i><p>Belum ada staking aktif</p></div>';
@@ -5785,8 +5786,8 @@ async function loadActiveStaking() {
             const now = new Date();
             const total = new Date(s.endDate) - new Date(s.startDate);
             const elapsed = now - new Date(s.startDate);
-            const pct = Math.min(Math.floor((elapsed/total)*100),100);
-            const daysLeft = Math.max(0, Math.ceil((end-now)/86400000));
+            const pct = Math.min(Math.floor((elapsed / total) * 100), 100);
+            const daysLeft = Math.max(0, Math.ceil((end - now) / 86400000));
             c.innerHTML += `<div class="staking-active-card">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                     <div><p style="font-size:11px;opacity:0.75;margin:0;">Lock ${s.days} Hari • ${s.apy}% APY</p><p style="font-size:18px;font-weight:900;color:#6EE7B7;margin:0;">${s.amount.toLocaleString()} SGT</p></div>
@@ -5796,58 +5797,81 @@ async function loadActiveStaking() {
                 <div class="countdown-bar"><div class="countdown-fill" style="width:${pct}%;"></div></div>
             </div>`;
         });
-    } catch(e) { logDebug('loadActiveStaking err: '+e.message); }
+    } catch (e) { 
+        logDebug('loadActiveStaking err: ' + e.message); 
+    }
 }
 
-// ---- BEASISWA ----
+// --- FITUR BEASISWA ---
 window.submitBeasiswa = async function() {
     if (!currentUser) { showToast('Silakan login dahulu', 'warning'); return; }
     const nama = document.getElementById('bsNama')?.value.trim();
     const tingkat = document.getElementById('bsTingkat')?.value;
     const sekolah = document.getElementById('bsSekolah')?.value.trim();
     const alasan = document.getElementById('bsAlasan')?.value.trim();
-    if (!nama||!tingkat||!sekolah||!alasan) { showToast('Lengkapi semua data', 'error'); return; }
+    
+    if (!nama || !tingkat || !sekolah || !alasan) { 
+        showToast('Lengkapi semua data', 'error'); 
+        return; 
+    }
 
-    const sgtNeeded = { sd:200, smp:350, sma:500, pt:1000 }[tingkat] || 200;
+    const sgtNeeded = { sd: 200, smp: 350, sma: 500, pt: 1000 }[tingkat] || 200;
+    
     try {
         await addDoc(collection(db, 'beasiswa_applications'), {
-            userId: currentUser.uid, username: currentUser.displayName || currentUser.email,
+            userId: currentUser.uid, 
+            username: currentUser.displayName || currentUser.email,
             nama, tingkat, sekolah, alasan, sgtNeeded,
-            status: 'pending', createdAt: serverTimestamp()
+            status: 'pending', 
+            createdAt: serverTimestamp()
         });
         closeModal('beasiswaModal');
         showToast('✅ Pengajuan beasiswa berhasil dikirim!', 'success');
-        ['bsNama','bsSekolah','bsAlasan'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
-        document.getElementById('bsTingkat').value = '';
+        
+        // Reset Form
+        ['bsNama', 'bsSekolah', 'bsAlasan'].forEach(id => { 
+            const e = document.getElementById(id); 
+            if (e) e.value = ''; 
+        });
+        if (document.getElementById('bsTingkat')) document.getElementById('bsTingkat').value = '';
+        
         loadBeasiswaStatus();
-        updateAdminSosialBadge();
-    } catch(e) { showToast('Gagal: '+e.message, 'error'); }
+        if (typeof updateAdminSosialBadge === 'function') updateAdminSosialBadge();
+    } catch (e) { 
+        showToast('Gagal: ' + e.message, 'error'); 
+    }
 };
 
 async function loadBeasiswaStatus() {
-    if (!currentUser||!db) return;
+    if (!currentUser || !db) return;
     const c = document.getElementById('beasiswaUserStatus');
     if (!c) return;
     try {
-        const q = query(collection(db,'beasiswa_applications'),where('userId','==',currentUser.uid));
+        const q = query(collection(db, 'beasiswa_applications'), where('userId', '==', currentUser.uid));
         const snap = await getDocs(q);
         if (snap.empty) {
             c.innerHTML = `<div style="background:#EFF6FF;border-radius:12px;padding:14px;text-align:center;"><p style="color:#6B7280;font-size:13px;">Kamu belum mengajukan beasiswa</p><button onclick="openModal('beasiswaModal')" style="margin-top:10px;background:#3B82F6;color:white;border:none;padding:10px 20px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">+ Ajukan Beasiswa</button></div>`;
             return;
         }
-        const statusColor = { pending:'#D97706', approved:'#059669', rejected:'#DC2626' };
-        const statusLabel = { pending:'Menunggu Verifikasi', approved:'Disetujui', rejected:'Ditolak' };
+        const statusColor = { pending: '#D97706', approved: '#059669', rejected: '#DC2626' };
+        const statusLabel = { pending: 'Menunggu Verifikasi', approved: 'Disetujui', rejected: 'Ditolak' };
         c.innerHTML = '';
         snap.forEach(d => {
             const s = d.data();
-            const sc = statusColor[s.status]||'#6B7280';
+            const sc = statusColor[s.status] || '#6B7280';
             c.innerHTML += `<div style="background:#F9FAFB;border-radius:12px;padding:14px;margin-bottom:8px;border-left:4px solid ${sc};">
-                <div style="display:flex;justify-content:space-between;align-items:center;"><p style="font-weight:700;color:#1F2937;font-size:13px;margin:0;">${s.nama} • ${s.tingkat?.toUpperCase()}</p><span style="background:${sc};color:white;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;">${statusLabel[s.status]||s.status}</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;"><p style="font-weight:700;color:#1F2937;font-size:13px;margin:0;">${s.nama} • ${s.tingkat?.toUpperCase()}</p><span style="background:${sc};color:white;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;">${statusLabel[s.status] || s.status}</span></div>
                 <p style="font-size:11px;color:#6B7280;margin:4px 0 0;">${s.sekolah} • ${s.sgtNeeded} SGT</p>
             </div>`;
         });
-    } catch(e) { logDebug('loadBeasiswaStatus err: '+e.message); }
+    } catch (e) { 
+        logDebug('loadBeasiswaStatus err: ' + e.message); 
+    }
 }
+
+// PENTING: Daftarkan fungsi ke sistem global Sagatama Mart agar tidak 'undefined'
+window._real_.loadActiveStaking = loadActiveStaking;
+window._real_.loadBeasiswaStatus = loadBeasiswaStatus;
 
 // ---- BANTUAN SOSIAL ----
 window.submitBantuan = async function() {
