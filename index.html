@@ -6171,7 +6171,6 @@ window.updateMintRate = async function() {
     
     if (!confirm(`Ubah rate mint menjadi ${val} SGT per Pi? Semua transaksi baru akan menggunakan rate ini.`)) return;
     
-    // Pastikan variabel global terupdate
     sgtRatePerPi = val; 
     
     try {
@@ -6190,35 +6189,38 @@ window.updateMintRate = async function() {
         showToast('Gagal update rate: ' + e.message, 'error');
         logDebug('Update rate error: ' + e.message);
     }
-}; // Penutup fungsi yang benar
+};
 
 // Sync admin modal supply panel when opened
 const _origOpenModal = window.openModal;
 window.openModal = function(id) {
     if (typeof _origOpenModal === 'function') _origOpenModal(id);
+    
     if (id === 'sgtAdminModal') {
-        loadSupplyStats().then(() => {
-            // Sync modal-specific elements
-            const sync = (from, to) => {
-                const fsrc = document.getElementById(from);
-                const fdst = document.getElementById(to);
-                if (fsrc && fdst) fdst.textContent = fsrc.textContent;
-            };
-            sync('supplyCirculating', 'modalCirculating');
-            sync('supplyBurned',      'modalBurned');
-            sync('supplyFeePool',     'modalFeePool');
-            sync('supplyPct',         'modalSupplyPct');
-            const msbar = document.getElementById('modalSupplyBar');
-            const ssbar = document.getElementById('supplyBar');
-            if (msbar && ssbar) msbar.style.width = ssbar.style.width;
-            const rateEl = document.getElementById('newMintRate');
-            const rateLbl = document.getElementById('currentMintRateDisplay');
-            if (rateEl) rateEl.value = sgtRatePerPi;
-            if (rateLbl) rateLbl.textContent = sgtRatePerPi;
-        }).catch(()=>{});
+        if (typeof loadSupplyStats === 'function') {
+            loadSupplyStats().then(() => {
+                const sync = (from, to) => {
+                    const fsrc = document.getElementById(from);
+                    const fdst = document.getElementById(to);
+                    if (fsrc && fdst) fdst.textContent = fsrc.textContent;
+                };
+                sync('supplyCirculating', 'modalCirculating');
+                sync('supplyBurned',      'modalBurned');
+                sync('supplyFeePool',     'modalFeePool');
+                sync('supplyPct',         'modalSupplyPct');
+                
+                const msbar = document.getElementById('modalSupplyBar');
+                const ssbar = document.getElementById('supplyBar');
+                if (msbar && ssbar) msbar.style.width = ssbar.style.width;
+                
+                const rateEl = document.getElementById('newMintRate');
+                const rateLbl = document.getElementById('currentMintRateDisplay');
+                if (rateEl) rateEl.value = (typeof sgtRatePerPi !== 'undefined') ? sgtRatePerPi : 0;
+                if (rateLbl) rateLbl.textContent = (typeof sgtRatePerPi !== 'undefined') ? sgtRatePerPi : 0;
+            }).catch((err)=>{ logDebug("Sync Modal Error: " + err.message); });
+        }
     }
-};
-}
+}; // Pastikan hanya ada satu penutup di sini
 
 
     </script>
