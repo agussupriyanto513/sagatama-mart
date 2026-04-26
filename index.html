@@ -3399,6 +3399,8 @@ window.loadMintRateFromFirestore = async function loadMintRateFromFirestore() {
             if (el) el.textContent = sgtRatePerPi;
             logDebug('Mint rate loaded: ' + sgtRatePerPi + ' SGT/Pi');
         }
+    } catch(e) { logDebug('loadMintRateFromFirestore error: ' + e.message); }
+};
 
 window._real_.refreshAdminSGTStats = async function() {
     try {
@@ -5767,13 +5769,12 @@ async function loadBaitulStats() {
     } catch(e) { logDebug('loadBaitulStats err: '+e.message); }
 }
 
-// --- FITUR STAKING ---
 async function loadActiveStaking() {
     if (!currentUser || !db) return;
     const c = document.getElementById('activeStakingList');
     if (!c) return;
     try {
-        const q = query(collection(db, 'sgt_stakings'), where('userId', '==', currentUser.uid), where('status', '==', 'active'));
+        const q = query(collection(db, 'sgt_stakings'), where('userId','==',currentUser.uid), where('status','==','active'));
         const snap = await getDocs(q);
         if (snap.empty) {
             c.innerHTML = '<div class="empty-state" style="padding:24px 0;"><i class="fas fa-lock-open" style="font-size:36px;"></i><p>Belum ada staking aktif</p></div>';
@@ -5786,8 +5787,8 @@ async function loadActiveStaking() {
             const now = new Date();
             const total = new Date(s.endDate) - new Date(s.startDate);
             const elapsed = now - new Date(s.startDate);
-            const pct = Math.min(Math.floor((elapsed / total) * 100), 100);
-            const daysLeft = Math.max(0, Math.ceil((end - now) / 86400000));
+            const pct = Math.min(Math.floor((elapsed/total)*100),100);
+            const daysLeft = Math.max(0, Math.ceil((end-now)/86400000));
             c.innerHTML += `<div class="staking-active-card">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                     <div><p style="font-size:11px;opacity:0.75;margin:0;">Lock ${s.days} Hari • ${s.apy}% APY</p><p style="font-size:18px;font-weight:900;color:#6EE7B7;margin:0;">${s.amount.toLocaleString()} SGT</p></div>
@@ -5797,81 +5798,58 @@ async function loadActiveStaking() {
                 <div class="countdown-bar"><div class="countdown-fill" style="width:${pct}%;"></div></div>
             </div>`;
         });
-    } catch (e) { 
-        logDebug('loadActiveStaking err: ' + e.message); 
-    }
+    } catch(e) { logDebug('loadActiveStaking err: '+e.message); }
 }
 
-// --- FITUR BEASISWA ---
+// ---- BEASISWA ----
 window.submitBeasiswa = async function() {
     if (!currentUser) { showToast('Silakan login dahulu', 'warning'); return; }
     const nama = document.getElementById('bsNama')?.value.trim();
     const tingkat = document.getElementById('bsTingkat')?.value;
     const sekolah = document.getElementById('bsSekolah')?.value.trim();
     const alasan = document.getElementById('bsAlasan')?.value.trim();
-    
-    if (!nama || !tingkat || !sekolah || !alasan) { 
-        showToast('Lengkapi semua data', 'error'); 
-        return; 
-    }
+    if (!nama||!tingkat||!sekolah||!alasan) { showToast('Lengkapi semua data', 'error'); return; }
 
-    const sgtNeeded = { sd: 200, smp: 350, sma: 500, pt: 1000 }[tingkat] || 200;
-    
+    const sgtNeeded = { sd:200, smp:350, sma:500, pt:1000 }[tingkat] || 200;
     try {
         await addDoc(collection(db, 'beasiswa_applications'), {
-            userId: currentUser.uid, 
-            username: currentUser.displayName || currentUser.email,
+            userId: currentUser.uid, username: currentUser.displayName || currentUser.email,
             nama, tingkat, sekolah, alasan, sgtNeeded,
-            status: 'pending', 
-            createdAt: serverTimestamp()
+            status: 'pending', createdAt: serverTimestamp()
         });
         closeModal('beasiswaModal');
         showToast('✅ Pengajuan beasiswa berhasil dikirim!', 'success');
-        
-        // Reset Form
-        ['bsNama', 'bsSekolah', 'bsAlasan'].forEach(id => { 
-            const e = document.getElementById(id); 
-            if (e) e.value = ''; 
-        });
-        if (document.getElementById('bsTingkat')) document.getElementById('bsTingkat').value = '';
-        
+        ['bsNama','bsSekolah','bsAlasan'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
+        document.getElementById('bsTingkat').value = '';
         loadBeasiswaStatus();
-        if (typeof updateAdminSosialBadge === 'function') updateAdminSosialBadge();
-    } catch (e) { 
-        showToast('Gagal: ' + e.message, 'error'); 
-    }
+        updateAdminSosialBadge();
+    } catch(e) { showToast('Gagal: '+e.message, 'error'); }
 };
 
 async function loadBeasiswaStatus() {
-    if (!currentUser || !db) return;
+    if (!currentUser||!db) return;
     const c = document.getElementById('beasiswaUserStatus');
     if (!c) return;
     try {
-        const q = query(collection(db, 'beasiswa_applications'), where('userId', '==', currentUser.uid));
+        const q = query(collection(db,'beasiswa_applications'),where('userId','==',currentUser.uid));
         const snap = await getDocs(q);
         if (snap.empty) {
             c.innerHTML = `<div style="background:#EFF6FF;border-radius:12px;padding:14px;text-align:center;"><p style="color:#6B7280;font-size:13px;">Kamu belum mengajukan beasiswa</p><button onclick="openModal('beasiswaModal')" style="margin-top:10px;background:#3B82F6;color:white;border:none;padding:10px 20px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">+ Ajukan Beasiswa</button></div>`;
             return;
         }
-        const statusColor = { pending: '#D97706', approved: '#059669', rejected: '#DC2626' };
-        const statusLabel = { pending: 'Menunggu Verifikasi', approved: 'Disetujui', rejected: 'Ditolak' };
+        const statusColor = { pending:'#D97706', approved:'#059669', rejected:'#DC2626' };
+        const statusLabel = { pending:'Menunggu Verifikasi', approved:'Disetujui', rejected:'Ditolak' };
         c.innerHTML = '';
         snap.forEach(d => {
             const s = d.data();
-            const sc = statusColor[s.status] || '#6B7280';
+            const sc = statusColor[s.status]||'#6B7280';
             c.innerHTML += `<div style="background:#F9FAFB;border-radius:12px;padding:14px;margin-bottom:8px;border-left:4px solid ${sc};">
-                <div style="display:flex;justify-content:space-between;align-items:center;"><p style="font-weight:700;color:#1F2937;font-size:13px;margin:0;">${s.nama} • ${s.tingkat?.toUpperCase()}</p><span style="background:${sc};color:white;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;">${statusLabel[s.status] || s.status}</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;"><p style="font-weight:700;color:#1F2937;font-size:13px;margin:0;">${s.nama} • ${s.tingkat?.toUpperCase()}</p><span style="background:${sc};color:white;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;">${statusLabel[s.status]||s.status}</span></div>
                 <p style="font-size:11px;color:#6B7280;margin:4px 0 0;">${s.sekolah} • ${s.sgtNeeded} SGT</p>
             </div>`;
         });
-    } catch (e) { 
-        logDebug('loadBeasiswaStatus err: ' + e.message); 
-    }
+    } catch(e) { logDebug('loadBeasiswaStatus err: '+e.message); }
 }
-
-// PENTING: Daftarkan fungsi ke sistem global Sagatama Mart agar tidak 'undefined'
-window._real_.loadActiveStaking = loadActiveStaking;
-window._real_.loadBeasiswaStatus = loadBeasiswaStatus;
 
 // ---- BANTUAN SOSIAL ----
 window.submitBantuan = async function() {
@@ -6158,82 +6136,58 @@ if (typeof window._registerReal === 'function') {
         adminDistribusiSGT: window.adminDistribusiSGT,
         awardSGTTiered: window.awardSGTTiered,
     });
+} // end if (_registerReal)
 
 // ============================================================
-// PATCH 13: updateMintRate + admin modal supply sync
-// ============================================================
-// ============================================================
-// PATCH 13: updateMintRate + admin modal supply sync
+// Additional functions exposed to window (outside module gate)
 // ============================================================
 window.updateMintRate = async function() {
     const val = parseInt(document.getElementById('newMintRate')?.value);
-    if (!val || val < 1 || val > 10000) { 
-        showToast('Rate harus antara 1–10000 SGT/Pi', 'error'); 
-        return; 
-    }
-    
+    if (!val || val < 1 || val > 10000) { showToast('Rate harus antara 1–10000 SGT/Pi', 'error'); return; }
     if (!confirm(`Ubah rate mint menjadi ${val} SGT per Pi? Semua transaksi baru akan menggunakan rate ini.`)) return;
-    
-    sgtRatePerPi = val; 
-    
+    sgtRatePerPi = val;
+    // Save to Firestore
     try {
         await setDoc(doc(db, 'sgt_config', 'supply'), {
             mintRate: val,
             mintRateUpdatedAt: serverTimestamp(),
-            mintRateUpdatedBy: currentUser?.displayName || currentUser?.email || 'admin'
+            mintRateUpdatedBy: currentUser?.username || 'admin'
         }, { merge: true });
-
-        const el = document.getElementById('currentMintRateDisplay');
-        if (el) el.textContent = val;
-        
-        showToast(`✅ Rate mint diubah ke ${val} SGT/Pi`, 'success');
-        logDebug('Mint rate updated to: ' + val);
-    } catch(e) {
-        showToast('Gagal update rate: ' + e.message, 'error');
-        logDebug('Update rate error: ' + e.message);
-    }
+    } catch(e) {}
+    const el = document.getElementById('currentMintRateDisplay');
+    if (el) el.textContent = val;
+    showToast(`✅ Rate mint diubah ke ${val} SGT/Pi`, 'success');
+    logDebug('Mint rate updated to: ' + val);
 };
 
 // Sync admin modal supply panel when opened
 const _origOpenModal = window.openModal;
 window.openModal = function(id) {
     if (typeof _origOpenModal === 'function') _origOpenModal(id);
-    
     if (id === 'sgtAdminModal') {
-        // Pastikan loadSupplyStats tersedia
-        if (typeof loadSupplyStats === 'function') {
-            loadSupplyStats().then(() => {
-                const sync = (from, to) => {
-                    const fsrc = document.getElementById(from);
-                    const fdst = document.getElementById(to);
-                    if (fsrc && fdst) fdst.textContent = fsrc.textContent;
-                };
-                sync('supplyCirculating', 'modalCirculating');
-                sync('supplyBurned',      'modalBurned');
-                sync('supplyFeePool',     'modalFeePool');
-                sync('supplyPct',         'modalSupplyPct');
-                
-                const msbar = document.getElementById('modalSupplyBar');
-                const ssbar = document.getElementById('supplyBar');
-                if (msbar && ssbar) msbar.style.width = ssbar.style.width;
-                
-                const rateEl = document.getElementById('newMintRate');
-                const rateLbl = document.getElementById('currentMintRateDisplay');
-                if (rateEl) rateEl.value = (typeof sgtRatePerPi !== 'undefined') ? sgtRatePerPi : 0;
-                if (rateLbl) rateLbl.textContent = (typeof sgtRatePerPi !== 'undefined') ? sgtRatePerPi : 0;
-            }).catch((err) => { 
-                console.error("Sync Modal Error:", err); 
-            });
-        }
+        loadSupplyStats().then(() => {
+            // Sync modal-specific elements
+            const sync = (from, to) => {
+                const fsrc = document.getElementById(from);
+                const fdst = document.getElementById(to);
+                if (fsrc && fdst) fdst.textContent = fsrc.textContent;
+            };
+            sync('supplyCirculating', 'modalCirculating');
+            sync('supplyBurned',      'modalBurned');
+            sync('supplyFeePool',     'modalFeePool');
+            sync('supplyPct',         'modalSupplyPct');
+            const msbar = document.getElementById('modalSupplyBar');
+            const ssbar = document.getElementById('supplyBar');
+            if (msbar && ssbar) msbar.style.width = ssbar.style.width;
+            const rateEl = document.getElementById('newMintRate');
+            const rateLbl = document.getElementById('currentMintRateDisplay');
+            if (rateEl) rateEl.value = sgtRatePerPi;
+            if (rateLbl) rateLbl.textContent = sgtRatePerPi;
+        }).catch(()=>{});
     }
 };
 
-// Pastikan semua script ditutup dengan benar di akhir file
-// Baris di bawah ini adalah penutup untuk tag <script type="module"> Anda
-</script>
-</body>
-</html>
 
-</script>
+    </script>
 </body>
 </html>
