@@ -1347,28 +1347,79 @@
                 </div>
             </div>
 
-            <!-- SGT Token Info -->
-            <div class="sgt-token-info">
-                <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-                    <div style="width:40px; height:40px; background:linear-gradient(135deg, #FCD34D, #F59E0B); border-radius:10px; display:flex; align-items:center; justify-content:center; color:#1A0533; font-weight:900; font-size:16px;">₴</div>
+            <!-- SGT Tokenomics Live Panel -->
+            <div style="background:white;border-radius:20px;padding:20px;margin-bottom:16px;border:1px solid #E2E8F0;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+                    <div style="width:40px;height:40px;background:linear-gradient(135deg,#FCD34D,#F59E0B);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#1A0533;font-weight:900;font-size:16px;">₴</div>
                     <div>
-                        <p style="font-weight:800; color:#1F2937; font-size:15px;">Sagatama Token (SGT)</p>
-                        <p style="font-size:12px; color:#64748B;">Cross-App Loyalty Token</p>
+                        <p style="font-weight:800;color:#1F2937;font-size:15px;margin:0;">SGT Tokenomics</p>
+                        <p style="font-size:11px;color:#64748B;margin:0;">Sagatama Token · Hard Cap 100 Juta</p>
                     </div>
-                    <div class="sgt-reward-badge" style="margin-left:auto;"><i class="fas fa-star"></i> Aktif</div>
+                    <button onclick="loadSupplyStats()" style="margin-left:auto;background:#F3F4F6;border:none;width:34px;height:34px;border-radius:9px;cursor:pointer;color:#6B7280;font-size:13px;">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
                 </div>
-                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px;">
-                    <div style="text-align:center; background:white; padding:12px; border-radius:12px; border:1px solid #FDE68A;">
-                        <p style="font-size:18px; font-weight:900; color:#D97706;">100</p>
-                        <p style="font-size:10px; color:#64748B; font-weight:600;">SGT/Pi</p>
+
+                <!-- Supply bar (user version) -->
+                <div style="margin-bottom:14px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+                        <span style="font-size:11px;color:#6B7280;font-weight:600;">Supply Beredar</span>
+                        <span id="walletCirculating" style="font-size:11px;color:#7C3AED;font-weight:700;">memuat...</span>
                     </div>
-                    <div style="text-align:center; background:white; padding:12px; border-radius:12px; border:1px solid #FDE68A;">
-                        <p style="font-size:18px; font-weight:900; color:#D97706;">2+</p>
-                        <p style="font-size:10px; color:#64748B; font-weight:600;">Apps</p>
+                    <div style="height:7px;background:#F3F4F6;border-radius:4px;overflow:hidden;">
+                        <div id="walletSupplyBar" style="height:100%;width:0%;background:linear-gradient(90deg,#8B5CF6,#F59E0B);border-radius:4px;transition:width 0.6s;"></div>
                     </div>
-                    <div style="text-align:center; background:white; padding:12px; border-radius:12px; border:1px solid #FDE68A;">
-                        <p style="font-size:18px; font-weight:900; color:#D97706;">∞</p>
-                        <p style="font-size:10px; color:#64748B; font-weight:600;">Reward</p>
+                    <div style="display:flex;justify-content:space-between;margin-top:3px;">
+                        <span style="font-size:9px;color:#9CA3AF;">0 SGT</span>
+                        <span style="font-size:9px;color:#9CA3AF;">Hard Cap: 100,000,000 SGT</span>
+                    </div>
+                </div>
+
+                <!-- Stats grid -->
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+                    <div style="background:#F9FAFB;border-radius:12px;padding:10px;text-align:center;">
+                        <p id="walletBurned" style="font-size:15px;font-weight:800;color:#EF4444;margin:0;">0</p>
+                        <p style="font-size:9px;color:#9CA3AF;margin:3px 0 0;">🔥 Total Burn</p>
+                    </div>
+                    <div style="background:#F9FAFB;border-radius:12px;padding:10px;text-align:center;">
+                        <p id="walletFeePool" style="font-size:15px;font-weight:800;color:#D97706;margin:0;">0</p>
+                        <p style="font-size:9px;color:#9CA3AF;margin:3px 0 0;">💰 Fee Pool</p>
+                    </div>
+                    <div style="background:#F9FAFB;border-radius:12px;padding:10px;text-align:center;">
+                        <p style="font-size:15px;font-weight:800;color:#059669;margin:0;">2%</p>
+                        <p style="font-size:9px;color:#9CA3AF;margin:3px 0 0;">🔥 Auto-Burn</p>
+                    </div>
+                </div>
+
+                <!-- Genesis Allocation -->
+                <p style="font-size:11px;font-weight:700;color:#374151;margin-bottom:8px;">Alokasi Genesis Token</p>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="height:7px;border-radius:4px;background:linear-gradient(90deg,#8B5CF6,#A78BFA);width:70%;flex-shrink:0;"></div>
+                        <span style="font-size:11px;color:#1F2937;font-weight:600;">70% Komunitas (Reward User)</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="height:7px;border-radius:4px;background:#3B82F6;width:15%;flex-shrink:0;"></div>
+                        <span style="font-size:11px;color:#1F2937;font-weight:600;">15% Treasury (Operasional)</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="height:7px;border-radius:4px;background:#059669;width:10%;flex-shrink:0;"></div>
+                        <span style="font-size:11px;color:#1F2937;font-weight:600;">10% Baitul Maal (Dana Sosial)</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="height:7px;border-radius:4px;background:#F59E0B;width:5%;flex-shrink:0;"></div>
+                        <span style="font-size:11px;color:#1F2937;font-weight:600;">5% Tim Pengembang (Lock 12 bln)</span>
+                    </div>
+                </div>
+
+                <!-- Fee mechanism summary -->
+                <div style="background:#F0FDF4;border-radius:12px;padding:12px;border:1px solid #A7F3D0;">
+                    <p style="font-size:11px;font-weight:700;color:#065F46;margin:0 0 6px;">⚙️ Mekanisme Fee Otomatis</p>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:10px;color:#047857;">
+                        <span>• 3% tiap reward → Fee Pool (APY staking)</span>
+                        <span>• 5% tiap reward → Baitul Maal</span>
+                        <span>• 2% tiap transfer/redeem → Burn</span>
+                        <span>• Tier Bronze→Platinum: +5%–15% bonus</span>
                     </div>
                 </div>
             </div>
@@ -1531,6 +1582,47 @@
                     <p style="font-size:11px;opacity:0.85;margin-bottom:6px;font-weight:600;"><i class="fas fa-fire" style="margin-right:4px;"></i>SGT Di-Burn</p>
                     <h3 id="admin-total-burned" style="font-size:20px;font-weight:900;">0 SGT</h3>
                     <p style="font-size:10px;opacity:0.7;margin-top:4px;">Total dibakar</p>
+                </div>
+            </div>
+
+            <!-- Supply Health Panel -->
+            <div style="background:linear-gradient(135deg,#1A0533 0%,#3D1078 60%,#7C3AED 100%);border-radius:20px;padding:20px;margin-bottom:16px;color:white;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                    <div style="width:40px;height:40px;background:rgba(255,255,255,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;">📊</div>
+                    <div>
+                        <p style="font-weight:800;font-size:14px;margin:0;">Supply Health Monitor</p>
+                        <p style="font-size:11px;opacity:0.75;margin:0;">Real-time tokenomics SGT</p>
+                    </div>
+                    <span id="supplyPct" style="margin-left:auto;background:rgba(255,255,255,0.15);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;">0%</span>
+                </div>
+                <!-- Hard cap progress bar -->
+                <div style="margin-bottom:14px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                        <span style="font-size:11px;opacity:0.75;">Circulating / Hard Cap</span>
+                        <span style="font-size:11px;color:#FCD34D;" id="supplyCirculating">0</span>
+                    </div>
+                    <div style="height:8px;background:rgba(255,255,255,0.15);border-radius:4px;overflow:hidden;">
+                        <div id="supplyBar" style="height:100%;width:0%;background:linear-gradient(90deg,#6EE7B7,#FCD34D);border-radius:4px;transition:width 0.5s;"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-top:4px;">
+                        <span style="font-size:10px;opacity:0.6;">0</span>
+                        <span style="font-size:10px;opacity:0.6;" id="supplyHardCap">100,000,000</span>
+                    </div>
+                </div>
+                <!-- Stats row -->
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+                    <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px;text-align:center;">
+                        <p id="supplyBurned" style="font-size:15px;font-weight:800;color:#FCA5A5;margin:0;">0</p>
+                        <p style="font-size:9px;opacity:0.7;margin:2px 0 0;">Total Burned</p>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px;text-align:center;">
+                        <p id="supplyFeePool" style="font-size:15px;font-weight:800;color:#FCD34D;margin:0;">0</p>
+                        <p style="font-size:9px;opacity:0.7;margin:2px 0 0;">Fee Pool (APY)</p>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px;text-align:center;">
+                        <p style="font-size:15px;font-weight:800;color:#6EE7B7;margin:0;">2%</p>
+                        <p style="font-size:9px;opacity:0.7;margin:2px 0 0;">Auto-burn rate</p>
+                    </div>
                 </div>
             </div>
 
@@ -1896,6 +1988,11 @@
                 <!-- Pilihan Staking -->
                 <div class="sosial-card">
                     <h4 style="font-weight:800;color:#1F2937;margin-bottom:14px;font-size:14px;"><i class="fas fa-lock" style="color:#059669;margin-right:8px;"></i>Pilih Paket Staking</h4>
+                    <!-- Fee pool APY notice -->
+                    <div style="background:#ECFDF5;border:1px solid #6EE7B7;border-radius:10px;padding:10px;margin-bottom:10px;display:flex;gap:8px;align-items:flex-start;">
+                        <i class="fas fa-info-circle" style="color:#059669;margin-top:1px;flex-shrink:0;font-size:13px;"></i>
+                        <p style="font-size:11px;color:#065F46;margin:0;">APY reward didanai dari <strong>Fee Pool</strong> (3% fee tiap transaksi) — bukan cetak token baru. Sustainable & tidak inflasioner.</p>
+                    </div>
                     <div class="staking-option" onclick="selectStaking(this,'30',8)" id="staking30">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
                             <div>
@@ -1904,7 +2001,7 @@
                             </div>
                             <div style="text-align:right;">
                                 <p style="font-weight:900;font-size:18px;color:#059669;margin:0;">8% APY</p>
-                                <p style="font-size:10px;color:#6B7280;margin:0;">+ 10% ke Baitul Maal</p>
+                                <p style="font-size:10px;color:#6B7280;margin:0;">dari fee pool · 10% → Baitul Maal</p>
                             </div>
                         </div>
                     </div>
@@ -1916,7 +2013,7 @@
                             </div>
                             <div style="text-align:right;">
                                 <p style="font-weight:900;font-size:18px;color:#059669;margin:0;">14% APY</p>
-                                <p style="font-size:10px;color:#6B7280;margin:0;">+ 10% ke Baitul Maal</p>
+                                <p style="font-size:10px;color:#6B7280;margin:0;">dari fee pool · 10% → Baitul Maal</p>
                             </div>
                         </div>
                     </div>
@@ -1928,7 +2025,7 @@
                             </div>
                             <div style="text-align:right;">
                                 <p style="font-weight:900;font-size:18px;color:#059669;margin:0;">20% APY</p>
-                                <p style="font-size:10px;color:#6B7280;margin:0;">+ 10% ke Baitul Maal</p>
+                                <p style="font-size:10px;color:#6B7280;margin:0;">dari fee pool · 10% → Baitul Maal</p>
                             </div>
                         </div>
                     </div>
@@ -2499,6 +2596,21 @@
     <!-- ===== MODAL: SGT ADMIN ===== -->
     <div id="sgtAdminModal" class="modal">
         <div class="modal-content">
+            <!-- Supply Health Live -->
+            <div style="background:linear-gradient(135deg,#1A0533,#3D1078);border-radius:16px;padding:16px;margin-bottom:16px;color:white;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <p style="font-weight:800;font-size:13px;margin:0;">📊 Supply Health</p>
+                    <span id="modalSupplyPct" style="background:rgba(255,255,255,0.15);padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;">0%</span>
+                </div>
+                <div style="height:6px;background:rgba(255,255,255,0.15);border-radius:3px;overflow:hidden;margin-bottom:10px;">
+                    <div id="modalSupplyBar" style="height:100%;width:0%;background:linear-gradient(90deg,#6EE7B7,#FCD34D);border-radius:3px;transition:width 0.5s;"></div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:10px;text-align:center;">
+                    <div><p id="modalCirculating" style="font-weight:800;color:#6EE7B7;margin:0;">0</p><p style="opacity:0.7;margin:2px 0 0;">Beredar</p></div>
+                    <div><p id="modalBurned" style="font-weight:800;color:#FCA5A5;margin:0;">0</p><p style="opacity:0.7;margin:2px 0 0;">Burned</p></div>
+                    <div><p id="modalFeePool" style="font-weight:800;color:#FCD34D;margin:0;">0</p><p style="opacity:0.7;margin:2px 0 0;">Fee Pool</p></div>
+                </div>
+            </div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                 <h3 style="font-size:20px; font-weight:900; color:#1E293B;">Kelola SGT Token</h3>
                 <button onclick="closeModal('sgtAdminModal')" style="background:none; border:none; color:#64748B; cursor:pointer; font-size:20px;"><i class="fas fa-times"></i></button>
@@ -2549,6 +2661,16 @@
                 <button onclick="distributeSGTManual()" class="btn-sgt">
                     <i class="fas fa-paper-plane"></i> Distribusikan
                 </button>
+            </div>
+
+            <!-- Dynamic Rate Adjustment -->
+            <div style="background:#F0FDF4;border-radius:14px;padding:16px;margin-bottom:12px;border:1px solid #A7F3D0;">
+                <h4 style="font-weight:800;margin-bottom:10px;font-size:13px;color:#065F46;"><i class="fas fa-sliders-h" style="margin-right:6px;"></i>Adjust Rate Mint (SGT/Pi)</h4>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="number" id="newMintRate" class="form-input" style="flex:1;" placeholder="Default: 100" min="1" max="10000">
+                    <button onclick="updateMintRate()" style="background:#059669;color:white;border:none;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer;font-size:12px;white-space:nowrap;font-family:inherit;"><i class="fas fa-check"></i> Set</button>
+                </div>
+                <p style="font-size:10px;color:#065F46;margin:6px 0 0;">Rate saat ini: <strong id="currentMintRateDisplay">100</strong> SGT/Pi · Ubah dengan hati-hati</p>
             </div>
 
             <div style="background:#FEF2F2; border-radius:14px; padding:16px; margin-bottom:16px; border:1px solid #FECACA;">
@@ -2644,11 +2766,41 @@ let paymentTimeout = null;
 
 // SGT Transfer button managed by processSGTTransfer()
 
-// SGT Token State
-let sgtBalance = 0;
-let sgtTransactions = [];
-let sgtRatePerPi = 100;
+// ============================================
+// SGT TOKENOMICS ENGINE v2.0
+// ============================================
+// Hard cap & genesis allocation
+const SGT_HARD_CAP        = 100_000_000; // 100 juta SGT maksimum
+const SGT_GENESIS_ALLOC   = {
+    komunitas : 0.70, // 70% reward user
+    treasury  : 0.15, // 15% operasional
+    baitulMaal: 0.10, // 10% dana sosial
+    tim       : 0.05  // 5% pengembang (locked 12 bln)
+};
+// Mint rate (adjustable admin, default 100)
+let sgtRatePerPi   = 100;
 let sgtMinPurchase = 0.1;
+
+// Fee pool — setiap transaksi bayar fee ini, dana ke pool
+const SGT_FEE_RATE      = 0.03;  // 3% dari base reward masuk fee pool
+const SGT_AUTOBURN_RATE = 0.02;  // 2% dari setiap SGT yang dipakai redeem/transfer di-burn
+const SGT_SOSIAL_RATE   = 0.05;  // 5% dari reward belanja ke Baitul Maal
+
+// Staking APY didanai dari fee pool, bukan mint baru
+const SGT_STAKING_PLANS = [
+    { days: 30,  apy: 8,  label: '30 Hari'  },
+    { days: 90,  apy: 14, label: '90 Hari'  },
+    { days: 180, apy: 20, label: '180 Hari' }
+];
+
+// Token state
+let sgtBalance      = 0;
+let sgtTransactions = [];
+
+// Global circulating supply tracker (loaded from Firestore)
+let sgtCirculatingSupply = 0;
+let sgtTotalBurned       = 0;
+let sgtFeePool           = 0; // akumulasi fee untuk APY staking
 
 
 // Admin exchange rate (hanya untuk referensi admin)
@@ -2869,29 +3021,107 @@ function renderSGTTransactionHistory() {
     }).join('');
 }
 
-function awardSGT(piAmount, description) {
+// ============================================
+// CORE MINT — respects hard cap & genesis allocation
+// ============================================
+window.mintSGT = async function mintSGT(amount, recipientUserId) {
+    if (!db) return false;
+    try {
+        const configSnap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        const supply = configSnap.exists() ? (configSnap.data().circulating || 0) : 0;
+        if (supply + amount > SGT_HARD_CAP) {
+            const remaining = Math.max(0, SGT_HARD_CAP - supply);
+            if (remaining === 0) { showToast('Hard cap SGT tercapai! Tidak ada SGT baru.', 'warning'); return false; }
+            amount = remaining; // mint sisa saja
+        }
+        await setDoc(doc(db, 'sgt_config', 'supply'), {
+            circulating: supply + amount,
+            hardCap: SGT_HARD_CAP,
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+        sgtCirculatingSupply = supply + amount;
+        return amount;
+    } catch(e) { logDebug('mintSGT error: ' + e.message); return false; }
+}
+
+// ============================================
+// CORE BURN — reduces circulating supply
+// ============================================
+window.burnSGTFromSupply = async function burnSGTFromSupply(amount, reason) {
+    if (!db || amount <= 0) return;
+    try {
+        const configSnap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        const supply = configSnap.exists() ? (configSnap.data().circulating || 0) : 0;
+        const burned  = configSnap.exists() ? (configSnap.data().totalBurned  || 0) : 0;
+        await setDoc(doc(db, 'sgt_config', 'supply'), {
+            circulating: Math.max(0, supply - amount),
+            totalBurned: burned + amount,
+            lastBurnAt: serverTimestamp(),
+            lastBurnReason: reason || 'auto'
+        }, { merge: true });
+        sgtCirculatingSupply = Math.max(0, supply - amount);
+        sgtTotalBurned = burned + amount;
+        logDebug('Burned ' + amount + ' SGT. Reason: ' + reason);
+    } catch(e) { logDebug('burnSGTFromSupply error: ' + e.message); }
+}
+
+// ============================================
+// AWARD SGT — tier-aware, hard-cap-safe, fee-pool-funded
+// ============================================
+async function awardSGT(piAmount, description) {
     if (!currentUser) return 0;
     if (piAmount < sgtMinPurchase) return 0;
-    const sgtEarned = Math.floor(piAmount * sgtRatePerPi);
-    if (sgtEarned <= 0) return 0;
-    sgtBalance += sgtEarned;
+
+    const tier        = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05, name: 'Bronze' };
+    const baseSGT     = Math.floor(piAmount * sgtRatePerPi);
+    const tierBonus   = Math.floor(baseSGT * tier.rate);
+    const feeAmount   = Math.floor(baseSGT * SGT_FEE_RATE);
+    const sosialShare = Math.floor(baseSGT * SGT_SOSIAL_RATE);
+    const userShare   = baseSGT + tierBonus - feeAmount;
+
+    if (userShare <= 0) return 0;
+
+    // Check hard cap before minting
+    const actualMint = await mintSGT(baseSGT, currentUser.uid);
+    if (!actualMint) return 0;
+
+    // Credit to user
+    sgtBalance += userShare;
     sgtTransactions.unshift({
-        type: 'earn',
-        amount: sgtEarned,
-        description: description || 'Reward pembelian',
-        date: new Date().toISOString(),
-        userId: currentUser.uid
+        type: 'earn', amount: userShare,
+        description: description || 'Reward belanja',
+        date: new Date().toISOString(), userId: currentUser.uid,
+        tier: tier.name, tierBonus, feeDeducted: feeAmount,
+        baseSGT
     });
+
+    // Fee pool accumulation (funds staking APY)
+    sgtFeePool += feeAmount;
+    try {
+        await setDoc(doc(db, 'sgt_config', 'fee_pool'), {
+            total: sgtFeePool,
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+    } catch(e) {}
+
+    // 5% ke Baitul Maal
+    if (sosialShare > 0) await addDanaToPool('baitul_maal', sosialShare);
+
     saveSGTData();
     updateSGTUI();
-    showToast(`+${sgtEarned} SGT berhasil dikreditkan! 🎉`, 'success');
-    logDebug("SGT awarded: " + sgtEarned + " SGT. New balance: " + sgtBalance);
-    return sgtEarned;
+    if (typeof updateSosialUI === 'function') updateSosialUI();
+    showToast(`+${userShare.toLocaleString()} SGT (Tier ${tier.name}) 🎉`, 'success');
+    logDebug('SGT awarded: ' + userShare + ' | fee: ' + feeAmount + ' | sosial: ' + sosialShare);
+    return userShare;
 }
 
 function calculateSGTReward(piAmount) {
     if (!piAmount || piAmount < sgtMinPurchase) return 0;
-    return Math.floor(piAmount * sgtRatePerPi);
+    const tier    = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05 };
+    const base    = Math.floor(piAmount * sgtRatePerPi);
+    const bonus   = Math.floor(base * tier.rate);
+    const fee     = Math.floor(base * SGT_FEE_RATE);
+    return Math.max(0, base + bonus - fee);
 }
 
 function showSGTElements(show) {
@@ -2957,10 +3187,13 @@ window.processSGTTransfer = async function() {
             sgtUpdatedAt: serverTimestamp()
         }, { merge: true });
 
+        // Auto-burn 2% dari transfer
+        autoBurnOnSpend(amount).catch(()=>{});
         saveSGTData();
         updateSGTUI();
         closeModal('sgtTransferModal');
-        showToast(`✅ ${amount} SGT berhasil dikirim ke @${targetUserInput}!`, 'success');
+        const burnedAmt = Math.floor(amount * SGT_AUTOBURN_RATE);
+        showToast(`✅ ${amount} SGT dikirim ke @${targetUserInput}! (${burnedAmt} SGT di-burn) 🔥`, 'success');
         logDebug("SGT transfer success: " + amount + " to " + targetUserInput);
     } catch(e) {
         logDebug("Transfer error: " + e.message);
@@ -2979,6 +3212,9 @@ window.redeemSGT = function(rewardType) {
     };
     const reward = rewards[rewardType];
     if (!reward) return;
+    // Auto-burn 2% dari setiap redeem
+    const burnOnRedeem = Math.floor(reward.cost * SGT_AUTOBURN_RATE);
+    autoBurnOnSpend(reward.cost).catch(()=>{});
     if (sgtBalance < reward.cost) {
         showToast(`SGT tidak cukup! Butuh ${reward.cost} SGT, saldo Anda ${sgtBalance} SGT`, 'error');
         return;
@@ -3089,26 +3325,80 @@ window.distributeSGTManual = window._real_.distributeSGTManual;
 window.burnSGT = async function() {
     const amount = parseInt(document.getElementById('sgtBurnAmount')?.value);
     if (!amount || amount <= 0) { showToast('Masukkan jumlah SGT yang akan di-burn', 'error'); return; }
-    if (!confirm(`Apakah Anda yakin ingin burn ${amount} SGT? Tindakan ini tidak dapat dibatalkan.`)) return;
-    // Simpan total burned ke localStorage
-    const prevBurned = parseInt(localStorage.getItem('sgt_total_burned') || '0');
-    localStorage.setItem('sgt_total_burned', (prevBurned + amount).toString());
-    // Simpan ke Firestore untuk persistensi
-    if (db) {
-        try {
-            await setDoc(doc(db, 'sgt_config', 'burn_log'), {
-                totalBurned: prevBurned + amount,
-                lastBurnAmount: amount,
-                lastBurnAt: serverTimestamp(),
-                burnedBy: currentUser?.username || 'admin'
-            }, { merge: true });
-        } catch(e) { logDebug("Burn log save error: " + e.message); }
-    }
-    showToast(`${amount} SGT berhasil di-burn dari sirkulasi 🔥`, 'success');
-    if (document.getElementById('sgtBurnAmount')) document.getElementById('sgtBurnAmount').value = '';
-    // Refresh stats
+    if (!confirm(`Burn ${amount.toLocaleString()} SGT dari sirkulasi? Tindakan ini tidak dapat dibatalkan.`)) return;
+    await burnSGTFromSupply(amount, 'admin_manual');
+    // Log ke sgt_logs
+    try {
+        await addDoc(collection(db, 'sgt_logs'), {
+            adminId: currentUser?.uid || 'admin',
+            type: 'burn_manual',
+            amount,
+            description: 'Burn manual oleh admin',
+            timestamp: serverTimestamp()
+        });
+    } catch(e) {}
+    showToast(`🔥 ${amount.toLocaleString()} SGT berhasil di-burn! Supply berkurang.`, 'success');
+    const el = document.getElementById('sgtBurnAmount');
+    if (el) el.value = '';
     updateSGTAdminStats();
+    loadSupplyStats();
 };
+
+// Auto-burn saat SGT dipakai redeem/transfer (2% burn)
+window.autoBurnOnSpend = async function autoBurnOnSpend(amount) {
+    const burnAmt = Math.floor(amount * SGT_AUTOBURN_RATE);
+    if (burnAmt > 0) {
+        await burnSGTFromSupply(burnAmt, 'auto_spend');
+        logDebug('Auto-burn on spend: ' + burnAmt + ' SGT');
+    }
+    return burnAmt;
+}
+
+// Load circulating supply stats from Firestore
+window.loadSupplyStats = async function loadSupplyStats() {
+    if (!db) return;
+    try {
+        const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        if (snap.exists()) {
+            const d = snap.data();
+            sgtCirculatingSupply = d.circulating || 0;
+            sgtTotalBurned = d.totalBurned || 0;
+        }
+        const feeSnap = await getDoc(doc(db, 'sgt_config', 'fee_pool'));
+        if (feeSnap.exists()) sgtFeePool = feeSnap.data().total || 0;
+
+        // Update supply UI elements
+        const upd = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+        upd('supplyCirculating',  sgtCirculatingSupply.toLocaleString());
+        upd('supplyHardCap',      SGT_HARD_CAP.toLocaleString());
+        upd('supplyBurned',       sgtTotalBurned.toLocaleString());
+        upd('supplyFeePool',      sgtFeePool.toLocaleString());
+        const pct = Math.min(100, (sgtCirculatingSupply / SGT_HARD_CAP * 100)).toFixed(2);
+        upd('supplyPct', pct + '%');
+        const bar = document.getElementById('supplyBar');
+        if (bar) bar.style.width = pct + '%';
+
+        // Also update wallet view panel
+        const fmt = n => n >= 1e6 ? (n/1e6).toFixed(2)+'jt' : n.toLocaleString('id-ID');
+        upd('walletCirculating', fmt(sgtCirculatingSupply) + ' / 100jt SGT');
+        upd('walletBurned',   fmt(sgtTotalBurned));
+        upd('walletFeePool',  fmt(sgtFeePool));
+        const wbar = document.getElementById('walletSupplyBar');
+        if (wbar) wbar.style.width = pct + '%';
+    } catch(e) { logDebug('loadSupplyStats error: ' + e.message); }
+}
+
+
+// Load mint rate from Firestore on startup
+window.loadMintRateFromFirestore = async function loadMintRateFromFirestore() {
+    try {
+        const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        if (snap.exists() && snap.data().mintRate) {
+            sgtRatePerPi = snap.data().mintRate;
+            const el = document.getElementById('currentMintRateDisplay');
+            if (el) el.textContent = sgtRatePerPi;
+            logDebug('Mint rate loaded: ' + sgtRatePerPi + ' SGT/Pi');
+        }
 
 window._real_.refreshAdminSGTStats = async function() {
     try {
@@ -3357,6 +3647,9 @@ async function init() {
         }
 
         logDebug("Initialization complete!");
+        // Init supply & mint rate from Firestore
+        loadSupplyStats().catch(e => logDebug("Supply stats init: " + e.message));
+        loadMintRateFromFirestore().catch(()=>{});
     } catch (e) {
         logDebug("Init error: " + e.message);
         console.error("INIT ERROR:", e);
@@ -4035,11 +4328,9 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     await saveOrderToFirebase(orderData, paymentId);
     logDebug("Order berhasil disimpan: " + paymentId);
 
-    // Langkah 3: Award SGT (tier-based cashback)
+    // Langkah 3: Award SGT (tiered, hard-cap-safe, fee-pool-funded)
     const orderId = pendingPayment?.metadata?.orderId || paymentId.substring(0, 8);
-    const actualSGT = (typeof window.awardSGTTiered === 'function')
-        ? window.awardSGTTiered(finalAmount, `Reward pesanan #${orderId}`)
-        : awardSGT(finalAmount, `Reward pesanan #${orderId}`);
+    const actualSGT = await awardSGT(finalAmount, `Reward pesanan #${orderId}`);
 
     // Langkah 4: Bersihkan cart
     cart = [];
@@ -4242,7 +4533,7 @@ window.switchView = function(view) {
             case 'cart': renderCart(); break;
             case 'orders': renderOrders(); break;
             case 'account': renderAccount(); break;
-            case 'wallet': renderWallet(); break;
+            case 'wallet': renderWallet(); loadSupplyStats().catch(()=>{}); break;
             case 'admin-dashboard': renderAdminDashboard(); break;
             case 'admin-products': currentAdminProductFilter = 'all'; renderAdminProducts(); break;
             case 'admin-orders': currentAdminOrderFilter = 'all'; renderAdminOrders(); break;
@@ -4709,6 +5000,8 @@ async function updateSGTAdminStats() {
                 }).join('');
             }
         }
+        // Also load from Firestore supply config
+        await loadSupplyStats();
         logDebug("SGT Admin stats updated: " + totalHolders + " holders, " + totalSGT + " SGT beredar");
     } catch (e) {
         logDebug("SGT admin stats error: " + e.message);
@@ -5274,36 +5567,15 @@ function getUserTier(balance) {
     return SGT_TIERS.find(t => balance >= t.min && balance <= t.max) || SGT_TIERS[0];
 }
 
-// Cashback rate based on tier (used in awardSGT override)
+// getCashbackRate — convenience helper (used in UI preview)
 function getCashbackRate() {
     const tier = getUserTier(sgtBalance);
     return tier.rate;
 }
 
-// Enhanced awardSGT — uses tier-based rate
-const _origAwardSGT = awardSGT;
-window.awardSGTTiered = function(piAmount, description) {
-    if (!currentUser) return 0;
-    if (piAmount < sgtMinPurchase) return 0;
-    const rate = getCashbackRate();
-    const baseSGT = Math.floor(piAmount * sgtRatePerPi);
-    const tierBonus = Math.floor(baseSGT * rate);
-    const totalSGT = baseSGT + tierBonus;
-    sgtBalance += totalSGT;
-    sgtTransactions.unshift({
-        type: 'earn', amount: totalSGT,
-        description: description || 'Reward belanja (tier bonus)',
-        date: new Date().toISOString(), userId: currentUser.uid,
-        baseReward: baseSGT, tierBonus, tier: getUserTier(sgtBalance).name
-    });
-    // 5% dari reward ke Dana Sosial Baitul Maal
-    const danaZakat = Math.floor(totalSGT * 0.05);
-    addDanaToPool('baitul_maal', danaZakat);
-    saveSGTData();
-    updateSGTUI();
-    updateSosialUI();
-    showToast(`+${totalSGT} SGT! (Tier ${getUserTier(sgtBalance).name}) 🎉`, 'success');
-    return totalSGT;
+// awardSGTTiered — now delegates to the upgraded awardSGT (v2 already has tier+fee+hardcap)
+window.awardSGTTiered = async function(piAmount, description) {
+    return await awardSGT(piAmount, description);
 };
 
 // Update Sosial View UI
@@ -5429,9 +5701,18 @@ window.submitStaking = async function() {
     try {
         const startDate = new Date();
         const endDate = new Date(startDate.getTime() + selectedStakingDays * 86400000);
-        const reward = Math.floor(amt * (selectedStakingAPY/100) * (selectedStakingDays/365));
-        const zakat  = Math.floor(reward * 0.10);
-        const netReward = reward - zakat;
+        // APY reward didanai dari fee pool, bukan mint baru
+        const grossReward = Math.floor(amt * (selectedStakingAPY/100) * (selectedStakingDays/365));
+        const zakat       = Math.floor(grossReward * 0.10); // 10% ke Baitul Maal
+        const netReward   = grossReward - zakat;
+        // Cek apakah fee pool cukup untuk cover reward
+        const currentFeePool = sgtFeePool;
+        const feePoolCover = Math.min(grossReward, currentFeePool);
+        const mintNeeded  = Math.max(0, grossReward - feePoolCover);
+        logDebug('Staking reward: ' + grossReward + ' SGT | Fee pool cover: ' + feePoolCover + ' | Mint needed: ' + mintNeeded);
+        // Update fee pool
+        sgtFeePool = Math.max(0, sgtFeePool - feePoolCover);
+        const reward = grossReward; // keep variable name for compatibility
 
         const stakingDoc = {
             userId: currentUser.uid,
@@ -5853,6 +6134,59 @@ if (typeof window._registerReal === 'function') {
         adminDistribusiSGT: window.adminDistribusiSGT,
         awardSGTTiered: window.awardSGTTiered,
     });
+
+// ============================================================
+// PATCH 13: updateMintRate + admin modal supply sync
+// ============================================================
+window.updateMintRate = async function() {
+    const val = parseInt(document.getElementById('newMintRate')?.value);
+    if (!val || val < 1 || val > 10000) { showToast('Rate harus antara 1–10000 SGT/Pi', 'error'); return; }
+    if (!confirm(`Ubah rate mint menjadi ${val} SGT per Pi? Semua transaksi baru akan menggunakan rate ini.`)) return;
+    sgtRatePerPi = val;
+    // Save to Firestore
+    try {
+        await setDoc(doc(db, 'sgt_config', 'supply'), {
+            mintRate: val,
+            mintRateUpdatedAt: serverTimestamp(),
+            mintRateUpdatedBy: currentUser?.username || 'admin'
+        }, { merge: true });
+    } catch(e) {}
+    const el = document.getElementById('currentMintRateDisplay');
+    if (el) el.textContent = val;
+    showToast(`✅ Rate mint diubah ke ${val} SGT/Pi`, 'success');
+    logDebug('Mint rate updated to: ' + val);
+};
+
+// loadMintRateFromFirestore hoisted above — see definition near loadSupplyStats
+    } catch(e) {}
+}
+
+// Sync admin modal supply panel when opened
+const _origOpenModal = window.openModal;
+window.openModal = function(id) {
+    if (typeof _origOpenModal === 'function') _origOpenModal(id);
+    if (id === 'sgtAdminModal') {
+        loadSupplyStats().then(() => {
+            // Sync modal-specific elements
+            const sync = (from, to) => {
+                const fsrc = document.getElementById(from);
+                const fdst = document.getElementById(to);
+                if (fsrc && fdst) fdst.textContent = fsrc.textContent;
+            };
+            sync('supplyCirculating', 'modalCirculating');
+            sync('supplyBurned',      'modalBurned');
+            sync('supplyFeePool',     'modalFeePool');
+            sync('supplyPct',         'modalSupplyPct');
+            const msbar = document.getElementById('modalSupplyBar');
+            const ssbar = document.getElementById('supplyBar');
+            if (msbar && ssbar) msbar.style.width = ssbar.style.width;
+            const rateEl = document.getElementById('newMintRate');
+            const rateLbl = document.getElementById('currentMintRateDisplay');
+            if (rateEl) rateEl.value = sgtRatePerPi;
+            if (rateLbl) rateLbl.textContent = sgtRatePerPi;
+        }).catch(()=>{});
+    }
+};
 }
 
 
