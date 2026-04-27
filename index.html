@@ -2363,7 +2363,7 @@
                             <button onclick="document.getElementById('infaqAmount').value=100" style="padding:8px;background:#FEF3C7;color:#92400E;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">100</button>
                             <button onclick="document.getElementById('infaqAmount').value=500" style="padding:8px;background:#ECFDF5;color:#065F46;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">500</button>
                             <button onclick="document.getElementById('infaqAmount').value=1000" style="padding:8px;background:#EFF6FF;color:#1E40AF;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">1000</button>
-                            <button onclick="document.getElementById('infaqAmount').value=Math.floor(sgtBalance*0.1)" style="padding:8px;background:#F5F3FF;color:#5B21B6;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">10%</button>
+                            <button onclick="document.getElementById('infaqAmount').value=Math.floor((window._getSgtBalance?window._getSgtBalance():0)*0.1)" style="padding:8px;background:#F5F3FF;color:#5B21B6;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">10%</button>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Niat/Catatan (opsional)</label>
@@ -3197,9 +3197,9 @@
 // Versi: 2.0 - Fixed Payment, SGT, Auth
 // ============================================
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 // ============================================
 // ERROR HANDLER GLOBAL
@@ -7840,6 +7840,10 @@ if (typeof window._registerReal === 'function') {
         initFase3: window.initFase3,
     });
 } // end if (_registerReal)
+
+// Helper untuk akses sgtBalance dari inline HTML onclick
+// (variabel module tidak bisa diakses langsung dari onclick="...")
+window._getSgtBalance = function() { return sgtBalance || 0; };
 
 // ============================================================
 // Additional functions exposed to window (outside module gate)
