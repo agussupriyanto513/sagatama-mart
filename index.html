@@ -3318,37 +3318,55 @@ function saveSGTData() {
 }
 
 async function loadSGTData() {
-    if (!currentUser) return;
+    if (!currentUser) {
+        console.log('[v0] loadSGTData: No currentUser');
+        return;
+    }
+    console.log('[v0] loadSGTData: Loading for user', currentUser.uid, currentUser.username);
     try {
         // Coba load dari Firestore dulu (lebih akurat)
         if (db && currentUser.uid) {
             try {
+                console.log('[v0] loadSGTData: Fetching from Firestore...');
                 const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+                console.log('[v0] loadSGTData: Doc exists?', userDoc.exists());
                 if (userDoc.exists()) {
                     const data = userDoc.data();
-                    if (data.sgtBalance !== undefined) {
-                        sgtBalance = data.sgtBalance || 0;
-                        sgtTransactions = data.sgtTransactions || [];
-                        logDebug("SGT loaded from Firestore: " + sgtBalance);
-                        updateSGTUI();
-                        return;
-                    }
+                    console.log('[v0] loadSGTData: Raw data', JSON.stringify(data));
+                    // Selalu ambil data dari Firestore, bahkan jika sgtBalance undefined (set ke 0)
+                    sgtBalance = data.sgtBalance || 0;
+                    sgtTransactions = data.sgtTransactions || [];
+                    console.log('[v0] loadSGTData: Balance=', sgtBalance, 'Transactions=', sgtTransactions.length);
+                    
+                    // Sinkronkan ke localStorage untuk cache saat refresh
+                    localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
+                    localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
+                    
+                    logDebug("SGT loaded from Firestore: " + sgtBalance);
+                    updateSGTUI();
+                    return;
+                } else {
+                    console.log('[v0] loadSGTData: User doc does not exist in Firestore');
                 }
             } catch (fsErr) {
+                console.log('[v0] loadSGTData: Firestore error', fsErr.message);
                 logDebug("Firestore SGT load failed, fallback to localStorage: " + fsErr.message);
             }
         }
 
         // Fallback ke localStorage
+        console.log('[v0] loadSGTData: Falling back to localStorage');
         const bal = localStorage.getItem('sgt_balance_' + currentUser.uid);
         const tx = localStorage.getItem('sgt_transactions_' + currentUser.uid);
         const rate = localStorage.getItem('sgt_rate');
         sgtBalance = bal ? parseInt(bal) : 0;
         sgtTransactions = tx ? JSON.parse(tx) : [];
         if (rate) sgtRatePerPi = parseInt(rate);
+        console.log('[v0] loadSGTData: localStorage Balance=', sgtBalance);
         logDebug("SGT loaded from localStorage: " + sgtBalance);
         updateSGTUI();
     } catch (e) {
+        console.log('[v0] loadSGTData: Error', e.message);
         logDebug("SGT load error: " + e.message);
     }
 }
@@ -3732,11 +3750,11 @@ window._real_.distributeSGTManual = async function() {
         document.getElementById('sgtDistUser').value = '';
         document.getElementById('sgtDistAmount').value = '';
 
-        // Refresh stats dan supply
-        setTimeout(() => {
-            updateSGTAdminStats();
-            loadSupplyStats();
-        }, 1500);
+        // Refresh stats dan supply - langsung setelah data tersimpan
+        console.log('[v0] Refreshing admin stats after distribution...');
+        await updateSGTAdminStats();
+        await loadSupplyStats();
+        console.log('[v0] Admin stats refreshed');
 
     } catch (error) {
         logDebug("Distribusi error: " + error.message);
@@ -3911,17 +3929,28 @@ function listenUserSGTBalance(userId) {
         unsubscribeSGT();
     }
 
+    console.log('[v0] listenUserSGTBalance: Starting listener for userId:', userId);
+    
     unsubscribeSGT = onSnapshot(
         doc(db, 'users', userId),
         (docSnap) => {
+            console.log('[v0] SGT Listener: Snapshot received, exists?', docSnap.exists());
             if (!docSnap.exists()) {
-                console.warn('User doc tidak ditemukan');
+                console.warn('[v0] SGT Listener: User doc tidak ditemukan untuk userId:', userId);
                 return;
             }
             const data = docSnap.data();
             const balance = data.sgtBalance || 0;
+            console.log('[v0] SGT Listener: Raw data:', JSON.stringify({sgtBalance: data.sgtBalance, txCount: (data.sgtTransactions||[]).length}));
+            
             sgtBalance = balance;
             sgtTransactions = data.sgtTransactions || [];
+            
+            // Sinkronkan ke localStorage untuk cache saat refresh
+            if (currentUser && currentUser.uid) {
+                localStorage.setItem('sgt_balance_' + currentUser.uid, balance.toString());
+                localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
+            }
             
             // Update all UI elements
             const walletEl = document.getElementById('walletSgtBalance');
@@ -3929,6 +3958,7 @@ function listenUserSGTBalance(userId) {
             const promoEl = document.getElementById('sgtPromoBalance');
             const sosialEl = document.getElementById('sgtSosialBadge');
             
+            console.log('[v0] SGT Listener: Updating UI elements, balance=', balance);
             if (walletEl) walletEl.innerText = balance.toLocaleString();
             if (headerEl) headerEl.innerText = balance.toLocaleString() + ' SGT';
             if (promoEl) promoEl.innerText = balance.toLocaleString();
@@ -3944,9 +3974,13 @@ function listenUserSGTBalance(userId) {
             if (ssEl) ssEl.textContent = spent.toLocaleString();
             if (stEl) stEl.textContent = sgtTransactions.length;
             
+            // Also call updateSGTUI for complete update
+            updateSGTUI();
+            
             logDebug('SGT realtime update: ' + balance + ' SGT');
         },
         (error) => {
+            console.log('[v0] SGT Listener Error:', error.message);
             logDebug('Listener SGT error: ' + error.message);
         }
     );
@@ -4444,14 +4478,19 @@ window.authenticatePi = async function() {
             }
         }
 
-        // Simpan user ke Firestore
+        // Simpan user ke Firestore - HARUS await agar data tersimpan sebelum load
         if (db) {
-            setDoc(doc(db, 'users', currentUser.uid), {
-                username: currentUser.username,
-                uid: currentUser.uid,
-                authType: 'pi',
-                lastLogin: serverTimestamp()
-            }, { merge: true }).catch(e => logDebug("Save user profile error: " + e.message));
+            try {
+                await setDoc(doc(db, 'users', currentUser.uid), {
+                    username: currentUser.username,
+                    uid: currentUser.uid,
+                    authType: 'pi',
+                    lastLogin: serverTimestamp()
+                }, { merge: true });
+                logDebug("User profile saved to Firestore");
+            } catch (e) {
+                logDebug("Save user profile error: " + e.message);
+            }
         }
 
         await loadSGTData();
@@ -5453,18 +5492,26 @@ function updateAdminStats() {
 }
 
 async function updateSGTAdminStats() {
+    console.log('[v0] updateSGTAdminStats: Starting...');
     try {
-        if (!db) return;
+        if (!db) {
+            console.log('[v0] updateSGTAdminStats: No db');
+            return;
+        }
+        
         // Ambil semua user dari Firestore untuk hitung SGT stats
         const usersSnap = await getDocs(collection(db, 'users'));
+        console.log('[v0] updateSGTAdminStats: Found', usersSnap.size, 'users');
+        
         let totalSGT = 0;
         let totalHolders = 0;
         let totalDistributed = 0;
-        const logRows = [];
+        const userLogRows = [];
 
         usersSnap.forEach(docSnap => {
             const data = docSnap.data();
             const bal = data.sgtBalance || 0;
+            console.log('[v0] User:', data.username, 'Balance:', bal);
             if (bal > 0) {
                 totalSGT += bal;
                 totalHolders++;
@@ -5474,16 +5521,41 @@ async function updateSGTAdminStats() {
             txs.forEach(tx => {
                 if (tx.type === 'earn') {
                     totalDistributed += tx.amount || 0;
-                    if (logRows.length < 10) {
-                        logRows.push({
-                            date: tx.date,
-                            username: data.username || docSnap.id,
-                            amount: tx.amount
+                    userLogRows.push({
+                        date: tx.date,
+                        username: data.username || docSnap.id,
+                        amount: tx.amount
+                    });
+                }
+            });
+        });
+        
+        console.log('[v0] updateSGTAdminStats: totalSGT=', totalSGT, 'holders=', totalHolders, 'distributed=', totalDistributed);
+
+        // Juga ambil dari sgt_logs collection untuk data yang lebih lengkap
+        try {
+            const logsSnap = await getDocs(collection(db, 'sgt_logs'));
+            console.log('[v0] updateSGTAdminStats: Found', logsSnap.size, 'log entries');
+            logsSnap.forEach(logDoc => {
+                const logData = logDoc.data();
+                if (logData.type === 'manual_distribution') {
+                    // Cek apakah sudah ada di userLogRows
+                    const exists = userLogRows.some(r => 
+                        r.username === logData.targetUser && 
+                        r.amount === logData.amount
+                    );
+                    if (!exists) {
+                        userLogRows.push({
+                            date: logData.timestamp?.toDate?.() || logData.timestamp,
+                            username: logData.targetUser,
+                            amount: logData.amount
                         });
                     }
                 }
             });
-        });
+        } catch (logErr) {
+            console.log('[v0] updateSGTAdminStats: sgt_logs error', logErr.message);
+        }
 
         // Baca total burned dari localStorage admin (sementara)
         const totalBurned = sgtTotalBurned || 0; // from Firestore via loadSupplyStats
@@ -5495,15 +5567,24 @@ async function updateSGTAdminStats() {
         upd('admin-total-burned', totalBurned.toLocaleString() + ' SGT');
         upd('statTotalSGTIssued', totalDistributed.toLocaleString());
 
-        // Render log distribusi
+        // Render log distribusi (ambil 20 terbaru)
         const tbody = document.getElementById('sgt-logs-body');
         if (tbody) {
-            if (logRows.length === 0) {
+            if (userLogRows.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:16px;color:#9CA3AF;font-style:italic;">Belum ada riwayat distribusi</td></tr>';
             } else {
-                logRows.sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
-                tbody.innerHTML = logRows.map(r => {
-                    const d = r.date ? new Date(r.date).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '-';
+                userLogRows.sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+                const displayRows = userLogRows.slice(0, 20);
+                tbody.innerHTML = displayRows.map(r => {
+                    let d = '-';
+                    try {
+                        if (r.date) {
+                            const dateObj = r.date instanceof Date ? r.date : new Date(r.date);
+                            if (!isNaN(dateObj.getTime())) {
+                                d = dateObj.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
+                            }
+                        }
+                    } catch(e) {}
                     return `<tr style="border-bottom:1px solid #F3F4F6;">
                         <td style="padding:8px 4px;color:#6B7280;">${d}</td>
                         <td style="padding:8px 4px;font-weight:600;color:#1F2937;">@${r.username}</td>
@@ -5516,6 +5597,7 @@ async function updateSGTAdminStats() {
         await loadSupplyStats();
         logDebug("SGT Admin stats updated: " + totalHolders + " holders, " + totalSGT + " SGT beredar");
     } catch (e) {
+        console.log('[v0] updateSGTAdminStats: Error', e.message);
         logDebug("SGT admin stats error: " + e.message);
     }
 }
