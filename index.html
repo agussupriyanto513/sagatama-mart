@@ -2248,7 +2248,7 @@
                 <div class="zakat-card">
                     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
                         <div style="width:52px;height:52px;background:rgba(255,255,255,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;">🌙</div>
-                        <div><p style="font-size:11px;opacity:0.8;margin:0;">ZAKAT DIGITAL SGT</p><p style="font-size:17px;font-weight:900;margin:0;">Kalkulator Zakat Mal</p></div>
+                        <div><p style="font-size:11px;opacity:0.8;margin:0;">ZAKAT DIGITAL SGT</p><p style="font-size:17px;font-weight:900;margin:0;">Pusat Zakat & Infaq</p></div>
                     </div>
                     <p style="font-size:11px;opacity:0.8;margin-bottom:12px;line-height:1.5;">SGT diperlakukan sebagai harta digital. Nisab setara 85 gram emas. Zakat 2.5% bila sudah haul (1 tahun).</p>
                     <!-- Nisab progress -->
@@ -2261,45 +2261,149 @@
                         <span style="font-size:10px;opacity:0.6;">0</span>
                         <span style="font-size:10px;opacity:0.6;">Nisab: <span id="nisabLabel">5,000 SGT</span></span>
                     </div>
+                    <!-- Haul tracker -->
+                    <div id="haulTrackerBox" style="margin-top:14px;background:rgba(255,255,255,0.1);border-radius:12px;padding:12px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:11px;font-weight:700;color:#FCD34D;">⏳ Haul Tracker</span>
+                            <span id="haulStatusLabel" style="font-size:10px;background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:20px;">Belum mulai</span>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.15);border-radius:4px;height:6px;overflow:hidden;">
+                            <div id="haulBar" style="height:100%;background:linear-gradient(90deg,#FCD34D,#F59E0B);border-radius:4px;transition:width 0.6s;width:0%;"></div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+                            <span style="font-size:10px;opacity:0.6;" id="haulStartLabel">Mulai: —</span>
+                            <span style="font-size:10px;opacity:0.6;" id="haulDaysLabel">0 / 365 hari</span>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Nisab setting -->
-                <div class="sosial-card">
-                    <h4 style="font-weight:800;color:#1F2937;margin-bottom:12px;font-size:14px;"><i class="fas fa-calculator" style="color:#059669;margin-right:8px;"></i>Pengaturan Nisab</h4>
-                    <div class="form-group">
-                        <label class="form-label">Nilai Nisab (SGT)</label>
-                        <div style="display:flex;gap:8px;">
-                            <input type="number" id="nisabInput" class="form-input" style="flex:1;" placeholder="Default: 5000" value="5000" min="100">
-                            <button onclick="updateNisab()" style="background:#059669;color:white;border:none;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px;white-space:nowrap;"><i class="fas fa-check"></i></button>
-                        </div>
-                        <p style="font-size:10px;color:#6B7280;margin:4px 0 0;">Sesuaikan dengan nilai emas saat ini. Admin dapat update secara berkala.</p>
-                    </div>
+                <!-- Tab zakat internal -->
+                <div style="display:flex;gap:8px;margin:12px 0;">
+                    <button onclick="switchZakatTab('mal',this)" id="ztab-mal" style="flex:1;padding:8px;border-radius:10px;border:none;font-weight:700;font-size:12px;cursor:pointer;background:#059669;color:white;font-family:inherit;">Zakat Mal</button>
+                    <button onclick="switchZakatTab('fitrah',this)" id="ztab-fitrah" style="flex:1;padding:8px;border-radius:10px;border:2px solid #E5E7EB;background:white;color:#374151;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">Zakat Fitrah</button>
+                    <button onclick="switchZakatTab('infaq',this)" id="ztab-infaq" style="flex:1;padding:8px;border-radius:10px;border:2px solid #E5E7EB;background:white;color:#374151;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">Infaq/Shadaqah</button>
+                </div>
 
-                    <!-- Hasil kalkulasi -->
-                    <div id="zakatResult" style="display:none;background:#F0FDF4;border:1px solid #A7F3D0;border-radius:12px;padding:14px;margin-top:12px;">
-                        <p style="font-weight:800;color:#065F46;font-size:13px;margin:0 0 8px;"><i class="fas fa-mosque" style="margin-right:6px;"></i>Hasil Kalkulasi Zakat</p>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                            <div style="background:white;border-radius:10px;padding:10px;text-align:center;">
-                                <p id="zakatAmount" style="font-size:20px;font-weight:900;color:#059669;margin:0;">0 SGT</p>
-                                <p style="font-size:10px;color:#6B7280;margin:3px 0 0;">Wajib dizakatkan</p>
+                <!-- PANEL: Zakat Mal -->
+                <div id="zpanel-mal">
+                    <div class="sosial-card">
+                        <h4 style="font-weight:800;color:#1F2937;margin-bottom:12px;font-size:14px;"><i class="fas fa-calculator" style="color:#059669;margin-right:8px;"></i>Kalkulator Zakat Mal</h4>
+                        <div class="form-group">
+                            <label class="form-label">Nilai Nisab (SGT)</label>
+                            <div style="display:flex;gap:8px;">
+                                <input type="number" id="nisabInput" class="form-input" style="flex:1;" placeholder="Default: 5000" value="5000" min="100">
+                                <button onclick="updateNisab()" style="background:#059669;color:white;border:none;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px;white-space:nowrap;"><i class="fas fa-check"></i></button>
                             </div>
-                            <div style="background:white;border-radius:10px;padding:10px;text-align:center;">
-                                <p id="zakatSisa" style="font-size:20px;font-weight:900;color:#1D4ED8;margin:0;">0 SGT</p>
-                                <p style="font-size:10px;color:#6B7280;margin:3px 0 0;">Sisa setelah zakat</p>
+                            <p style="font-size:10px;color:#6B7280;margin:4px 0 0;">Sesuaikan dengan nilai emas saat ini. Admin dapat update secara berkala.</p>
+                        </div>
+                        <div id="zakatResult" style="display:none;background:#F0FDF4;border:1px solid #A7F3D0;border-radius:12px;padding:14px;margin-top:12px;">
+                            <p style="font-weight:800;color:#065F46;font-size:13px;margin:0 0 8px;"><i class="fas fa-mosque" style="margin-right:6px;"></i>Hasil Kalkulasi Zakat Mal</p>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                                <div style="background:white;border-radius:10px;padding:10px;text-align:center;">
+                                    <p id="zakatAmount" style="font-size:20px;font-weight:900;color:#059669;margin:0;">0 SGT</p>
+                                    <p style="font-size:10px;color:#6B7280;margin:3px 0 0;">Wajib dizakatkan (2.5%)</p>
+                                </div>
+                                <div style="background:white;border-radius:10px;padding:10px;text-align:center;">
+                                    <p id="zakatSisa" style="font-size:20px;font-weight:900;color:#1D4ED8;margin:0;">0 SGT</p>
+                                    <p style="font-size:10px;color:#6B7280;margin:3px 0 0;">Sisa setelah zakat</p>
+                                </div>
+                            </div>
+                            <div style="background:#ECFDF5;border-radius:10px;padding:10px;margin-bottom:10px;font-size:11px;color:#065F46;">
+                                <p style="margin:0;">📊 <b>Rincian distribusi:</b> 98% → Baitul Maal · 2% → Burn (deflasi SGT)</p>
+                            </div>
+                            <button onclick="bayarZakat()" style="width:100%;background:linear-gradient(135deg,#059669,#047857);color:white;border:none;padding:12px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">
+                                <i class="fas fa-hand-holding-heart" style="margin-right:8px;"></i>Bayar Zakat ke Baitul Maal
+                            </button>
+                        </div>
+                        <div id="zakatBelumNisab" style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:12px;padding:14px;margin-top:12px;">
+                            <p style="font-size:12px;color:#92400E;text-align:center;"><i class="fas fa-info-circle" style="margin-right:6px;"></i>Saldo belum mencapai nisab. Teruslah beramal dan belanja untuk menambah SGT.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PANEL: Zakat Fitrah -->
+                <div id="zpanel-fitrah" style="display:none;">
+                    <div class="sosial-card">
+                        <h4 style="font-weight:800;color:#1F2937;margin-bottom:4px;font-size:14px;"><i class="fas fa-moon" style="color:#7C3AED;margin-right:8px;"></i>Zakat Fitrah</h4>
+                        <p style="font-size:11px;color:#6B7280;margin-bottom:14px;">Dibayar di bulan Ramadan, setara 2.5 kg beras per jiwa.</p>
+                        <div class="form-group">
+                            <label class="form-label">Jumlah Jiwa (tanggungan)</label>
+                            <input type="number" id="fitrahJiwa" class="form-input" value="1" min="1" max="20" oninput="calcFitrah()">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Tarif per jiwa (SGT)</label>
+                            <input type="number" id="fitrahTarif" class="form-input" value="250" min="100" oninput="calcFitrah()">
+                            <p style="font-size:10px;color:#6B7280;margin:4px 0 0;">Tarif default: 250 SGT/jiwa. Admin dapat menyesuaikan.</p>
+                        </div>
+                        <div id="fitrahResult" style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:12px;padding:14px;margin:12px 0;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;">
+                                <div>
+                                    <p style="font-size:11px;color:#6B7280;margin:0;">Total Zakat Fitrah</p>
+                                    <p id="fitrahTotal" style="font-size:22px;font-weight:900;color:#7C3AED;margin:0;">250 SGT</p>
+                                </div>
+                                <div style="font-size:32px;">🕌</div>
                             </div>
                         </div>
-                        <button onclick="bayarZakat()" style="width:100%;background:linear-gradient(135deg,#059669,#047857);color:white;border:none;padding:12px;border-radius:10px;font-weight:700;cursor:pointer;margin-top:12px;font-size:13px;font-family:inherit;">
-                            <i class="fas fa-hand-holding-heart" style="margin-right:8px;"></i>Bayar Zakat ke Baitul Maal
+                        <button onclick="bayarFitrah()" style="width:100%;background:linear-gradient(135deg,#7C3AED,#5B21B6);color:white;border:none;padding:12px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">
+                            <i class="fas fa-hand-holding-heart" style="margin-right:8px;"></i>Bayar Zakat Fitrah
                         </button>
                     </div>
-                    <div id="zakatBelumNisab" style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:12px;padding:14px;margin-top:12px;">
-                        <p style="font-size:12px;color:#92400E;text-align:center;"><i class="fas fa-info-circle" style="margin-right:6px;"></i>Saldo belum mencapai nisab. Teruslah beramal dan belanja untuk menambah SGT.</p>
+                </div>
+
+                <!-- PANEL: Infaq/Shadaqah -->
+                <div id="zpanel-infaq" style="display:none;">
+                    <div class="sosial-card">
+                        <h4 style="font-weight:800;color:#1F2937;margin-bottom:4px;font-size:14px;"><i class="fas fa-heart" style="color:#EF4444;margin-right:8px;"></i>Infaq & Shadaqah</h4>
+                        <p style="font-size:11px;color:#6B7280;margin-bottom:14px;">Berikan donasi sukarela ke Baitul Maal. Tidak ada batas minimum.</p>
+                        <div class="form-group">
+                            <label class="form-label">Jumlah SGT</label>
+                            <input type="number" id="infaqAmount" class="form-input" placeholder="Masukkan jumlah SGT" min="1">
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;">
+                            <button onclick="document.getElementById('infaqAmount').value=100" style="padding:8px;background:#FEF3C7;color:#92400E;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">100</button>
+                            <button onclick="document.getElementById('infaqAmount').value=500" style="padding:8px;background:#ECFDF5;color:#065F46;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">500</button>
+                            <button onclick="document.getElementById('infaqAmount').value=1000" style="padding:8px;background:#EFF6FF;color:#1E40AF;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">1000</button>
+                            <button onclick="document.getElementById('infaqAmount').value=Math.floor(sgtBalance*0.1)" style="padding:8px;background:#F5F3FF;color:#5B21B6;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">10%</button>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Niat/Catatan (opsional)</label>
+                            <input type="text" id="infaqNiat" class="form-input" placeholder="Contoh: untuk fakir miskin">
+                        </div>
+                        <button onclick="bayarInfaq()" style="width:100%;background:linear-gradient(135deg,#EF4444,#B91C1C);color:white;border:none;padding:12px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">
+                            <i class="fas fa-heart" style="margin-right:8px;"></i>Kirim Infaq ke Baitul Maal
+                        </button>
                     </div>
+                </div>
+
+                <!-- Dashboard Baitul Maal -->
+                <div class="sosial-card" style="background:linear-gradient(135deg,#1E3A5F,#1D4ED8);color:white;">
+                    <h4 style="font-weight:800;margin-bottom:12px;font-size:14px;color:white;"><i class="fas fa-landmark" style="margin-right:8px;color:#93C5FD;"></i>Dashboard Baitul Maal</h4>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                        <div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:12px;text-align:center;">
+                            <p style="font-size:10px;opacity:0.8;margin:0 0 4px;">Total Dana BM</p>
+                            <p id="bmTotalDana" style="font-size:18px;font-weight:900;color:#93C5FD;margin:0;">— SGT</p>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:12px;text-align:center;">
+                            <p style="font-size:10px;opacity:0.8;margin:0 0 4px;">Total Dizakatkan</p>
+                            <p id="bmTotalZakat" style="font-size:18px;font-weight:900;color:#6EE7B7;margin:0;">— SGT</p>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:12px;text-align:center;">
+                            <p style="font-size:10px;opacity:0.8;margin:0 0 4px;">Total Muzakki</p>
+                            <p id="bmTotalMuzakki" style="font-size:18px;font-weight:900;color:#FCD34D;margin:0;">—</p>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:12px;text-align:center;">
+                            <p style="font-size:10px;opacity:0.8;margin:0 0 4px;">Total Infaq</p>
+                            <p id="bmTotalInfaq" style="font-size:18px;font-weight:900;color:#F9A8D4;margin:0;">— SGT</p>
+                        </div>
+                    </div>
+                    <button onclick="loadBaitulMaalDashboard()" style="width:100%;background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.3);padding:10px;border-radius:10px;font-weight:700;cursor:pointer;font-size:12px;font-family:inherit;">
+                        <i class="fas fa-sync-alt" style="margin-right:6px;"></i>Refresh Data Baitul Maal
+                    </button>
                 </div>
 
                 <!-- Riwayat zakat -->
                 <div class="sosial-card">
-                    <h4 style="font-weight:800;color:#1F2937;margin-bottom:12px;font-size:14px;"><i class="fas fa-history" style="color:#8B5CF6;margin-right:8px;"></i>Riwayat Zakat</h4>
+                    <h4 style="font-weight:800;color:#1F2937;margin-bottom:12px;font-size:14px;"><i class="fas fa-history" style="color:#8B5CF6;margin-right:8px;"></i>Riwayat Zakat & Infaq</h4>
                     <div id="zakatHistory"><div class="empty-state" style="padding:24px;"><i class="fas fa-mosque" style="font-size:36px;"></i><p>Belum ada riwayat zakat</p></div></div>
                 </div>
             </div>
@@ -3095,7 +3199,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // ============================================
 // ERROR HANDLER GLOBAL
@@ -3915,7 +4019,6 @@ let unsubscribeSGT = null;
 let sgtListenerActive = false; // PERBAIKAN: Flag untuk mencegah race condition
 
 function listenUserSGTBalance(userId) {
-    // Skip listener untuk admin session — admin punya sgtBalance sendiri di UI
     if (currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin') {
         logDebug('Skip SGT listener: admin session');
         return null;
@@ -3925,67 +4028,92 @@ function listenUserSGTBalance(userId) {
         return;
     }
 
-    // 🔥 stop listener lama (biar tidak dobel)
     if (unsubscribeSGT) {
         unsubscribeSGT();
     }
 
     console.log('[v0] listenUserSGTBalance: Starting listener for userId:', userId);
-    
-    // PERBAIKAN: Set flag aktif
     sgtListenerActive = true;
-    
+
     unsubscribeSGT = onSnapshot(
         doc(db, 'users', userId),
-        (docSnap) => {
+        async (docSnap) => {
             console.log('[v0] SGT Listener: Snapshot received, exists?', docSnap.exists());
+
+            // PERBAIKAN: Jika doc tidak ada by UID, coba cari by username (fix agussupriyanto case)
             if (!docSnap.exists()) {
-                console.warn('[v0] SGT Listener: User doc tidak ditemukan untuk userId:', userId);
+                console.warn('[v0] SGT Listener: User doc tidak ditemukan by UID, mencoba lookup by username...');
+                if (currentUser?.username && db) {
+                    try {
+                        const snap = await getDocs(query(collection(db,'users'), where('username','==',currentUser.username), limit(1)));
+                        if (!snap.empty) {
+                            const altDoc = snap.docs[0];
+                            const altData = altDoc.data();
+                            console.log('[v0] SGT Listener: Ditemukan by username! altUID=', altDoc.id, 'balance=', altData.sgtBalance);
+                            // Migrate: copy saldo ke doc dengan UID yang benar
+                            if (altDoc.id !== userId) {
+                                await setDoc(doc(db,'users', userId), {
+                                    ...altData,
+                                    uid: userId,
+                                    sgtUpdatedAt: serverTimestamp()
+                                }, { merge: true });
+                                console.log('[v0] SGT migration done: saldo dipindah ke UID yang benar');
+                            }
+                            sgtBalance = altData.sgtBalance || 0;
+                            sgtTransactions = altData.sgtTransactions || [];
+                        }
+                    } catch(lookupErr) {
+                        console.warn('[v0] SGT lookup by username error:', lookupErr.message);
+                    }
+                }
+                updateSGTUI();
                 return;
             }
+
             const data = docSnap.data();
             const balance = data.sgtBalance || 0;
-            console.log('[v0] SGT Listener: Raw data:', JSON.stringify({sgtBalance: data.sgtBalance, txCount: (data.sgtTransactions||[]).length}));
-            
+            console.log('[v0] SGT Listener: balance=', balance, 'txCount=', (data.sgtTransactions||[]).length);
+
             sgtBalance = balance;
             sgtTransactions = data.sgtTransactions || [];
-            
-            // Sinkronkan ke localStorage untuk cache saat refresh
+
             if (currentUser && currentUser.uid) {
                 localStorage.setItem('sgt_balance_' + currentUser.uid, balance.toString());
                 localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
             }
-            
-            // Update all UI elements
+
             const walletEl = document.getElementById('walletSgtBalance');
             const headerEl = document.getElementById('sgtHeaderBalance');
-            const promoEl = document.getElementById('sgtPromoBalance');
+            const promoEl  = document.getElementById('sgtPromoBalance');
             const sosialEl = document.getElementById('sgtSosialBadge');
-            
-            console.log('[v0] SGT Listener: Updating UI elements, balance=', balance);
             if (walletEl) walletEl.innerText = balance.toLocaleString();
             if (headerEl) headerEl.innerText = balance.toLocaleString() + ' SGT';
-            if (promoEl) promoEl.innerText = balance.toLocaleString();
+            if (promoEl)  promoEl.innerText  = balance.toLocaleString();
             if (sosialEl) sosialEl.innerText = balance.toLocaleString() + ' SGT';
-            
-            // Update SGT stats
-            const earned = sgtTransactions.filter(t => t.type === 'earn').reduce((s, t) => s + (t.amount || 0), 0);
-            const spent = sgtTransactions.filter(t => t.type !== 'earn').reduce((s, t) => s + (t.amount || 0), 0);
+
+            const earned = sgtTransactions.filter(t => t.type === 'earn').reduce((s,t) => s+(t.amount||0), 0);
+            const spent  = sgtTransactions.filter(t => t.type !== 'earn').reduce((s,t) => s+(t.amount||0), 0);
             const seEl = document.getElementById('statSgtEarned');
             const ssEl = document.getElementById('statSgtSpent');
             const stEl = document.getElementById('statSgtTx');
             if (seEl) seEl.textContent = earned.toLocaleString();
             if (ssEl) ssEl.textContent = spent.toLocaleString();
             if (stEl) stEl.textContent = sgtTransactions.length;
-            
-            // Also call updateSGTUI for complete update
+
             updateSGTUI();
-            
             logDebug('SGT realtime update: ' + balance + ' SGT');
         },
         (error) => {
             console.log('[v0] SGT Listener Error:', error.message);
             logDebug('Listener SGT error: ' + error.message);
+            // Auto-retry listener setelah 5 detik jika error
+            sgtListenerActive = false;
+            setTimeout(() => {
+                if (currentUser?.uid && db) {
+                    logDebug('SGT listener retry...');
+                    listenUserSGTBalance(currentUser.uid);
+                }
+            }, 5000);
         }
     );
 
@@ -4252,8 +4380,12 @@ async function initFirebase() {
     try {
         app = initializeApp(firebaseConfig);
         auth = getAuth(app);
-        db = getFirestore(app);
-        logDebug("Firebase initialized");
+        // Gunakan experimentalAutoDetectLongPolling untuk fix Firestore 404 stale channel error
+        db = initializeFirestore(app, {
+            experimentalAutoDetectLongPolling: true,
+            useFetchStreams: false
+        });
+        logDebug("Firebase initialized (long polling aktif)");
         return true;
     } catch (e) {
         logDebug("Firebase error: " + e.message);
@@ -7118,8 +7250,73 @@ window.renderBadges = async function() {
 };
 
 // ── ZAKAT ───────────────────────────────────────────────────
-let currentNisab = 5000; // Default: 5000 SGT ≈ nisab emas
+let currentNisab = 5000;
 
+// ── ZAKAT TAB SWITCHER ───────────────────────────────────────
+window.switchZakatTab = function(tab, btn) {
+    ['mal','fitrah','infaq'].forEach(t => {
+        const p = document.getElementById('zpanel-'+t);
+        const b = document.getElementById('ztab-'+t);
+        if (p) p.style.display = t===tab ? 'block' : 'none';
+        if (b) {
+            b.style.background = t===tab ? '#059669' : 'white';
+            b.style.color = t===tab ? 'white' : '#374151';
+            b.style.border = t===tab ? 'none' : '2px solid #E5E7EB';
+        }
+    });
+};
+
+// ── HAUL TRACKER ─────────────────────────────────────────────
+async function loadHaulTracker() {
+    if (!currentUser||!db) return;
+    try {
+        const userDoc = await getDoc(doc(db,'users',currentUser.uid));
+        if (!userDoc.exists()) return;
+        const data = userDoc.data();
+        const haulStart = data.haulStart ? new Date(data.haulStart) : null;
+        const nisabReachedAt = data.nisabReachedAt ? new Date(data.nisabReachedAt) : null;
+
+        // Jika saldo baru mencapai nisab dan belum ada haul, catat tanggal mulai
+        if (sgtBalance >= currentNisab && !haulStart) {
+            const now = new Date().toISOString();
+            await setDoc(doc(db,'users',currentUser.uid), {
+                haulStart: now, nisabReachedAt: now
+            }, {merge:true});
+            updateHaulUI(new Date(now));
+            return;
+        }
+        // Jika saldo turun di bawah nisab, reset haul
+        if (sgtBalance < currentNisab && haulStart) {
+            await setDoc(doc(db,'users',currentUser.uid), { haulStart: null }, {merge:true});
+            updateHaulUI(null);
+            return;
+        }
+        updateHaulUI(haulStart);
+    } catch(e) {}
+}
+
+function updateHaulUI(haulStart) {
+    const haulBar = document.getElementById('haulBar');
+    const haulDays = document.getElementById('haulDaysLabel');
+    const haulStatus = document.getElementById('haulStatusLabel');
+    const haulStartLbl = document.getElementById('haulStartLabel');
+    if (!haulBar) return;
+    if (!haulStart) {
+        haulBar.style.width = '0%';
+        if (haulDays) haulDays.textContent = '0 / 365 hari';
+        if (haulStatus) haulStatus.textContent = 'Belum mulai';
+        if (haulStartLbl) haulStartLbl.textContent = 'Mulai: —';
+        return;
+    }
+    const daysPassed = Math.floor((Date.now() - haulStart.getTime()) / 86400000);
+    const pct = Math.min(100, Math.round(daysPassed/365*100));
+    haulBar.style.width = pct+'%';
+    if (haulDays) haulDays.textContent = daysPassed + ' / 365 hari';
+    if (haulStatus) haulStatus.textContent = daysPassed>=365 ? '✅ Haul selesai — wajib zakat!' : (pct+'% haul');
+    if (haulStartLbl) haulStartLbl.textContent = 'Mulai: '+haulStart.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
+}
+
+// ── UPDATE NISAB UI (extended) ───────────────────────────────
 window.updateNisabUI = function() {
     if (!document.getElementById('zakatSaldoLabel')) return;
     const el = id => document.getElementById(id);
@@ -7140,6 +7337,8 @@ window.updateNisabUI = function() {
         if (el('zakatBelumNisab')) el('zakatBelumNisab').style.display = 'block';
     }
     loadZakatHistory();
+    loadHaulTracker();
+    loadBaitulMaalDashboard();
 };
 
 window.updateNisab = function() {
@@ -7150,34 +7349,116 @@ window.updateNisab = function() {
     showToast('Nisab diperbarui: '+val.toLocaleString()+' SGT','success');
 };
 
+// ── ZAKAT MAL ────────────────────────────────────────────────
 window.bayarZakat = async function() {
     if (!currentUser) { showToast('Silakan login dahulu','warning'); return; }
     const zakatAmt = sgtBalance >= currentNisab ? Math.floor(sgtBalance * 0.025) : 0;
     if (zakatAmt <= 0) { showToast('Saldo belum mencapai nisab','warning'); return; }
-    if (!confirm(`Bayar zakat ${zakatAmt.toLocaleString()} SGT ke Baitul Maal?`)) return;
+    if (!confirm(`Bayar zakat mal ${zakatAmt.toLocaleString()} SGT ke Baitul Maal?`)) return;
     try {
-        // Deduct from user balance
         sgtBalance -= zakatAmt;
         sgtTransactions.unshift({ type:'zakat', amount:zakatAmt,
             description:'Zakat mal 2.5%', date:new Date().toISOString(), userId:currentUser.uid });
         saveSGTData(true); updateSGTUI();
-        // Auto-burn 2% of zakat, rest to Baitul Maal
-        const burnAmt  = Math.floor(zakatAmt * 0.02);
+        const burnAmt   = Math.floor(zakatAmt * 0.02);
         const baitulAmt = zakatAmt - burnAmt;
         await burnSGTFromSupply(burnAmt, 'zakat_burn');
         await addDanaToPool('baitul_maal', baitulAmt);
-        // Log to Firestore
         await addDoc(collection(db,'zakat_logs'), {
             userId:currentUser.uid, username:currentUser.username,
-            amount:zakatAmt, burnAmt, baitulAmt,
+            amount:zakatAmt, type:'mal', burnAmt, baitulAmt,
             nisab:currentNisab, timestamp:serverTimestamp()
         });
+        // Reset haul setelah zakat dibayar
+        await setDoc(doc(db,'users',currentUser.uid), { haulStart: null }, {merge:true});
         await incrementStat('totalZakat');
-        showToast(`✅ Zakat ${zakatAmt.toLocaleString()} SGT berhasil dibayar! JazakallahuKhairan 🌙`,'success');
+        showToast(`✅ Zakat ${zakatAmt.toLocaleString()} SGT berhasil! JazakallahuKhairan 🌙`,'success');
         updateNisabUI();
         updateSosialUI();
     } catch(e) { showToast('Gagal bayar zakat: '+e.message,'error'); }
 };
+
+// ── ZAKAT FITRAH ─────────────────────────────────────────────
+window.calcFitrah = function() {
+    const jiwa   = parseInt(document.getElementById('fitrahJiwa')?.value) || 1;
+    const tarif  = parseInt(document.getElementById('fitrahTarif')?.value) || 250;
+    const total  = jiwa * tarif;
+    const el = document.getElementById('fitrahTotal');
+    if (el) el.textContent = total.toLocaleString()+' SGT';
+};
+
+window.bayarFitrah = async function() {
+    if (!currentUser) { showToast('Silakan login dahulu','warning'); return; }
+    const jiwa  = parseInt(document.getElementById('fitrahJiwa')?.value) || 1;
+    const tarif = parseInt(document.getElementById('fitrahTarif')?.value) || 250;
+    const total = jiwa * tarif;
+    if (total > sgtBalance) { showToast('Saldo SGT tidak mencukupi','error'); return; }
+    if (!confirm(`Bayar zakat fitrah ${total.toLocaleString()} SGT (${jiwa} jiwa × ${tarif} SGT)?`)) return;
+    try {
+        sgtBalance -= total;
+        sgtTransactions.unshift({ type:'zakat', amount:total,
+            description:`Zakat fitrah ${jiwa} jiwa`, date:new Date().toISOString(), userId:currentUser.uid });
+        saveSGTData(true); updateSGTUI();
+        await addDanaToPool('baitul_maal', total);
+        await addDoc(collection(db,'zakat_logs'), {
+            userId:currentUser.uid, username:currentUser.username,
+            amount:total, type:'fitrah', jiwa, tarif, timestamp:serverTimestamp()
+        });
+        showToast(`✅ Zakat fitrah ${total.toLocaleString()} SGT berhasil! 🕌`,'success');
+        updateNisabUI();
+    } catch(e) { showToast('Gagal bayar fitrah: '+e.message,'error'); }
+};
+
+// ── INFAQ/SHADAQAH ───────────────────────────────────────────
+window.bayarInfaq = async function() {
+    if (!currentUser) { showToast('Silakan login dahulu','warning'); return; }
+    const amount = parseInt(document.getElementById('infaqAmount')?.value);
+    const niat   = document.getElementById('infaqNiat')?.value.trim() || 'Infaq sukarela';
+    if (!amount || amount < 1) { showToast('Masukkan jumlah infaq','error'); return; }
+    if (amount > sgtBalance)   { showToast('Saldo SGT tidak mencukupi','error'); return; }
+    if (!confirm(`Kirim infaq ${amount.toLocaleString()} SGT ke Baitul Maal?`)) return;
+    try {
+        sgtBalance -= amount;
+        sgtTransactions.unshift({ type:'infaq', amount,
+            description: niat, date:new Date().toISOString(), userId:currentUser.uid });
+        saveSGTData(true); updateSGTUI();
+        await addDanaToPool('baitul_maal', amount);
+        await addDoc(collection(db,'zakat_logs'), {
+            userId:currentUser.uid, username:currentUser.username,
+            amount, type:'infaq', niat, timestamp:serverTimestamp()
+        });
+        showToast(`✅ Infaq ${amount.toLocaleString()} SGT diterima! Barakallahu fiikum 🤲`,'success');
+        document.getElementById('infaqAmount').value = '';
+        document.getElementById('infaqNiat').value = '';
+        updateNisabUI();
+    } catch(e) { showToast('Gagal kirim infaq: '+e.message,'error'); }
+};
+
+// ── BAITUL MAAL DASHBOARD ────────────────────────────────────
+window.loadBaitulMaalDashboard = async function() {
+    if (!db) return;
+    try {
+        // Dana pool
+        const poolSnap = await getDoc(doc(db,'sgt_config','dana_pools'));
+        const poolData = poolSnap.exists() ? poolSnap.data() : {};
+        const bmDana = poolData.baitul_maal || 0;
+        const el = id => document.getElementById(id);
+        if (el('bmTotalDana')) el('bmTotalDana').textContent = bmDana.toLocaleString()+' SGT';
+
+        // Stats dari zakat_logs
+        const logs = await getDocs(collection(db,'zakat_logs'));
+        let totalZakat=0, totalInfaq=0, muzakkiSet=new Set();
+        logs.forEach(d => {
+            const s = d.data();
+            if (s.type==='mal'||s.type==='fitrah') { totalZakat += s.amount||0; muzakkiSet.add(s.userId); }
+            if (s.type==='infaq') totalInfaq += s.amount||0;
+        });
+        if (el('bmTotalZakat'))   el('bmTotalZakat').textContent   = totalZakat.toLocaleString()+' SGT';
+        if (el('bmTotalMuzakki')) el('bmTotalMuzakki').textContent = muzakkiSet.size+' orang';
+        if (el('bmTotalInfaq'))   el('bmTotalInfaq').textContent   = totalInfaq.toLocaleString()+' SGT';
+    } catch(e) {}
+};
+
 
 async function loadZakatHistory() {
     if (!currentUser||!db) return;
@@ -7204,7 +7485,12 @@ async function loadZakatHistory() {
 const _origSwitchSosialTab = window.switchSosialTab;
 window.switchSosialTab = function(tab, btn) {
     if (typeof _origSwitchSosialTab === 'function') _origSwitchSosialTab(tab, btn);
-    if (tab === 'zakat') setTimeout(updateNisabUI, 100);
+    if (tab === 'zakat') {
+        setTimeout(() => {
+            updateNisabUI();
+            switchZakatTab('mal', document.getElementById('ztab-mal'));
+        }, 100);
+    }
 };
 
 // ── REFERRAL ────────────────────────────────────────────────
@@ -7539,6 +7825,11 @@ if (typeof window._registerReal === 'function') {
         updateNisabUI: window.updateNisabUI,
         updateNisab: window.updateNisab,
         bayarZakat: window.bayarZakat,
+        switchZakatTab: window.switchZakatTab,
+        calcFitrah: window.calcFitrah,
+        bayarFitrah: window.bayarFitrah,
+        bayarInfaq: window.bayarInfaq,
+        loadBaitulMaalDashboard: window.loadBaitulMaalDashboard,
         initReferralCode: window.initReferralCode,
         loadReferralData: window.loadReferralData,
         copyRefCode: window.copyRefCode,
