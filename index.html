@@ -3811,24 +3811,37 @@ window._real_.distributeSGTManual = async function() {
             return;
         }
 
-        const userDocRef = doc(db, 'users', usersSnap.docs[0].id);
+        const docId = usersSnap.docs[0].id;
         const userData = usersSnap.docs[0].data();
-        console.log('[v0] Found user:', usersSnap.docs[0].id, 'Current balance:', userData.sgtBalance);
+        // FIX: gunakan userData.uid jika ada (Pi UID), bukan document ID
+        // Ini memastikan SGT masuk ke dokumen yang sama dengan yang dibaca user saat login
+        const targetUid = (userData.uid && userData.uid !== docId) ? userData.uid : docId;
+        const userDocRef = doc(db, 'users', targetUid);
+        console.log('[v0] Found user docId:', docId, 'targetUid:', targetUid, 'Current balance:', userData.sgtBalance);
 
-        const currentBal = userData.sgtBalance || 0;
-        const currentTxs = Array.isArray(userData.sgtTransactions) ? userData.sgtTransactions : [];
+        // Jika target berbeda dari doc ditemukan, baca dulu data dari doc target
+        let currentBal, currentTxs;
+        if (targetUid !== docId) {
+            const targetDoc = await getDoc(userDocRef);
+            const targetData = targetDoc.exists() ? targetDoc.data() : userData;
+            currentBal = targetData.sgtBalance || userData.sgtBalance || 0;
+            currentTxs = Array.isArray(targetData.sgtTransactions) ? targetData.sgtTransactions : [];
+        } else {
+            currentBal = userData.sgtBalance || 0;
+            currentTxs = Array.isArray(userData.sgtTransactions) ? userData.sgtTransactions : [];
+        }
 
         const newTx = {
             type: 'earn',
             amount,
             description: 'Distribusi manual dari Admin',
             date: new Date().toISOString(),
-            userId: usersSnap.docs[0].id
+            userId: targetUid
         };
 
         // Update circulating supply SEBELUM credit ke user
         console.log('[v0] Calling mintSGT with amount:', amount);
-        const mintResult = await mintSGT(amount, usersSnap.docs[0].id);
+        const mintResult = await mintSGT(amount, targetUid);
         console.log('[v0] mintSGT result:', mintResult);
         if (!mintResult) {
             showToast('Gagal: Hard cap tercapai atau error minting', 'error');
@@ -3847,7 +3860,7 @@ window._real_.distributeSGTManual = async function() {
             adminId: currentUser?.uid || 'admin_manual',
             adminUsername: currentUser?.username || 'admin',
             targetUser,
-            targetUserId: usersSnap.docs[0].id,
+            targetUserId: targetUid,
             amount,
             type: 'manual_distribution',
             description: 'Distribusi manual oleh admin',
@@ -4670,6 +4683,47 @@ window.authenticatePi = async function() {
                     lastLogin: serverTimestamp()
                 }, { merge: true });
                 logDebug("User profile saved to Firestore");
+
+                // FIX: Cek apakah ada dokumen lama by username dengan saldo SGT
+                // Jika ada dan document ID-nya berbeda dari UID, migrate saldo ke dokumen yang benar
+                try {
+                    const oldSnap = await getDocs(query(
+                        collection(db, 'users'),
+                        where('username', '==', currentUser.username),
+                        limit(5)
+                    ));
+                    for (const oldDoc of oldSnap.docs) {
+                        if (oldDoc.id !== currentUser.uid) {
+                            const oldData = oldDoc.data();
+                            const oldBal = oldData.sgtBalance || 0;
+                            if (oldBal > 0) {
+                                // Ada saldo di dokumen lama — merge ke dokumen yang benar
+                                const correctDoc = await getDoc(doc(db, 'users', currentUser.uid));
+                                const correctBal = correctDoc.exists() ? (correctDoc.data().sgtBalance || 0) : 0;
+                                const mergedBal = correctBal + oldBal;
+                                const mergedTxs = [
+                                    ...(correctDoc.exists() ? (correctDoc.data().sgtTransactions || []) : []),
+                                    ...(oldData.sgtTransactions || [])
+                                ].slice(0, 50);
+                                await setDoc(doc(db, 'users', currentUser.uid), {
+                                    sgtBalance: mergedBal,
+                                    sgtTransactions: mergedTxs,
+                                    sgtUpdatedAt: serverTimestamp()
+                                }, { merge: true });
+                                // Nolkan dokumen lama agar tidak double-count
+                                await setDoc(doc(db, 'users', oldDoc.id), {
+                                    sgtBalance: 0,
+                                    uid: currentUser.uid,
+                                    migratedTo: currentUser.uid,
+                                    sgtUpdatedAt: serverTimestamp()
+                                }, { merge: true });
+                                logDebug('SGT migration: ' + oldBal + ' SGT dari doc ' + oldDoc.id + ' → ' + currentUser.uid);
+                            }
+                        }
+                    }
+                } catch (migErr) {
+                    logDebug('SGT migration error (non-kritis): ' + migErr.message);
+                }
             } catch (e) {
                 logDebug("Save user profile error: " + e.message);
             }
