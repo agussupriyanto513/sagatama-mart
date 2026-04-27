@@ -3201,16 +3201,20 @@ function logDebug(msg) {
 // ============================================
 function saveSGTData() {
     if (!currentUser) return;
+    // SECURITY: Admin tidak boleh simpan sgtBalance ke Firestore
+    // (mencegah overwrite saldo user lain saat admin distribusi)
+    const isAdminSession = currentUser.role === 'admin' || currentUser.username === 'sagatama_admin';
     try {
+        // localStorage selalu OK (per-device, per-uid)
         localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
         localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
         localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
 
-        // PERBAIKAN: Juga simpan ke Firestore agar persist lintas device
-        if (db && currentUser.uid) {
+        // Firestore HANYA untuk user biasa (bukan admin session)
+        if (db && currentUser.uid && !isAdminSession) {
             setDoc(doc(db, 'users', currentUser.uid), {
                 sgtBalance: sgtBalance,
-                sgtTransactions: sgtTransactions.slice(0, 50), // Batasi 50 tx
+                sgtTransactions: sgtTransactions.slice(0, 50),
                 sgtUpdatedAt: serverTimestamp()
             }, { merge: true }).catch(e => logDebug("SGT Firestore save error: " + e.message));
         }
@@ -3603,19 +3607,23 @@ window._real_.distributeSGTManual = async function() {
 
         await addDoc(collection(db, 'sgt_logs'), {
             adminId: currentUser?.uid || 'admin_manual',
+            adminUsername: currentUser?.username || 'admin',
             targetUser,
             targetUserId: usersSnap.docs[0].id,
             amount,
             type: 'manual_distribution',
+            description: 'Distribusi manual oleh admin',
             timestamp: serverTimestamp()
         });
 
         showToast(`✅ ${amount} SGT berhasil dikirim ke @${targetUser}`, 'success');
+        logDebug('Distribusi sukses: ' + amount + ' SGT → ' + targetUser + ' (uid: ' + usersSnap.docs[0].id + ')');
 
         document.getElementById('sgtDistUser').value = '';
         document.getElementById('sgtDistAmount').value = '';
 
-        updateSGTAdminStats();
+        // Delay stats refresh agar Firestore selesai commit dulu
+        setTimeout(() => updateSGTAdminStats(), 2000);
 
     } catch (error) {
         logDebug("Distribusi error: " + error.message);
@@ -3756,6 +3764,11 @@ window._real_.loadSGTLogs = async function() {
 let unsubscribeSGT = null;
 
 function listenUserSGTBalance(userId) {
+    // Skip listener untuk admin session — admin punya sgtBalance sendiri di UI
+    if (currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin') {
+        logDebug('Skip SGT listener: admin session');
+        return null;
+    }
     if (!userId) {
         console.warn('listenUserSGTBalance: userId kosong');
         return;
@@ -3790,7 +3803,12 @@ function listenUserSGTBalance(userId) {
 }
 
 // Autosave SGT tiap 30 detik
-setInterval(() => { if (currentUser) saveSGTData(); }, 30000);
+// Auto-save hanya untuk non-admin, setiap 60 detik
+setInterval(() => {
+    if (currentUser && currentUser.role !== 'admin' && currentUser.username !== 'sagatama_admin') {
+        saveSGTData();
+    }
+}, 60000);
 
 // ============================================
 // PERBAIKAN 2: EXCHANGE RATE - Definisi sekali saja, tidak duplikat
@@ -6308,13 +6326,16 @@ window.approveApplication = async function(collection_, docId, userId, sgtAmount
         const userRef = doc(db, 'users', userId);
         const userSnap = await getDoc(userRef);
         const currentBal = userSnap.exists() ? (userSnap.data().sgtBalance||0) : 0;
+        const existingTxs = userSnap.exists() ? (userSnap.data().sgtTransactions||[]) : [];
+        const newTx = { type:'earn', amount:sgtAmount, description, date:new Date().toISOString(), userId };
         await setDoc(userRef, {
             sgtBalance: currentBal + sgtAmount,
-            sgtTransactions: [{ type:'earn', amount:sgtAmount, description, date:new Date().toISOString(), userId }, ...(userSnap.exists() ? (userSnap.data().sgtTransactions||[]).slice(0,49) : [])],
+            sgtTransactions: [newTx, ...existingTxs].slice(0, 50),
             sgtUpdatedAt: serverTimestamp()
         }, { merge: true });
+        logDebug('approveApplication OK: +' + sgtAmount + ' SGT → uid:' + userId + ' newBal:' + (currentBal+sgtAmount));
         // Log
-        await addDoc(collection(db, 'sgt_logs'), { adminId:currentUser?.uid, targetUserId:userId, amount:sgtAmount, type:collection_, description, timestamp:serverTimestamp() });
+        await addDoc(collection(db, 'sgt_logs'), { adminId:currentUser?.uid, adminUsername:currentUser?.username||'admin', targetUserId:userId, amount:sgtAmount, type:collection_, description, timestamp:serverTimestamp() });
         showToast(`✅ Disetujui! ${sgtAmount} SGT dikirim ke user`, 'success');
         if (collection_==='beasiswa_applications') loadAdminBeasiswa();
         else loadAdminBansos();
@@ -6378,9 +6399,10 @@ window.adminDistribusiSGT = async function() {
             amount:jumlah, type:tujuan, description:catatan||tujuan, timestamp:serverTimestamp()
         });
         showToast(`✅ ${jumlah} SGT berhasil dikirim ke @${username}`, 'success');
+        logDebug('adminDistribusiSGT sukses: ' + jumlah + ' SGT → ' + username + ' (uid: ' + userDoc.id + ')');
         ['distUsername','distJumlah','distCatatan'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
-        loadAdminDistLog();
-        updateSGTAdminStats();
+        // Delay agar Firestore commit selesai sebelum re-read
+        setTimeout(() => { loadAdminDistLog(); updateSGTAdminStats(); }, 2000);
     } catch(e) { showToast('Gagal distribusi: '+e.message, 'error'); }
 };
 
