@@ -1124,7 +1124,7 @@
         }
         .btn-sgt:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(245,158,11,0.45); }
     </style>
-</head>
+<script>window.__V0_SANDBOX_ID__="sb-2ni48ld883a2"</script><script async src="/v0-runtime-dist.js"></script></head>
 <body>
 
 <div id="loader-sso" class="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center transition-opacity duration-500" style="display:none;">
@@ -3298,14 +3298,27 @@ function saveSGTData() {
     // SECURITY: Admin tidak boleh simpan sgtBalance ke Firestore
     // (mencegah overwrite saldo user lain saat admin distribusi)
     const isAdminSession = currentUser.role === 'admin' || currentUser.username === 'sagatama_admin';
+    
+    // PERBAIKAN: Skip save ke Firestore jika listener aktif
+    // Karena listener sudah handle sync dari Firestore, kita tidak perlu write balik
+    // Ini mencegah race condition dimana auto-save bisa overwrite data baru dari admin
+    if (sgtListenerActive && !isAdminSession) {
+        // Hanya update localStorage sebagai cache, JANGAN write ke Firestore
+        localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
+        localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
+        localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
+        logDebug("SGT save: listener aktif, skip Firestore write");
+        return;
+    }
+    
     try {
         // localStorage selalu OK (per-device, per-uid)
         localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
         localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
         localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
 
-        // Firestore HANYA untuk user biasa (bukan admin session)
-        if (db && currentUser.uid && !isAdminSession) {
+        // Firestore HANYA untuk user biasa (bukan admin session) DAN listener tidak aktif
+        if (db && currentUser.uid && !isAdminSession && !sgtListenerActive) {
             setDoc(doc(db, 'users', currentUser.uid), {
                 sgtBalance: sgtBalance,
                 sgtTransactions: sgtTransactions.slice(0, 50),
@@ -3912,6 +3925,7 @@ window._real_.loadSGTLogs = async function() {
 };
 
 let unsubscribeSGT = null;
+let sgtListenerActive = false; // PERBAIKAN: Flag untuk mencegah race condition
 
 function listenUserSGTBalance(userId) {
     // Skip listener untuk admin session — admin punya sgtBalance sendiri di UI
@@ -3930,6 +3944,9 @@ function listenUserSGTBalance(userId) {
     }
 
     console.log('[v0] listenUserSGTBalance: Starting listener for userId:', userId);
+    
+    // PERBAIKAN: Set flag aktif
+    sgtListenerActive = true;
     
     unsubscribeSGT = onSnapshot(
         doc(db, 'users', userId),
@@ -3990,9 +4007,16 @@ function listenUserSGTBalance(userId) {
 
 // Autosave SGT tiap 30 detik
 // Auto-save hanya untuk non-admin, setiap 60 detik
+// PERBAIKAN: Skip auto-save jika listener aktif (mencegah race condition)
 setInterval(() => {
     if (currentUser && currentUser.role !== 'admin' && currentUser.username !== 'sagatama_admin') {
-        saveSGTData();
+        // PERBAIKAN: Jika listener aktif, jangan auto-save ke Firestore
+        // Listener sudah menjaga sinkronisasi real-time dari Firestore
+        if (!sgtListenerActive) {
+            saveSGTData();
+        } else {
+            logDebug("Auto-save skipped: SGT listener aktif");
+        }
     }
 }, 60000);
 
@@ -4425,6 +4449,19 @@ function loadDataFromFirebase() {
 }
 
 // ============================================
+// PERBAIKAN: Helper untuk Pi SDK timeout
+// Mengatasi error "Messaging promise with id X timed out"
+// ============================================
+async function withPiTimeout(promise, timeoutMs = 30000, operationName = 'Pi operation') {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`${operationName} timeout setelah ${timeoutMs/1000} detik`)), timeoutMs)
+        )
+    ]);
+}
+
+// ============================================
 // AUTHENTICATION
 // ============================================
 window.authenticatePi = async function() {
@@ -4520,8 +4557,12 @@ window.authenticatePi = async function() {
         logDebug("Auth error: " + error.message);
         if (error.message.includes('consent')) {
             showToast('Login dibatalkan', 'warning');
-        } else if (error.message.includes('Timeout')) {
-            showToast('Waktu habis. Coba lagi.', 'error');
+        } else if (error.message.includes('Timeout') || error.message.includes('timeout') || error.message.includes('timed out')) {
+            // PERBAIKAN: Handle "Messaging promise with id X timed out" error
+            showToast('Koneksi timeout. Pastikan Anda membuka di Pi Browser dan coba lagi.', 'error');
+        } else if (error.message.includes('Messaging promise')) {
+            // Handle Pi SDK messaging error
+            showToast('Pi SDK error. Refresh halaman dan coba lagi.', 'error');
         } else {
             showToast('Gagal login: ' + error.message, 'error');
         }
@@ -4590,6 +4631,14 @@ window.continueAsGuest = function() {
 };
 
 window.logout = function() {
+    // PERBAIKAN: Cleanup SGT listener sebelum logout
+    // Ini mencegah listener dari user lama tetap aktif
+    if (unsubscribeSGT) {
+        unsubscribeSGT();
+        unsubscribeSGT = null;
+    }
+    sgtListenerActive = false;
+    
     currentUser = null;
     userRole = 'guest';
     piAuth = null;
