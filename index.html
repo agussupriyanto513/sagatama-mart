@@ -6634,7 +6634,7 @@ function renderRewardHistory() {
 
 // Sosial Tab Switching (User)
 window.switchSosialTab = function(tab, btn) {
-    ['rewards','beasiswa','bansos','staking'].forEach(t => {
+    ['rewards','beasiswa','bansos','staking','zakat'].forEach(t => {
         const el = document.getElementById('sosial-tab-'+t);
         if (el) el.style.display = t===tab ? 'block' : 'none';
     });
@@ -6643,6 +6643,13 @@ window.switchSosialTab = function(tab, btn) {
     if (tab==='staking') { loadBaitulStats(); loadActiveStaking(); }
     if (tab==='beasiswa') loadBeasiswaStatus();
     if (tab==='bansos')   loadBansosStatus();
+    if (tab==='zakat') {
+        setTimeout(() => {
+            if (typeof updateNisabUI === 'function') updateNisabUI();
+            if (typeof switchZakatTab === 'function') switchZakatTab('mal', document.getElementById('ztab-mal'));
+            if (typeof loadBaitulMaalDashboard === 'function') loadBaitulMaalDashboard();
+        }, 100);
+    }
 };
 
 // Admin Sosial Tab Switching
@@ -7481,17 +7488,6 @@ async function loadZakatHistory() {
     } catch(e) {}
 }
 
-// Hook zakat tab: refresh UI when opened
-const _origSwitchSosialTab = window.switchSosialTab;
-window.switchSosialTab = function(tab, btn) {
-    if (typeof _origSwitchSosialTab === 'function') _origSwitchSosialTab(tab, btn);
-    if (tab === 'zakat') {
-        setTimeout(() => {
-            updateNisabUI();
-            switchZakatTab('mal', document.getElementById('ztab-mal'));
-        }, 100);
-    }
-};
 
 // ── REFERRAL ────────────────────────────────────────────────
 function genRefCode(username) {
