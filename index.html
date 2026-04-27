@@ -4234,10 +4234,11 @@ function detectPiEnv() {
 
 async function initPiSDK() {
     return new Promise((resolve) => {
+        // PERBAIKAN: Kurangi timeout dari 10s ke 5s untuk response lebih cepat
         const timeout = setTimeout(() => {
-            logDebug("Pi SDK init timeout (10s) - lanjut tanpa Pi SDK");
+            logDebug("Pi SDK init timeout (5s) - lanjut tanpa Pi SDK");
             resolve(false);
-        }, 10000);
+        }, 5000);
 
         if (!window.Pi) {
             clearTimeout(timeout);
@@ -4256,6 +4257,7 @@ async function initPiSDK() {
             .catch((err) => {
                 clearTimeout(timeout);
                 logDebug("Pi SDK error: " + err.message);
+                // PERBAIKAN: Jangan block app jika SDK init gagal
                 resolve(false);
             });
     });
@@ -4472,6 +4474,14 @@ window.authenticatePi = async function() {
         return;
     }
 
+    // PERBAIKAN: Tampilkan loading state yang lebih jelas
+    const loginBtn = document.querySelector('[onclick*="authenticatePi"]');
+    const originalBtnText = loginBtn?.innerHTML;
+    if (loginBtn) {
+        loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menghubungkan...';
+        loginBtn.disabled = true;
+    }
+
     try {
         showToast('Menghubungkan ke Pi Network...', 'info');
         const scopes = ['username', 'payments'];
@@ -4483,9 +4493,10 @@ window.authenticatePi = async function() {
             }
         };
 
+        // PERBAIKAN: Kurangi timeout dari 60s ke 30s untuk response lebih cepat
         const authResult = await Promise.race([
             window.Pi.authenticate(scopes, onIncompletePaymentFound),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout 60s')), 60000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout koneksi. Coba lagi.')), 30000))
         ]);
 
         if (!authResult?.user) throw new Error('Auth result tidak valid');
@@ -4565,6 +4576,12 @@ window.authenticatePi = async function() {
             showToast('Pi SDK error. Refresh halaman dan coba lagi.', 'error');
         } else {
             showToast('Gagal login: ' + error.message, 'error');
+        }
+    } finally {
+        // PERBAIKAN: Reset button state setelah selesai (sukses/gagal)
+        if (loginBtn && originalBtnText) {
+            loginBtn.innerHTML = originalBtnText;
+            loginBtn.disabled = false;
         }
     }
 };
@@ -6573,9 +6590,13 @@ window.submitStaking = async function() {
         sgtFeePool = Math.max(0, sgtFeePool - feePoolCover);
         const reward = grossReward; // keep variable name for compatibility
 
+        // PERBAIKAN: Ambil username dengan urutan prioritas yang benar
+        // Pi Auth menggunakan currentUser.username, bukan displayName
+        const stakingUsername = currentUser.username || currentUser.displayName || currentUser.email || 'anonymous';
+        
         const stakingDoc = {
             userId: currentUser.uid,
-            username: currentUser.displayName || currentUser.email,
+            username: stakingUsername,
             amount: amt, days: selectedStakingDays, apy: selectedStakingAPY,
             startDate: startDate.toISOString(), endDate: endDate.toISOString(),
             reward, zakat, netReward,
