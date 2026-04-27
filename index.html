@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sagatama Mart | Pi Native E-Commerce</title>
+    <meta name="description" content="Sagatama Mart - Marketplace terpercaya berbasis Pi Network dengan token SGT">
     <meta name="viewer-pi-app-id" content="https://sagatama-mart.vercel.app" />
 	<link rel="icon" href="data:;base64,iVBORw0KGgo=">
 
@@ -163,6 +164,19 @@
             padding-bottom: 80px; 
             min-height: 100vh; 
             color: #1f2937; 
+        }
+        
+        /* Announcement banner adjustments */
+        #announcement-banner {
+            position: fixed;
+            top: 70px;
+            left: 0; right: 0;
+            z-index: 999;
+            padding: 8px 16px !important;
+        }
+        /* Push content below announcement */
+        .app-container.with-banner {
+            padding-top: 36px;
         }
         
         /* View System */
@@ -1141,13 +1155,10 @@
     <!-- DEBUG PANEL -->
     <div id="debugPanel"></div>
     
-    <div id="announcement-banner" style="background-color: #ffa500; color: #000; padding: 15px; text-align: center; font-family: sans-serif; font-weight: bold; border-bottom: 3px solid #e69500; margin-bottom: 20px;">
-    <p style="margin: 0; font-size: 1.1em;">🚀 Welcome to Sagatama Mart! 🚀</p>
-    <p style="margin: 5px 0 0; font-size: 0.9em; font-weight: normal;">
-        Our application is currently under <strong>Pi Network Verification</strong>. 
-        Transactions are currently in <strong>Testnet Mode</strong>. 
-        Stay tuned for the Official Mainnet Launch!
-    </p>
+    <div id="announcement-banner" style="background: linear-gradient(135deg, #7C3AED, #5B21B6); color: white; padding: 12px 16px; text-align: center; font-family: inherit; border-bottom: none; margin-bottom: 0; display:flex; align-items:center; justify-content:center; gap:8px; font-size:13px; font-weight:600; letter-spacing:0.3px; box-shadow: 0 2px 8px rgba(124,58,237,0.3);">
+        <span style="font-size:16px;">⚡</span>
+        <span>Sagatama Mart — Pi Network Merchant · <strong style="color:#FCD34D;">Testnet Mode</strong> aktif · Mainnet segera hadir!</span>
+        <button onclick="document.getElementById('announcement-banner').style.display='none'" style="background:rgba(255,255,255,0.2);border:none;color:white;width:24px;height:24px;border-radius:50%;cursor:pointer;margin-left:8px;font-size:14px;display:flex;align-items:center;justify-content:center;">×</button>
     </div>
 
     <!-- LOADING OVERLAY -->
@@ -1186,7 +1197,7 @@
     
 
     <!-- MAIN CONTENT -->
-    <div class="app-container">
+    <div class="app-container" id="appContainer">
 
         <!-- HOME VIEW -->
         <div id="home-view" class="view active">
@@ -2091,7 +2102,7 @@
                             <div style="display:flex;justify-content:space-between;"><span style="font-size:12px;color:#065F46;">Estimasi reward:</span><span id="previewReward" style="font-weight:800;color:#065F46;">0 SGT</span></div>
                             <div style="display:flex;justify-content:space-between;margin-top:4px;"><span style="font-size:12px;color:#065F46;">Dana Baitul Maal:</span><span id="previewZakat" style="font-weight:800;color:#047857;">0 SGT</span></div>
                         </div>
-                        <button onclick="submitStaking()" style="width:100%;background:linear-gradient(135deg,#059669,#047857);color:white;border:none;padding:12px;border-radius:10px;font-weight:700;cursor:pointer;margin-top:12px;font-size:13px;font-family:inherit;">
+                        <button onclick="submitStaking()" id="btnSubmitStaking" style="width:100%;background:linear-gradient(135deg,#059669,#047857);color:white;border:none;padding:12px;border-radius:10px;font-weight:700;cursor:pointer;margin-top:12px;font-size:13px;font-family:inherit;">
                             <i class="fas fa-lock" style="margin-right:6px;"></i>Mulai Staking
                         </button>
                     </div>
@@ -2641,13 +2652,13 @@
             
             <div class="form-group">
                 <label class="form-label">Username Admin</label>
-                <input type="text" id="adminUsername" class="form-input" placeholder="Masukkan username" value="sagatama_admin">
+                <input type="text" id="adminUsername" class="form-input" placeholder="Masukkan username" value="sagatama_admin" onkeypress="if(event.key==='Enter')loginAdmin()">
             </div>
             
             <div class="form-group">
                 <label class="form-label">Password</label>
                 <div style="position:relative;">
-                    <input type="password" id="adminPassword" class="form-input" placeholder="Masukkan password">
+                    <input type="password" id="adminPassword" class="form-input" placeholder="Masukkan password" onkeypress="if(event.key==='Enter')loginAdmin()">
                     <button onclick="togglePasswordVisibility()" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:#6B7280; cursor:pointer;">
                         <i class="fas fa-eye" id="passwordToggleIcon"></i>
                     </button>
@@ -2659,7 +2670,7 @@
                 <span id="adminLoginErrorText">Username atau password salah</span>
             </div>
             
-            <button onclick="loginAdmin()" class="btn-admin" style="margin-bottom:12px;">
+            <button onclick="loginAdmin()" class="btn-admin" style="margin-bottom:12px;" id="btnAdminLogin">
                 <i class="fas fa-sign-in-alt"></i>Login sebagai Admin
             </button>
             
@@ -3067,6 +3078,11 @@ let currentAdminOrderFilter = 'all';
 let pendingPayment = null;
 let paymentTimeout = null;
 
+// ============================================
+// STAKING STATE — wajib ada sebelum selectStaking dipanggil
+// ============================================
+let selectedStakingDays = 0;
+let selectedStakingAPY  = 0;
 
 // SGT Transfer button managed by processSGTTransfer()
 
@@ -3824,13 +3840,15 @@ function listenUserSGTBalance(userId) {
     return unsubscribeSGT;
 }
 
-// Autosave SGT tiap 30 detik
-// Auto-save hanya untuk non-admin, setiap 60 detik
-setInterval(() => {
-    if (currentUser && currentUser.role !== 'admin' && currentUser.username !== 'sagatama_admin') {
-        saveSGTData();
+// Auto-save SGT tiap 90 detik untuk non-admin (skip jika realtime listener aktif)
+setInterval(function() {
+    if (!currentUser || currentUser.role === 'admin' || currentUser.username === 'sagatama_admin') return;
+    if (unsubscribeSGT) {
+        // Listener aktif — Firestore sudah sinkron, tidak perlu save manual
+        return;
     }
-}, 60000);
+    saveSGTData();
+}, 90000);
 
 // ============================================
 // PERBAIKAN 2: EXCHANGE RATE - Definisi sekali saja, tidak duplikat
@@ -4043,6 +4061,20 @@ function detectPiEnv() {
         logDebug("Environment: " + (isPiBrowser ? "Pi Browser" : "External Browser"));
     } catch (e) {
         logDebug("Detect env error: " + e.message);
+    }
+}
+
+// Adjust body padding when announcement banner is visible
+function adjustBannerPadding() {
+    const banner = document.getElementById('announcement-banner');
+    const container = document.getElementById('appContainer');
+    if (banner && container) {
+        const h = banner.offsetHeight;
+        if (banner.style.display !== 'none') {
+            container.style.paddingTop = h + 'px';
+        } else {
+            container.style.paddingTop = '0px';
+        }
     }
 }
 
@@ -4269,7 +4301,7 @@ window.authenticatePi = async function() {
     logDebug("authenticatePi called, SDK ready: " + isPiSDKReady);
 
     if (!window.Pi) {
-        showToast('Pi SDK tidak tersedia. Buka di Pi Browser.', 'error');
+        showToast('Buka di Pi Browser untuk login dengan Pi Network', 'warning');
         return;
     }
 
@@ -4360,8 +4392,17 @@ window.authenticatePi = async function() {
 };
 
 window.openAdminLoginModal = function() {
-    closeModal('loginOptionsModal');
-    document.getElementById('adminLoginModal')?.classList.add('active');
+    // Fix race condition: tutup dulu, buka setelah delay singkat
+    const opts = document.getElementById('loginOptionsModal');
+    if (opts) opts.classList.remove('active');
+    setTimeout(function() {
+        const adminMod = document.getElementById('adminLoginModal');
+        if (adminMod) adminMod.classList.add('active');
+        const errDiv = document.getElementById('adminLoginError');
+        if (errDiv) errDiv.style.display = 'none';
+        const pwField = document.getElementById('adminPassword');
+        if (pwField) pwField.value = '';
+    }, 120);
 };
 
 window.togglePasswordVisibility = function() {
@@ -5969,7 +6010,7 @@ window.awardSGTTiered = async function(piAmount, description) {
 };
 
 // Update Sosial View UI
-function updateSosialUI() {
+window.updateSosialUI = function updateSosialUI() {
     const tier = getUserTier(sgtBalance);
     const el = (id) => document.getElementById(id);
 
@@ -6082,12 +6123,14 @@ window.calcStakingPreview = function() {
 };
 
 window.submitStaking = async function() {
-    if (!currentUser) { showToast('Silakan login dahulu', 'warning'); return; }
+    if (!currentUser) { showToast('Silakan login dahulu', 'warning'); openModal('loginOptionsModal'); return; }
     const amt = parseInt(document.getElementById('stakingAmount')?.value);
     if (!amt || amt < 100) { showToast('Minimum staking 100 SGT', 'error'); return; }
-    if (amt > sgtBalance) { showToast('Saldo SGT tidak cukup', 'error'); return; }
-    if (!selectedStakingDays) { showToast('Pilih paket staking terlebih dahulu', 'error'); return; }
+    if (amt > sgtBalance) { showToast('Saldo SGT tidak cukup! Saldo kamu: ' + sgtBalance + ' SGT', 'error'); return; }
+    if (!selectedStakingDays || selectedStakingAPY <= 0) { showToast('Pilih paket staking terlebih dahulu', 'error'); return; }
 
+    const btn = document.getElementById('btnSubmitStaking');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>Memproses...'; }
     try {
         const startDate = new Date();
         const endDate = new Date(startDate.getTime() + selectedStakingDays * 86400000);
@@ -6106,7 +6149,7 @@ window.submitStaking = async function() {
 
         const stakingDoc = {
             userId: currentUser.uid,
-            username: currentUser.displayName || currentUser.email,
+            username: currentUser.username || currentUser.displayName || currentUser.email || 'user',
             amount: amt, days: selectedStakingDays, apy: selectedStakingAPY,
             startDate: startDate.toISOString(), endDate: endDate.toISOString(),
             reward, zakat, netReward,
@@ -6129,11 +6172,22 @@ window.submitStaking = async function() {
         await addDanaToPool('baitul_maal', zakat);
 
         showToast(`✅ ${amt} SGT berhasil di-staking! Reward: +${netReward} SGT`, 'success');
-        document.getElementById('stakingAmount').value = '';
-        document.getElementById('stakingPreview').style.display = 'none';
+        const amtEl = document.getElementById('stakingAmount');
+        const prevEl = document.getElementById('stakingPreview');
+        const areaEl = document.getElementById('stakingInputArea');
+        if (amtEl) amtEl.value = '';
+        if (prevEl) prevEl.style.display = 'none';
+        if (areaEl) areaEl.style.display = 'none';
+        // Deselect staking option
+        document.querySelectorAll('.staking-option').forEach(o => o.classList.remove('selected'));
+        selectedStakingDays = 0; selectedStakingAPY = 0;
         loadBaitulStats();
         loadActiveStaking();
     } catch(e) { showToast('Gagal staking: '+e.message, 'error'); }
+    finally {
+        const btn2 = document.getElementById('btnSubmitStaking');
+        if (btn2) { btn2.disabled = false; btn2.innerHTML = '<i class="fas fa-lock" style="margin-right:6px;"></i>Mulai Staking'; }
+    }
 };
 
 async function loadBaitulStats() {
@@ -7057,6 +7111,8 @@ if (typeof window._registerReal === 'function') {
         saveUserAddress: window.saveUserAddress, openExchangeRateModal: window.openExchangeRateModal,
         updateAdminCalculator: window.updateAdminCalculator, closeAndRemoveModal: window.closeAndRemoveModal,
         handleStartShopping: window.handleStartShopping, loginAdmin: window.loginAdmin,
+        adminLogin: window.loginAdmin,
+        loginAdmin: window.loginAdmin,
         continueAsGuest: window.continueAsGuest, filterByCategory: window.filterByCategory,
         filterOrders: window.filterOrders, openProductModal: window.openProductModal,
         saveProduct: window.saveProduct, searchProducts: window.searchProducts,
@@ -7064,6 +7120,7 @@ if (typeof window._registerReal === 'function') {
         updateSGTAdminStats: typeof updateSGTAdminStats !== 'undefined' ? updateSGTAdminStats : function(){},
         // SGT Sosial Module
         switchSosialTab: window.switchSosialTab,
+        updateSosialUI: window.updateSosialUI,
         switchAdminSosialTab: window.switchAdminSosialTab,
         selectStaking: window.selectStaking,
         calcStakingPreview: window.calcStakingPreview,
