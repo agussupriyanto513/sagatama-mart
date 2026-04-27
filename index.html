@@ -1124,7 +1124,7 @@
         }
         .btn-sgt:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(245,158,11,0.45); }
     </style>
-<script>window.__V0_SANDBOX_ID__="sb-2ni48ld883a2"</script><script async src="/v0-runtime-dist.js"></script></head>
+</head>
 <body>
 
 <div id="loader-sso" class="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center transition-opacity duration-500" style="display:none;">
@@ -1564,244 +1564,213 @@
 
         <!-- ADMIN DASHBOARD VIEW -->
         <div id="admin-dashboard-view" class="view">
-            <!-- Header dengan gradient -->
-            <div style="background:linear-gradient(135deg,#1E1B4B 0%,#312E81 50%,#4338CA 100%);margin:-16px -16px 20px -16px;padding:24px 20px 28px;border-radius:0 0 24px 24px;position:relative;overflow:hidden;">
-                <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(255,255,255,0.05);border-radius:50%;"></div>
-                <div style="position:absolute;bottom:-20px;left:-20px;width:80px;height:80px;background:rgba(255,255,255,0.03);border-radius:50%;"></div>
-                <div style="display:flex;align-items:center;justify-content:space-between;position:relative;">
-                    <div>
-                        <p style="color:rgba(255,255,255,0.7);font-size:12px;margin-bottom:4px;">Selamat datang kembali</p>
-                        <h2 style="font-size:22px;font-weight:800;color:white;margin:0;">Dashboard Admin</h2>
-                    </div>
-                    <div style="width:48px;height:48px;background:rgba(255,255,255,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(10px);">
-                        <i class="fas fa-crown" style="color:#FCD34D;font-size:20px;"></i>
-                    </div>
-                </div>
-            </div>
+            <h2 style="font-size:22px; font-weight:800; margin-bottom:16px; color:#1F2937;">
+                <i class="fas fa-chart-line" style="color:#8B5CF6; margin-right:8px;"></i>Dashboard Admin
+            </h2>
             
-            <!-- Overview Stats - Horizontal Scroll -->
-            <div style="margin-bottom:20px;">
-                <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;">
-                    <div style="min-width:140px;background:white;border-radius:16px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
-                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-                            <div style="width:42px;height:42px;background:linear-gradient(135deg,#8B5CF6,#7C3AED);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;">
-                                <i class="fas fa-box"></i>
-                            </div>
+            <!-- Stats Grid -->
+            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; margin-bottom:20px;">
+                <div class="stat-card">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                        <div style="width:40px; height:40px; background:#F5F3FF; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#8B5CF6;">
+                            <i class="fas fa-box"></i>
                         </div>
-                        <p id="statTotalProducts" style="font-size:24px;font-weight:800;color:#1F2937;margin:0;">0</p>
-                        <p style="font-size:11px;color:#6B7280;margin-top:2px;">Total Produk</p>
                     </div>
-                    <div style="min-width:140px;background:white;border-radius:16px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
-                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-                            <div style="width:42px;height:42px;background:linear-gradient(135deg,#F59E0B,#D97706);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;">
-                                <i class="fas fa-clock"></i>
-                            </div>
+                    <p class="stat-value" id="statTotalProducts">0</p>
+                    <p class="stat-label">Total Produk</p>
+                </div>
+                <div class="stat-card">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                        <div style="width:40px; height:40px; background:#FEF3C7; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#D97706;">
+                            <i class="fas fa-clock"></i>
                         </div>
-                        <p id="statPendingOrders" style="font-size:24px;font-weight:800;color:#1F2937;margin:0;">0</p>
-                        <p style="font-size:11px;color:#6B7280;margin-top:2px;">Menunggu</p>
                     </div>
-                    <div style="min-width:140px;background:white;border-radius:16px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
-                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-                            <div style="width:42px;height:42px;background:linear-gradient(135deg,#10B981,#059669);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;">
-                                <i class="fas fa-check-circle"></i>
-                            </div>
+                    <p class="stat-value" id="statPendingOrders">0</p>
+                    <p class="stat-label">Menunggu</p>
+                </div>
+                <div class="stat-card">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                        <div style="width:40px; height:40px; background:#ECFDF5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#059669;">
+                            <i class="fas fa-check-circle"></i>
                         </div>
-                        <p id="statCompletedOrders" style="font-size:24px;font-weight:800;color:#1F2937;margin:0;">0</p>
-                        <p style="font-size:11px;color:#6B7280;margin-top:2px;">Selesai</p>
                     </div>
-                    <div style="min-width:140px;background:white;border-radius:16px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
-                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-                            <div style="width:42px;height:42px;background:linear-gradient(135deg,#3B82F6,#2563EB);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;">
-                                <i class="fab fa-pi"></i>
-                            </div>
+                    <p class="stat-value" id="statCompletedOrders">0</p>
+                    <p class="stat-label">Selesai</p>
+                </div>
+                <div class="stat-card">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                        <div style="width:40px; height:40px; background:#EFF6FF; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#3B82F6;">
+                            <i class="fas fa-coins"></i>
                         </div>
-                        <p id="statTotalRevenue" style="font-size:24px;font-weight:800;color:#1F2937;margin:0;">0</p>
-                        <p style="font-size:11px;color:#6B7280;margin-top:2px;">Pi Terjual</p>
                     </div>
+                    <p class="stat-value" id="statTotalRevenue">0</p>
+                    <p class="stat-label">Pi Terjual</p>
+                </div>
+                <div class="stat-card" style="border-left:3px solid #F59E0B;">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                        <div style="width:40px; height:40px; background:#FEF3C7; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#D97706; font-size:18px;">₴</div>
+                    </div>
+                    <p class="stat-value" id="statTotalSGTIssued" style="color:#D97706;">0</p>
+                    <p class="stat-label">SGT Diterbitkan</p>
+                </div>
+				<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+                <div style="background:linear-gradient(135deg,#8B5CF6,#7C3AED);padding:16px;border-radius:16px;color:white;box-shadow:0 4px 12px rgba(139,92,246,0.3);">
+                    <p style="font-size:11px;opacity:0.85;margin-bottom:6px;font-weight:600;">₴ Total SGT Beredar</p>
+                    <h3 id="admin-total-sgt" style="font-size:20px;font-weight:900;">0 SGT</h3>
+                    <p style="font-size:10px;opacity:0.7;margin-top:4px;">Semua SGT aktif</p>
+                </div>
+                <div style="background:linear-gradient(135deg,#EC4899,#BE185D);padding:16px;border-radius:16px;color:white;box-shadow:0 4px 12px rgba(236,72,153,0.3);">
+                    <p style="font-size:11px;opacity:0.85;margin-bottom:6px;font-weight:600;"><i class="fas fa-users" style="margin-right:4px;"></i>Total Holders</p>
+                    <h3 id="admin-total-holders" style="font-size:20px;font-weight:900;">0 User</h3>
+                    <p style="font-size:10px;opacity:0.7;margin-top:4px;">Pemegang SGT aktif</p>
+                </div>
+                <div style="background:linear-gradient(135deg,#F59E0B,#D97706);padding:16px;border-radius:16px;color:white;box-shadow:0 4px 12px rgba(245,158,11,0.3);">
+                    <p style="font-size:11px;opacity:0.85;margin-bottom:6px;font-weight:600;"><i class="fas fa-paper-plane" style="margin-right:4px;"></i>SGT Didistribusi</p>
+                    <h3 id="admin-total-distributed" style="font-size:20px;font-weight:900;">0 SGT</h3>
+                    <p style="font-size:10px;opacity:0.7;margin-top:4px;">Total terdistribusi manual</p>
+                </div>
+                <div style="background:linear-gradient(135deg,#EF4444,#DC2626);padding:16px;border-radius:16px;color:white;box-shadow:0 4px 12px rgba(239,68,68,0.3);">
+                    <p style="font-size:11px;opacity:0.85;margin-bottom:6px;font-weight:600;"><i class="fas fa-fire" style="margin-right:4px;"></i>SGT Di-Burn</p>
+                    <h3 id="admin-total-burned" style="font-size:20px;font-weight:900;">0 SGT</h3>
+                    <p style="font-size:10px;opacity:0.7;margin-top:4px;">Total dibakar</p>
                 </div>
             </div>
 
-            <!-- SGT Overview Panel -->
-            <div style="background:linear-gradient(135deg,#0F172A 0%,#1E293B 100%);border-radius:20px;padding:20px;margin-bottom:16px;color:white;box-shadow:0 8px 32px rgba(0,0,0,0.15);">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-                    <div style="display:flex;align-items:center;gap:12px;">
-                        <div style="width:44px;height:44px;background:linear-gradient(135deg,#F59E0B,#EAB308);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#1F2937;">S</div>
-                        <div>
-                            <p style="font-weight:800;font-size:15px;margin:0;">SGT Tokenomics</p>
-                            <p style="font-size:11px;opacity:0.6;margin:2px 0 0;">Real-time supply monitor</p>
-                        </div>
+            <!-- Supply Health Panel -->
+            <div style="background:linear-gradient(135deg,#1A0533 0%,#3D1078 60%,#7C3AED 100%);border-radius:20px;padding:20px;margin-bottom:16px;color:white;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                    <div style="width:40px;height:40px;background:rgba(255,255,255,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;">📊</div>
+                    <div>
+                        <p style="font-weight:800;font-size:14px;margin:0;">Supply Health Monitor</p>
+                        <p style="font-size:11px;opacity:0.75;margin:0;">Real-time tokenomics SGT</p>
                     </div>
-                    <button onclick="openModal('sgtAdminModal')" style="background:rgba(245,158,11,0.2);color:#FCD34D;border:1px solid rgba(245,158,11,0.3);padding:8px 14px;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">
-                        <i class="fas fa-paper-plane"></i> Distribusi
-                    </button>
+                    <span id="supplyPct" style="margin-left:auto;background:rgba(255,255,255,0.15);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;">0%</span>
                 </div>
-                
-                <!-- SGT Stats Grid -->
-                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">
-                    <div style="background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.2);border-radius:14px;padding:14px;text-align:center;">
-                        <p id="admin-total-sgt" style="font-size:20px;font-weight:900;color:#A78BFA;margin:0;">0</p>
-                        <p style="font-size:10px;color:rgba(255,255,255,0.6);margin:4px 0 0;">SGT Beredar</p>
+                <!-- Hard cap progress bar -->
+                <div style="margin-bottom:14px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                        <span style="font-size:11px;opacity:0.75;">Circulating / Hard Cap</span>
+                        <span style="font-size:11px;color:#FCD34D;" id="supplyCirculating">0</span>
                     </div>
-                    <div style="background:rgba(236,72,153,0.15);border:1px solid rgba(236,72,153,0.2);border-radius:14px;padding:14px;text-align:center;">
-                        <p id="admin-total-holders" style="font-size:20px;font-weight:900;color:#F472B6;margin:0;">0</p>
-                        <p style="font-size:10px;color:rgba(255,255,255,0.6);margin:4px 0 0;">Total Holders</p>
+                    <div style="height:8px;background:rgba(255,255,255,0.15);border-radius:4px;overflow:hidden;">
+                        <div id="supplyBar" style="height:100%;width:0%;background:linear-gradient(90deg,#6EE7B7,#FCD34D);border-radius:4px;transition:width 0.5s;"></div>
                     </div>
-                    <div style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.2);border-radius:14px;padding:14px;text-align:center;">
-                        <p id="admin-total-distributed" style="font-size:20px;font-weight:900;color:#FBBF24;margin:0;">0</p>
-                        <p style="font-size:10px;color:rgba(255,255,255,0.6);margin:4px 0 0;">Didistribusi</p>
-                    </div>
-                    <div style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.2);border-radius:14px;padding:14px;text-align:center;">
-                        <p id="admin-total-burned" style="font-size:20px;font-weight:900;color:#FCA5A5;margin:0;">0</p>
-                        <p style="font-size:10px;color:rgba(255,255,255,0.6);margin:4px 0 0;">Total Burned</p>
+                    <div style="display:flex;justify-content:space-between;margin-top:4px;">
+                        <span style="font-size:10px;opacity:0.6;">0</span>
+                        <span style="font-size:10px;opacity:0.6;" id="supplyHardCap">100,000,000</span>
                     </div>
                 </div>
-                
-                <!-- Supply Progress -->
-                <div style="background:rgba(255,255,255,0.05);border-radius:12px;padding:14px;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                        <span style="font-size:12px;color:rgba(255,255,255,0.7);">Supply Progress</span>
-                        <span id="supplyPct" style="background:linear-gradient(135deg,#10B981,#059669);padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;">0%</span>
+                <!-- Stats row -->
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+                    <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px;text-align:center;">
+                        <p id="supplyBurned" style="font-size:15px;font-weight:800;color:#FCA5A5;margin:0;">0</p>
+                        <p style="font-size:9px;opacity:0.7;margin:2px 0 0;">Total Burned</p>
                     </div>
-                    <div style="height:10px;background:rgba(255,255,255,0.1);border-radius:5px;overflow:hidden;margin-bottom:8px;">
-                        <div id="supplyBar" style="height:100%;width:0%;background:linear-gradient(90deg,#10B981,#34D399,#6EE7B7);border-radius:5px;transition:width 0.5s;"></div>
+                    <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px;text-align:center;">
+                        <p id="supplyFeePool" style="font-size:15px;font-weight:800;color:#FCD34D;margin:0;">0</p>
+                        <p style="font-size:9px;opacity:0.7;margin:2px 0 0;">Fee Pool (APY)</p>
                     </div>
-                    <div style="display:flex;justify-content:space-between;">
-                        <span style="font-size:10px;color:rgba(255,255,255,0.5);">Circulating: <span id="supplyCirculating" style="color:#6EE7B7;">0</span></span>
-                        <span style="font-size:10px;color:rgba(255,255,255,0.5);">Hard Cap: <span id="supplyHardCap" style="color:#FCD34D;">100M</span></span>
-                    </div>
-                </div>
-                
-                <!-- Mini Stats -->
-                <div style="display:flex;justify-content:space-around;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.1);">
-                    <div style="text-align:center;">
-                        <p id="supplyBurned" style="font-size:14px;font-weight:800;color:#FCA5A5;margin:0;">0</p>
-                        <p style="font-size:9px;color:rgba(255,255,255,0.5);margin:2px 0 0;">Burned</p>
-                    </div>
-                    <div style="width:1px;background:rgba(255,255,255,0.1);"></div>
-                    <div style="text-align:center;">
-                        <p id="supplyFeePool" style="font-size:14px;font-weight:800;color:#FCD34D;margin:0;">0</p>
-                        <p style="font-size:9px;color:rgba(255,255,255,0.5);margin:2px 0 0;">Fee Pool</p>
-                    </div>
-                    <div style="width:1px;background:rgba(255,255,255,0.1);"></div>
-                    <div style="text-align:center;">
-                        <p style="font-size:14px;font-weight:800;color:#6EE7B7;margin:0;">2%</p>
-                        <p style="font-size:9px;color:rgba(255,255,255,0.5);margin:2px 0 0;">Burn Rate</p>
-                    </div>
-                    <div style="width:1px;background:rgba(255,255,255,0.1);"></div>
-                    <div style="text-align:center;">
-                        <p id="statTotalSGTIssued" style="font-size:14px;font-weight:800;color:#A78BFA;margin:0;">0</p>
-                        <p style="font-size:9px;color:rgba(255,255,255,0.5);margin:2px 0 0;">Issued</p>
+                    <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px;text-align:center;">
+                        <p style="font-size:15px;font-weight:800;color:#6EE7B7;margin:0;">2%</p>
+                        <p style="font-size:9px;opacity:0.7;margin:2px 0 0;">Auto-burn rate</p>
                     </div>
                 </div>
             </div>
 
             <!-- Riwayat Distribusi SGT -->
-            <div style="background:white;border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <div style="width:36px;height:36px;background:linear-gradient(135deg,#F59E0B,#D97706);border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-size:14px;">
-                            <i class="fas fa-history"></i>
-                        </div>
-                        <div>
-                            <p style="font-weight:700;color:#1F2937;font-size:14px;margin:0;">Riwayat Distribusi</p>
-                            <p style="font-size:10px;color:#6B7280;margin:2px 0 0;">10 transaksi terakhir</p>
-                        </div>
-                    </div>
-                    <button onclick="switchView('admin-analytics')" style="background:#F3F4F6;color:#6B7280;border:none;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;">
-                        Lihat Semua <i class="fas fa-chevron-right" style="margin-left:4px;font-size:10px;"></i>
-                    </button>
+            <div class="card" style="margin-bottom:0;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h4 style="font-weight:800;color:#1F2937;font-size:14px;"><i class="fas fa-history" style="color:#F59E0B;margin-right:8px;"></i>Riwayat Distribusi SGT</h4>
+                    <button onclick="openModal('sgtAdminModal')" style="background:#FEF3C7;color:#D97706;border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Kelola</button>
                 </div>
-                <div style="max-height:200px;overflow-y:auto;">
+                <div style="overflow-x:auto;">
                     <table style="width:100%;font-size:12px;border-collapse:collapse;">
                         <thead>
                             <tr style="border-bottom:2px solid #F3F4F6;">
-                                <th style="padding:10px 8px;text-align:left;color:#9CA3AF;font-weight:600;font-size:10px;text-transform:uppercase;">Waktu</th>
-                                <th style="padding:10px 8px;text-align:left;color:#9CA3AF;font-weight:600;font-size:10px;text-transform:uppercase;">User</th>
-                                <th style="padding:10px 8px;text-align:right;color:#9CA3AF;font-weight:600;font-size:10px;text-transform:uppercase;">Jumlah</th>
+                                <th style="padding:8px 4px;text-align:left;color:#6B7280;font-weight:700;">Waktu</th>
+                                <th style="padding:8px 4px;text-align:left;color:#6B7280;font-weight:700;">Username</th>
+                                <th style="padding:8px 4px;text-align:right;color:#6B7280;font-weight:700;">Jumlah</th>
                             </tr>
                         </thead>
                         <tbody id="sgt-logs-body">
-                            <tr><td colspan="3" style="text-align:center;padding:24px;color:#9CA3AF;font-style:italic;font-size:12px;">Belum ada riwayat distribusi</td></tr>
+                            <tr><td colspan="3" style="text-align:center;padding:16px;color:#9CA3AF;font-style:italic;">Belum ada riwayat distribusi</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
-
-            <!-- Quick Actions Menu -->
-            <div style="margin-bottom:16px;">
-                <p style="font-weight:700;color:#1F2937;font-size:14px;margin-bottom:12px;">Menu Cepat</p>
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
-                    <div onclick="switchView('admin-products')" style="cursor:pointer;background:white;border-radius:16px;padding:16px 12px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;transition:transform 0.2s;">
-                        <div style="width:48px;height:48px;background:linear-gradient(135deg,#8B5CF6,#7C3AED);border-radius:14px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;margin:0 auto 10px;">
-                            <i class="fas fa-boxes"></i>
-                        </div>
-                        <p style="font-weight:700;color:#1F2937;font-size:12px;margin:0;">Produk</p>
-                    </div>
-                    <div onclick="switchView('admin-orders')" style="cursor:pointer;background:white;border-radius:16px;padding:16px 12px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;position:relative;">
-                        <span id="adminOrderBadgeQuick" style="position:absolute;top:8px;right:8px;background:#EF4444;color:white;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;display:none;">0</span>
-                        <div style="width:48px;height:48px;background:linear-gradient(135deg,#F59E0B,#D97706);border-radius:14px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;margin:0 auto 10px;">
-                            <i class="fas fa-clipboard-check"></i>
-                        </div>
-                        <p style="font-weight:700;color:#1F2937;font-size:12px;margin:0;">Pesanan</p>
-                    </div>
-                    <div onclick="switchView('admin-analytics')" style="cursor:pointer;background:white;border-radius:16px;padding:16px 12px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
-                        <div style="width:48px;height:48px;background:linear-gradient(135deg,#10B981,#059669);border-radius:14px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;margin:0 auto 10px;">
-                            <i class="fas fa-chart-pie"></i>
-                        </div>
-                        <p style="font-weight:700;color:#1F2937;font-size:12px;margin:0;">Analitik</p>
-                    </div>
-                </div>
             </div>
 
-            <!-- Admin Tools Section -->
+            <!-- Quick Actions -->
             <div class="admin-section">
-                <p style="font-weight:700;color:#1F2937;font-size:14px;margin-bottom:12px;">Pengaturan Lanjutan</p>
-                <div style="display:flex;flex-direction:column;gap:10px;">
-                    <div onclick="switchView('admin-products')" style="cursor:pointer;background:white;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;">
-                        <div style="width:44px;height:44px;background:#F5F3FF;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#8B5CF6;font-size:18px;">
+                <h3 style="font-weight:700; margin-bottom:12px; color:#1F2937;">Menu Admin</h3>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <div onclick="switchView('admin-products')" class="card" style="cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:12px;">
+                        <div style="width:48px; height:48px; background:#F5F3FF; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#8B5CF6; font-size:20px;">
                             <i class="fas fa-boxes"></i>
                         </div>
                         <div style="flex:1;">
-                            <p style="font-weight:600;color:#1F2937;font-size:13px;margin:0;">Kelola Produk</p>
-                            <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Tambah, edit, hapus produk</p>
+                            <p style="font-weight:700; color:#1F2937;">Kelola Produk</p>
+                            <p style="font-size:12px; color:#6B7280;">Tambah, edit, hapus produk</p>
                         </div>
-                        <i class="fas fa-chevron-right" style="color:#D1D5DB;font-size:12px;"></i>
+                        <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
                     </div>
                     
-                    <div onclick="switchView('admin-orders')" style="cursor:pointer;background:white;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;position:relative;">
-                        <span id="adminOrderBadge" style="position:absolute;top:8px;right:8px;background:#EF4444;color:white;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;display:none;">0</span>
-                        <div style="width:44px;height:44px;background:#FEF3C7;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#D97706;font-size:18px;">
+                    <div onclick="switchView('admin-orders')" class="card" style="cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:12px;">
+                        <div style="width:48px; height:48px; background:#FEF3C7; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#D97706; font-size:20px;">
                             <i class="fas fa-clipboard-check"></i>
                         </div>
                         <div style="flex:1;">
-                            <p style="font-weight:600;color:#1F2937;font-size:13px;margin:0;">Kelola Pesanan</p>
-                            <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Verifikasi & proses pesanan</p>
+                            <p style="font-weight:700; color:#1F2937;">Kelola Pesanan</p>
+                            <p style="font-size:12px; color:#6B7280;">Verifikasi & proses pesanan</p>
                         </div>
-                        <i class="fas fa-chevron-right" style="color:#D1D5DB;font-size:12px;"></i>
-                    </div>
-
-                    <div onclick="openExchangeRateModal()" style="cursor:pointer;background:white;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;">
-                        <div style="width:44px;height:44px;background:#EFF6FF;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#3B82F6;font-size:18px;">
-                            <i class="fas fa-calculator"></i>
-                        </div>
-                        <div style="flex:1;">
-                            <p style="font-weight:600;color:#1F2937;font-size:13px;margin:0;">Kalkulator Pi</p>
-                            <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Konversi Pi ke IDR</p>
-                        </div>
-                        <i class="fas fa-chevron-right" style="color:#D1D5DB;font-size:12px;"></i>
-                    </div>
-
-                    <div onclick="switchView('admin-sgt-sosial')" style="cursor:pointer;background:white;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;">
-                        <div style="width:44px;height:44px;background:#EDE9FE;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#8B5CF6;font-size:18px;">
-                            <i class="fas fa-hand-holding-heart"></i>
-                        </div>
-                        <div style="flex:1;">
-                            <p style="font-weight:600;color:#1F2937;font-size:13px;margin:0;">SGT Sosial</p>
-                            <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Beasiswa, bansos & staking</p>
-                        </div>
-                        <span id="adminSosialBadge" style="display:none;background:#EF4444;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">0</span>
+                        <span id="adminOrderBadge" style="background:#EF4444; color:white; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; display:none;">0</span>
                         <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
                     </div>
+
+                    <div onclick="switchView('admin-analytics')" class="card" style="cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:12px;">
+                        <div style="width:48px; height:48px; background:#ECFDF5; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#059669; font-size:20px;">
+                            <i class="fas fa-chart-pie"></i>
+                        </div>
+                        <div style="flex:1;">
+                            <p style="font-weight:700; color:#1F2937;">Analitik</p>
+                            <p style="font-size:12px; color:#6B7280;">Statistik penjualan</p>
+                        </div>
+                        <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
+                    </div>
+					
+					            <!-- Admin Tools -->
+            <div class="admin-section">
+                <h3 style="font-weight:700; margin-bottom:12px; color:#1F2937;">Tools Admin</h3>
+                <div onclick="openExchangeRateModal()" class="card" style="cursor:pointer; margin-bottom:8px; display:flex; align-items:center; gap:12px;">
+                    <div style="width:48px; height:48px; background:#F5F3FF; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#8B5CF6; font-size:20px;">
+                        <i class="fas fa-calculator"></i>
+                    </div>
+                    <div style="flex:1;">
+                        <p style="font-weight:700; color:#1F2937;">Kalkulator Pi</p>
+                        <p style="font-size:12px; color:#6B7280;">Hitung konversi Pi ke IDR (referensi)</p>
+                    </div>
+                    <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
+                </div>
+                <div onclick="openModal('sgtAdminModal')" class="card" style="cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:12px; border-left:3px solid #F59E0B;">
+                    <div style="width:48px; height:48px; background:#FEF3C7; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#D97706; font-size:22px; font-weight:900;">₴</div>
+                    <div style="flex:1;">
+                        <p style="font-weight:700; color:#1F2937;">Kelola SGT Token</p>
+                        <p style="font-size:12px; color:#6B7280;">Rate, distribusi & burn token</p>
+                    </div>
+                    <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
+                </div>
+                <div onclick="switchView('admin-sgt-sosial')" class="card" style="cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:12px; border-left:3px solid #8B5CF6; margin-top:8px;">
+                    <div style="width:48px; height:48px; background:#EDE9FE; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#8B5CF6; font-size:20px;">
+                        <i class="fas fa-hand-holding-heart"></i>
+                    </div>
+                    <div style="flex:1;">
+                        <p style="font-weight:700; color:#1F2937;">SGT Sosial</p>
+                        <p style="font-size:12px; color:#6B7280;">Beasiswa, bansos & staking</p>
+                    </div>
+                    <span id="adminSosialBadge" style="display:none;background:#EF4444;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">0</span>
+                    <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
+                </div>
+            </div>
                 </div>
             </div>
 
@@ -2495,86 +2464,23 @@
 
         <!-- ADMIN ANALYTICS VIEW -->
         <div id="admin-analytics-view" class="view">
-            <!-- Header -->
-            <div style="background:linear-gradient(135deg,#059669 0%,#10B981 50%,#34D399 100%);margin:-16px -16px 20px -16px;padding:20px;border-radius:0 0 24px 24px;position:relative;overflow:hidden;">
-                <div style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;background:rgba(255,255,255,0.05);border-radius:50%;"></div>
-                <div style="display:flex;align-items:center;gap:12px;position:relative;">
-                    <button onclick="switchView('admin-dashboard')" style="background:rgba(255,255,255,0.2);border:none;width:40px;height:40px;border-radius:12px;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;">
-                        <i class="fas fa-arrow-left"></i>
-                    </button>
-                    <div>
-                        <p style="color:rgba(255,255,255,0.8);font-size:11px;margin:0;">Admin Panel</p>
-                        <h2 style="font-size:20px;font-weight:800;color:white;margin:0;">Analitik Penjualan</h2>
-                    </div>
-                    <div style="margin-left:auto;width:44px;height:44px;background:rgba(255,255,255,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;">
-                        <i class="fas fa-chart-pie" style="color:white;font-size:18px;"></i>
-                    </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h2 style="font-size:22px; font-weight:800; color:#1F2937;">Analitik</h2>
+                <button onclick="switchView('admin-dashboard')" style="background:#F3F4F6; border:none; width:40px; height:40px; border-radius:10px; color:#6B7280; cursor:pointer;">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+            </div>
+
+            <div class="card" style="margin-bottom:16px;">
+                <h3 style="font-weight:700; margin-bottom:16px; color:#1F2937;">Performa Penjualan</h3>
+                <div style="height:200px; background:#F9FAFB; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#9CA3AF;">
+                    <i class="fas fa-chart-area" style="font-size:48px; margin-right:12px;"></i>
+                    <span>Grafik penjualan akan tampil di sini</span>
                 </div>
             </div>
 
-            <!-- Sales Chart Card -->
-            <div style="background:white;border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <div style="width:36px;height:36px;background:linear-gradient(135deg,#8B5CF6,#7C3AED);border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-size:14px;">
-                            <i class="fas fa-chart-area"></i>
-                        </div>
-                        <div>
-                            <p style="font-weight:700;color:#1F2937;font-size:14px;margin:0;">Performa 7 Hari</p>
-                            <p style="font-size:10px;color:#6B7280;margin:2px 0 0;">Order & Revenue</p>
-                        </div>
-                    </div>
-                    <span id="chartPeriod" style="background:#F3F4F6;color:#6B7280;padding:4px 10px;border-radius:6px;font-size:10px;font-weight:600;">7 Hari Terakhir</span>
-                </div>
-                <div style="height:200px;background:#FAFAFA;border-radius:12px;padding:12px;position:relative;">
-                    <canvas id="salesChart"></canvas>
-                    <div id="salesChartLoading" style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#9CA3AF;background:#FAFAFA;border-radius:12px;">
-                        <i class="fas fa-spinner fa-spin" style="font-size:28px;margin-bottom:10px;color:#8B5CF6;"></i>
-                        <span style="font-size:12px;">Memuat grafik...</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SGT Supply Stats Card for Admin -->
-            <div style="background:linear-gradient(135deg,#0F172A 0%,#1E293B 100%);border-radius:16px;padding:16px;margin-bottom:16px;color:white;box-shadow:0 4px 20px rgba(0,0,0,0.15);">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-                    <div style="width:36px;height:36px;background:linear-gradient(135deg,#F59E0B,#EAB308);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#1F2937;">S</div>
-                    <div>
-                        <p style="font-weight:700;font-size:14px;margin:0;">SGT Supply Overview</p>
-                        <p style="font-size:10px;opacity:0.6;margin:2px 0 0;">Statistik token real-time</p>
-                    </div>
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">
-                    <div style="background:rgba(110,231,183,0.15);border:1px solid rgba(110,231,183,0.2);border-radius:12px;padding:12px;text-align:center;">
-                        <p id="analyticsCirculating" style="font-size:18px;font-weight:800;color:#6EE7B7;margin:0;">0</p>
-                        <p style="font-size:10px;opacity:0.6;margin:4px 0 0;">Circulating</p>
-                    </div>
-                    <div style="background:rgba(252,211,77,0.15);border:1px solid rgba(252,211,77,0.2);border-radius:12px;padding:12px;text-align:center;">
-                        <p id="analyticsHardCap" style="font-size:18px;font-weight:800;color:#FCD34D;margin:0;">100M</p>
-                        <p style="font-size:10px;opacity:0.6;margin:4px 0 0;">Hard Cap</p>
-                    </div>
-                    <div style="background:rgba(252,165,165,0.15);border:1px solid rgba(252,165,165,0.2);border-radius:12px;padding:12px;text-align:center;">
-                        <p id="analyticsBurned" style="font-size:18px;font-weight:800;color:#FCA5A5;margin:0;">0</p>
-                        <p style="font-size:10px;opacity:0.6;margin:4px 0 0;">Burned</p>
-                    </div>
-                    <div style="background:rgba(147,197,253,0.15);border:1px solid rgba(147,197,253,0.2);border-radius:12px;padding:12px;text-align:center;">
-                        <p id="analyticsSupplyPct" style="font-size:18px;font-weight:800;color:#93C5FD;margin:0;">0%</p>
-                        <p style="font-size:10px;opacity:0.6;margin:4px 0 0;">Used</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Top Products Card -->
-            <div style="background:white;border-radius:16px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-                    <div style="width:36px;height:36px;background:linear-gradient(135deg,#F59E0B,#D97706);border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-size:14px;">
-                        <i class="fas fa-trophy"></i>
-                    </div>
-                    <div>
-                        <p style="font-weight:700;color:#1F2937;font-size:14px;margin:0;">Produk Terlaris</p>
-                        <p style="font-size:10px;color:#6B7280;margin:2px 0 0;">Top 5 penjualan</p>
-                    </div>
-                </div>
+            <div class="card">
+                <h3 style="font-weight:700; margin-bottom:16px; color:#1F2937;">Produk Terlaris</h3>
                 <div id="topProductsList"></div>
             </div>
         </div>
@@ -3071,15 +2977,6 @@
                 <p style="font-size:10px;color:#065F46;margin:6px 0 0;">Rate saat ini: <strong id="currentMintRateDisplay">100</strong> SGT/Pi · Ubah dengan hati-hati</p>
             </div>
 
-            <!-- DEBUG: Lihat Semua User & Balance -->
-            <div style="background:#F0F9FF; border-radius:14px; padding:16px; margin-bottom:16px; border:1px solid #BAE6FD;">
-                <h4 style="font-weight:800; margin-bottom:12px; font-size:14px; color:#0369A1;">🔍 Debug: Lihat Semua User</h4>
-                <button onclick="debugListAllUsers()" style="background:#0284C7;color:white;border:none;padding:12px;border-radius:10px;width:100%;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">
-                    <i class="fas fa-users"></i> Tampilkan Semua User & Balance
-                </button>
-                <div id="debugUsersList" style="margin-top:12px;max-height:200px;overflow-y:auto;font-size:12px;display:none;"></div>
-            </div>
-
             <div style="background:#FEF2F2; border-radius:14px; padding:16px; margin-bottom:16px; border:1px solid #FECACA;">
                 <h4 style="font-weight:800; margin-bottom:12px; font-size:14px; color:#B91C1C;">🔥 Burn Token</h4>
                 <div class="form-group">
@@ -3307,27 +3204,14 @@ function saveSGTData() {
     // SECURITY: Admin tidak boleh simpan sgtBalance ke Firestore
     // (mencegah overwrite saldo user lain saat admin distribusi)
     const isAdminSession = currentUser.role === 'admin' || currentUser.username === 'sagatama_admin';
-    
-    // PERBAIKAN: Skip save ke Firestore jika listener aktif
-    // Karena listener sudah handle sync dari Firestore, kita tidak perlu write balik
-    // Ini mencegah race condition dimana auto-save bisa overwrite data baru dari admin
-    if (sgtListenerActive && !isAdminSession) {
-        // Hanya update localStorage sebagai cache, JANGAN write ke Firestore
-        localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
-        localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
-        localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
-        logDebug("SGT save: listener aktif, skip Firestore write");
-        return;
-    }
-    
     try {
         // localStorage selalu OK (per-device, per-uid)
         localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
         localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
         localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
 
-        // Firestore HANYA untuk user biasa (bukan admin session) DAN listener tidak aktif
-        if (db && currentUser.uid && !isAdminSession && !sgtListenerActive) {
+        // Firestore HANYA untuk user biasa (bukan admin session)
+        if (db && currentUser.uid && !isAdminSession) {
             setDoc(doc(db, 'users', currentUser.uid), {
                 sgtBalance: sgtBalance,
                 sgtTransactions: sgtTransactions.slice(0, 50),
@@ -3340,55 +3224,44 @@ function saveSGTData() {
 }
 
 async function loadSGTData() {
-    if (!currentUser) {
-        console.log('[v0] loadSGTData: No currentUser');
+    if (!currentUser) return;
+    // Admin tidak perlu load SGT — langsung return
+    if (currentUser.role === 'admin' || currentUser.username === 'sagatama_admin') {
+        sgtBalance = 0;
+        sgtTransactions = [];
+        logDebug('loadSGTData: skipped for admin session');
         return;
     }
-    console.log('[v0] loadSGTData: Loading for user', currentUser.uid, currentUser.username);
     try {
         // Coba load dari Firestore dulu (lebih akurat)
         if (db && currentUser.uid) {
             try {
-                console.log('[v0] loadSGTData: Fetching from Firestore...');
                 const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-                console.log('[v0] loadSGTData: Doc exists?', userDoc.exists());
                 if (userDoc.exists()) {
                     const data = userDoc.data();
-                    console.log('[v0] loadSGTData: Raw data', JSON.stringify(data));
-                    // Selalu ambil data dari Firestore, bahkan jika sgtBalance undefined (set ke 0)
-                    sgtBalance = data.sgtBalance || 0;
-                    sgtTransactions = data.sgtTransactions || [];
-                    console.log('[v0] loadSGTData: Balance=', sgtBalance, 'Transactions=', sgtTransactions.length);
-                    
-                    // Sinkronkan ke localStorage untuk cache saat refresh
-                    localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
-                    localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
-                    
-                    logDebug("SGT loaded from Firestore: " + sgtBalance);
-                    updateSGTUI();
-                    return;
-                } else {
-                    console.log('[v0] loadSGTData: User doc does not exist in Firestore');
+                    if (data.sgtBalance !== undefined) {
+                        sgtBalance = data.sgtBalance || 0;
+                        sgtTransactions = data.sgtTransactions || [];
+                        logDebug("SGT loaded from Firestore: " + sgtBalance);
+                        updateSGTUI();
+                        return;
+                    }
                 }
             } catch (fsErr) {
-                console.log('[v0] loadSGTData: Firestore error', fsErr.message);
                 logDebug("Firestore SGT load failed, fallback to localStorage: " + fsErr.message);
             }
         }
 
         // Fallback ke localStorage
-        console.log('[v0] loadSGTData: Falling back to localStorage');
         const bal = localStorage.getItem('sgt_balance_' + currentUser.uid);
         const tx = localStorage.getItem('sgt_transactions_' + currentUser.uid);
         const rate = localStorage.getItem('sgt_rate');
         sgtBalance = bal ? parseInt(bal) : 0;
         sgtTransactions = tx ? JSON.parse(tx) : [];
         if (rate) sgtRatePerPi = parseInt(rate);
-        console.log('[v0] loadSGTData: localStorage Balance=', sgtBalance);
         logDebug("SGT loaded from localStorage: " + sgtBalance);
         updateSGTUI();
     } catch (e) {
-        console.log('[v0] loadSGTData: Error', e.message);
         logDebug("SGT load error: " + e.message);
     }
 }
@@ -3699,11 +3572,8 @@ window.saveSGTSettings = function() {
 window._real_ = window._real_ || {};
 
 window._real_.distributeSGTManual = async function() {
-    console.log('[v0] distributeSGTManual called');
     const targetUser = document.getElementById('sgtDistUser')?.value.trim();
     const amount = parseInt(document.getElementById('sgtDistAmount')?.value);
-
-    console.log('[v0] Target user:', targetUser, 'Amount:', amount);
 
     if (!targetUser) { showToast('Masukkan username penerima', 'error'); return; }
     if (!amount || amount <= 0) { showToast('Jumlah SGT tidak valid', 'error'); return; }
@@ -3712,20 +3582,33 @@ window._real_.distributeSGTManual = async function() {
 
     try {
         if (!db) throw new Error('Database tidak siap');
-        console.log('[v0] Database ready, searching for user...');
 
-        const usersSnap = await getDocs(
+        // Cari user — coba exact match dulu, lalu lowercase
+        let usersSnap = await getDocs(
             query(collection(db, 'users'), where('username', '==', targetUser))
         );
+        if (usersSnap.empty) {
+            usersSnap = await getDocs(
+                query(collection(db, 'users'), where('username', '==', targetUser.toLowerCase()))
+            );
+        }
 
         if (usersSnap.empty) {
-            showToast(`User @${targetUser} tidak ditemukan di database`, 'error');
+            showToast(`User @${targetUser} tidak ditemukan. Pastikan user sudah pernah login.`, 'error');
             return;
         }
 
-        const userDocRef = doc(db, 'users', usersSnap.docs[0].id);
-        const userData = usersSnap.docs[0].data();
-        console.log('[v0] Found user:', usersSnap.docs[0].id, 'Current balance:', userData.sgtBalance);
+        const targetDoc = usersSnap.docs[0];
+        // GUARD: jangan kirim ke dokumen admin sendiri
+        if (targetDoc.id === 'sagatama_admin_fixed' || targetDoc.data().role === 'admin') {
+            showToast('Tidak bisa kirim SGT ke akun admin', 'error');
+            return;
+        }
+
+        const userDocRef = doc(db, 'users', targetDoc.id);
+        // Fresh read untuk dapat saldo terkini (bukan dari snapshot cache)
+        const freshSnap = await getDoc(userDocRef);
+        const userData = freshSnap.exists() ? freshSnap.data() : targetDoc.data();
 
         const currentBal = userData.sgtBalance || 0;
         const currentTxs = Array.isArray(userData.sgtTransactions) ? userData.sgtTransactions : [];
@@ -3738,30 +3621,11 @@ window._real_.distributeSGTManual = async function() {
             userId: usersSnap.docs[0].id
         };
 
-        // Update circulating supply SEBELUM credit ke user
-        console.log('[v0] Calling mintSGT with amount:', amount);
-        const mintResult = await mintSGT(amount, usersSnap.docs[0].id);
-        console.log('[v0] mintSGT result:', mintResult);
-        if (!mintResult) {
-            showToast('Gagal: Hard cap tercapai atau error minting', 'error');
-            return;
-        }
-
-        console.log('[v0] Updating user balance to:', currentBal + amount);
         await setDoc(userDocRef, {
             sgtBalance: currentBal + amount,
             sgtTransactions: [newTx, ...currentTxs].slice(0, 50),
             sgtUpdatedAt: serverTimestamp()
         }, { merge: true });
-        console.log('[v0] User balance updated successfully');
-        
-        // PERBAIKAN: Verifikasi data tersimpan dengan benar
-        const verifySnap = await getDoc(userDocRef);
-        if (verifySnap.exists()) {
-            const verifyData = verifySnap.data();
-            console.log('[v0] VERIFIKASI - Balance di Firestore:', verifyData.sgtBalance);
-            logDebug('Verifikasi: Balance ' + targetUser + ' = ' + verifyData.sgtBalance + ' SGT');
-        }
 
         await addDoc(collection(db, 'sgt_logs'), {
             adminId: currentUser?.uid || 'admin_manual',
@@ -3774,17 +3638,14 @@ window._real_.distributeSGTManual = async function() {
             timestamp: serverTimestamp()
         });
 
-        showToast(`${amount} SGT berhasil dikirim ke @${targetUser}`, 'success');
+        showToast(`✅ ${amount} SGT berhasil dikirim ke @${targetUser}`, 'success');
         logDebug('Distribusi sukses: ' + amount + ' SGT → ' + targetUser + ' (uid: ' + usersSnap.docs[0].id + ')');
 
         document.getElementById('sgtDistUser').value = '';
         document.getElementById('sgtDistAmount').value = '';
 
-        // Refresh stats dan supply - langsung setelah data tersimpan
-        console.log('[v0] Refreshing admin stats after distribution...');
-        await updateSGTAdminStats();
-        await loadSupplyStats();
-        console.log('[v0] Admin stats refreshed');
+        // Delay stats refresh agar Firestore selesai commit dulu
+        setTimeout(() => updateSGTAdminStats(), 2000);
 
     } catch (error) {
         logDebug("Distribusi error: " + error.message);
@@ -3794,68 +3655,6 @@ window._real_.distributeSGTManual = async function() {
 
 // 🔥 INI WAJIB (JANGAN SAMPAI GAK ADA)
 window.distributeSGTManual = window._real_.distributeSGTManual;
-
-// DEBUG: Lihat semua user dan balance mereka
-window.debugListAllUsers = async function() {
-    const container = document.getElementById('debugUsersList');
-    if (!container) return;
-    
-    container.style.display = 'block';
-    container.innerHTML = '<p style="color:#0369A1;">Loading...</p>';
-    
-    try {
-        if (!db) {
-            container.innerHTML = '<p style="color:#DC2626;">Database tidak tersedia</p>';
-            return;
-        }
-        
-        const usersSnap = await getDocs(collection(db, 'users'));
-        
-        if (usersSnap.empty) {
-            container.innerHTML = '<p style="color:#DC2626;">Tidak ada user di database</p>';
-            return;
-        }
-        
-        let html = '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
-        html += '<tr style="background:#E0F2FE;"><th style="padding:6px;text-align:left;">Username</th><th style="padding:6px;text-align:right;">Balance</th><th style="padding:6px;text-align:right;">Tx</th></tr>';
-        
-        let totalUsers = 0;
-        let usersWithBalance = 0;
-        let totalBalance = 0;
-        
-        usersSnap.forEach(docSnap => {
-            const data = docSnap.data();
-            const username = data.username || docSnap.id.substring(0,8);
-            const balance = data.sgtBalance || 0;
-            const txCount = (data.sgtTransactions || []).length;
-            
-            totalUsers++;
-            if (balance > 0) {
-                usersWithBalance++;
-                totalBalance += balance;
-            }
-            
-            const rowColor = balance > 0 ? '#ECFDF5' : '#FEF2F2';
-            html += `<tr style="background:${rowColor};border-bottom:1px solid #E5E7EB;">
-                <td style="padding:6px;">@${username}</td>
-                <td style="padding:6px;text-align:right;font-weight:600;color:${balance > 0 ? '#059669' : '#DC2626'};">${balance.toLocaleString()}</td>
-                <td style="padding:6px;text-align:right;color:#6B7280;">${txCount}</td>
-            </tr>`;
-        });
-        
-        html += '</table>';
-        html += `<div style="margin-top:8px;padding:8px;background:#FEF3C7;border-radius:8px;font-size:11px;">
-            <strong>Summary:</strong> ${totalUsers} total users, ${usersWithBalance} dengan balance, Total: ${totalBalance.toLocaleString()} SGT
-        </div>`;
-        
-        container.innerHTML = html;
-        logDebug('Debug: ' + totalUsers + ' users, ' + usersWithBalance + ' dengan balance');
-        
-    } catch (error) {
-        container.innerHTML = `<p style="color:#DC2626;">Error: ${error.message}</p>`;
-        logDebug('Debug error: ' + error.message);
-    }
-};
 
 window.burnSGT = async function() {
     const amount = parseInt(document.getElementById('sgtBurnAmount')?.value);
@@ -3898,28 +3697,9 @@ window.loadSupplyStats = async function loadSupplyStats() {
             const d = snap.data();
             sgtCirculatingSupply = d.circulating || 0;
             sgtTotalBurned = d.totalBurned || 0;
-        } else {
-            // Initialize supply document if it doesn't exist
-            await setDoc(doc(db, 'sgt_config', 'supply'), {
-                circulating: 0,
-                totalBurned: 0,
-                hardCap: SGT_HARD_CAP,
-                mintRate: sgtRatePerPi,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-            });
-            logDebug('Initialized sgt_config/supply document');
         }
         const feeSnap = await getDoc(doc(db, 'sgt_config', 'fee_pool'));
-        if (feeSnap.exists()) {
-            sgtFeePool = feeSnap.data().total || 0;
-        } else {
-            // Initialize fee_pool document if it doesn't exist
-            await setDoc(doc(db, 'sgt_config', 'fee_pool'), {
-                total: 0,
-                createdAt: serverTimestamp()
-            });
-        }
+        if (feeSnap.exists()) sgtFeePool = feeSnap.data().total || 0;
 
         // Update supply UI elements
         const upd = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
@@ -4004,7 +3784,6 @@ window._real_.loadSGTLogs = async function() {
 };
 
 let unsubscribeSGT = null;
-let sgtListenerActive = false; // PERBAIKAN: Flag untuk mencegah race condition
 
 function listenUserSGTBalance(userId) {
     // Skip listener untuk admin session — admin punya sgtBalance sendiri di UI
@@ -4022,61 +3801,22 @@ function listenUserSGTBalance(userId) {
         unsubscribeSGT();
     }
 
-    console.log('[v0] listenUserSGTBalance: Starting listener for userId:', userId);
-    
-    // PERBAIKAN: Set flag aktif
-    sgtListenerActive = true;
-    
     unsubscribeSGT = onSnapshot(
         doc(db, 'users', userId),
         (docSnap) => {
-            console.log('[v0] SGT Listener: Snapshot received, exists?', docSnap.exists());
             if (!docSnap.exists()) {
-                console.warn('[v0] SGT Listener: User doc tidak ditemukan untuk userId:', userId);
+                console.warn('User doc tidak ditemukan');
                 return;
             }
             const data = docSnap.data();
             const balance = data.sgtBalance || 0;
-            console.log('[v0] SGT Listener: Raw data:', JSON.stringify({sgtBalance: data.sgtBalance, txCount: (data.sgtTransactions||[]).length}));
-            
             sgtBalance = balance;
-            sgtTransactions = data.sgtTransactions || [];
-            
-            // Sinkronkan ke localStorage untuk cache saat refresh
-            if (currentUser && currentUser.uid) {
-                localStorage.setItem('sgt_balance_' + currentUser.uid, balance.toString());
-                localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
-            }
-            
-            // Update all UI elements
             const walletEl = document.getElementById('walletSgtBalance');
             const headerEl = document.getElementById('sgtHeaderBalance');
-            const promoEl = document.getElementById('sgtPromoBalance');
-            const sosialEl = document.getElementById('sgtSosialBadge');
-            
-            console.log('[v0] SGT Listener: Updating UI elements, balance=', balance);
-            if (walletEl) walletEl.innerText = balance.toLocaleString();
-            if (headerEl) headerEl.innerText = balance.toLocaleString() + ' SGT';
-            if (promoEl) promoEl.innerText = balance.toLocaleString();
-            if (sosialEl) sosialEl.innerText = balance.toLocaleString() + ' SGT';
-            
-            // Update SGT stats
-            const earned = sgtTransactions.filter(t => t.type === 'earn').reduce((s, t) => s + (t.amount || 0), 0);
-            const spent = sgtTransactions.filter(t => t.type !== 'earn').reduce((s, t) => s + (t.amount || 0), 0);
-            const seEl = document.getElementById('statSgtEarned');
-            const ssEl = document.getElementById('statSgtSpent');
-            const stEl = document.getElementById('statSgtTx');
-            if (seEl) seEl.textContent = earned.toLocaleString();
-            if (ssEl) ssEl.textContent = spent.toLocaleString();
-            if (stEl) stEl.textContent = sgtTransactions.length;
-            
-            // Also call updateSGTUI for complete update
-            updateSGTUI();
-            
-            logDebug('SGT realtime update: ' + balance + ' SGT');
+            if (walletEl) walletEl.innerText = balance;
+            if (headerEl) headerEl.innerText = balance + ' SGT';
         },
         (error) => {
-            console.log('[v0] SGT Listener Error:', error.message);
             logDebug('Listener SGT error: ' + error.message);
         }
     );
@@ -4086,16 +3826,9 @@ function listenUserSGTBalance(userId) {
 
 // Autosave SGT tiap 30 detik
 // Auto-save hanya untuk non-admin, setiap 60 detik
-// PERBAIKAN: Skip auto-save jika listener aktif (mencegah race condition)
 setInterval(() => {
     if (currentUser && currentUser.role !== 'admin' && currentUser.username !== 'sagatama_admin') {
-        // PERBAIKAN: Jika listener aktif, jangan auto-save ke Firestore
-        // Listener sudah menjaga sinkronisasi real-time dari Firestore
-        if (!sgtListenerActive) {
-            saveSGTData();
-        } else {
-            logDebug("Auto-save skipped: SGT listener aktif");
-        }
+        saveSGTData();
     }
 }, 60000);
 
@@ -4200,6 +3933,12 @@ async function init() {
         const savedUser = localStorage.getItem('sagatama_user');
         if (savedUser) {
             currentUser = JSON.parse(savedUser);
+            // Normalise admin uid — lama pakai 'admin_timestamp', sekarang fixed
+            if (currentUser.role === 'admin' || currentUser.username === 'sagatama_admin') {
+                currentUser.uid = 'sagatama_admin_fixed';
+                currentUser.role = 'admin';
+                localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
+            }
             userRole = currentUser.role || 'user';
             logDebug("Restored user session: " + currentUser.username);
             // Langsung update UI dengan data cache - tidak perlu tunggu network
@@ -4242,10 +3981,6 @@ async function init() {
         if (currentUser && db) {
             // Refresh SGT dari Firestore (background, tidak block UI)
             loadSGTData().catch(e => logDebug("BGround SGT load: " + e.message));
-            // Start realtime listener for SGT balance updates
-            if (currentUser.uid && currentUser.role !== 'admin') {
-                listenUserSGTBalance(currentUser.uid);
-            }
             // Verifikasi user masih valid di Firestore
             verifyUserSession().catch(e => logDebug("User verify: " + e.message));
         }
@@ -4313,11 +4048,10 @@ function detectPiEnv() {
 
 async function initPiSDK() {
     return new Promise((resolve) => {
-        // PERBAIKAN: Kurangi timeout dari 10s ke 5s untuk response lebih cepat
         const timeout = setTimeout(() => {
-            logDebug("Pi SDK init timeout (5s) - lanjut tanpa Pi SDK");
+            logDebug("Pi SDK init timeout (10s) - lanjut tanpa Pi SDK");
             resolve(false);
-        }, 5000);
+        }, 10000);
 
         if (!window.Pi) {
             clearTimeout(timeout);
@@ -4336,7 +4070,6 @@ async function initPiSDK() {
             .catch((err) => {
                 clearTimeout(timeout);
                 logDebug("Pi SDK error: " + err.message);
-                // PERBAIKAN: Jangan block app jika SDK init gagal
                 resolve(false);
             });
     });
@@ -4488,7 +4221,7 @@ function loadDataFromFirebase() {
     if (isAdmin) {
         try {
             unsubscribers.users = onSnapshot(collection(db, 'users'), (snapshot) => {
-                // Hitung stats SGT secara realtime
+                // READ-ONLY stats — JANGAN ubah sgtBalance global di sini
                 let totalSGT = 0, totalHolders = 0, totalDistributed = 0;
                 const logRows = [];
                 snapshot.forEach(docSnap => {
@@ -4530,19 +4263,6 @@ function loadDataFromFirebase() {
 }
 
 // ============================================
-// PERBAIKAN: Helper untuk Pi SDK timeout
-// Mengatasi error "Messaging promise with id X timed out"
-// ============================================
-async function withPiTimeout(promise, timeoutMs = 30000, operationName = 'Pi operation') {
-    return Promise.race([
-        promise,
-        new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`${operationName} timeout setelah ${timeoutMs/1000} detik`)), timeoutMs)
-        )
-    ]);
-}
-
-// ============================================
 // AUTHENTICATION
 // ============================================
 window.authenticatePi = async function() {
@@ -4551,14 +4271,6 @@ window.authenticatePi = async function() {
     if (!window.Pi) {
         showToast('Pi SDK tidak tersedia. Buka di Pi Browser.', 'error');
         return;
-    }
-
-    // PERBAIKAN: Tampilkan loading state yang lebih jelas
-    const loginBtn = document.querySelector('[onclick*="authenticatePi"]');
-    const originalBtnText = loginBtn?.innerHTML;
-    if (loginBtn) {
-        loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menghubungkan...';
-        loginBtn.disabled = true;
     }
 
     try {
@@ -4572,10 +4284,9 @@ window.authenticatePi = async function() {
             }
         };
 
-        // PERBAIKAN: Kurangi timeout dari 60s ke 30s untuk response lebih cepat
         const authResult = await Promise.race([
             window.Pi.authenticate(scopes, onIncompletePaymentFound),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout koneksi. Coba lagi.')), 30000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout 60s')), 60000))
         ]);
 
         if (!authResult?.user) throw new Error('Auth result tidak valid');
@@ -4605,26 +4316,19 @@ window.authenticatePi = async function() {
             }
         }
 
-        // Simpan user ke Firestore - HARUS await agar data tersimpan sebelum load
+        // Simpan user ke Firestore
         if (db) {
-            try {
-                await setDoc(doc(db, 'users', currentUser.uid), {
-                    username: currentUser.username,
-                    uid: currentUser.uid,
-                    authType: 'pi',
-                    lastLogin: serverTimestamp()
-                }, { merge: true });
-                logDebug("User profile saved to Firestore");
-            } catch (e) {
-                logDebug("Save user profile error: " + e.message);
-            }
+            setDoc(doc(db, 'users', currentUser.uid), {
+                username: currentUser.username,
+                usernameLower: (currentUser.username||'').toLowerCase(),
+                uid: currentUser.uid,
+                authType: 'pi',
+                displayName: currentUser.displayName || currentUser.username,
+                lastLogin: serverTimestamp()
+            }, { merge: true }).catch(e => logDebug("Save user profile error: " + e.message));
         }
 
         await loadSGTData();
-        // Start realtime listener for SGT balance updates
-        if (currentUser.uid) {
-            listenUserSGTBalance(currentUser.uid);
-        }
         showSGTElements(true);
         updateUI();
         // Refresh sosial module after login
@@ -4647,20 +4351,10 @@ window.authenticatePi = async function() {
         logDebug("Auth error: " + error.message);
         if (error.message.includes('consent')) {
             showToast('Login dibatalkan', 'warning');
-        } else if (error.message.includes('Timeout') || error.message.includes('timeout') || error.message.includes('timed out')) {
-            // PERBAIKAN: Handle "Messaging promise with id X timed out" error
-            showToast('Koneksi timeout. Pastikan Anda membuka di Pi Browser dan coba lagi.', 'error');
-        } else if (error.message.includes('Messaging promise')) {
-            // Handle Pi SDK messaging error
-            showToast('Pi SDK error. Refresh halaman dan coba lagi.', 'error');
+        } else if (error.message.includes('Timeout')) {
+            showToast('Waktu habis. Coba lagi.', 'error');
         } else {
             showToast('Gagal login: ' + error.message, 'error');
-        }
-    } finally {
-        // PERBAIKAN: Reset button state setelah selesai (sukses/gagal)
-        if (loginBtn && originalBtnText) {
-            loginBtn.innerHTML = originalBtnText;
-            loginBtn.disabled = false;
         }
     }
 };
@@ -4697,16 +4391,22 @@ window.loginAdmin = function() {
 
     if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
         currentUser = {
-            uid: 'admin_' + Date.now(),
+            uid: 'sagatama_admin_fixed',  // uid TETAP agar tidak ada dokumen baru di Firestore
             username: 'sagatama_admin',
             role: 'admin',
             authType: 'admin',
             walletAddress: null
         };
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
-        loadSGTData();
+        // JANGAN panggil loadSGTData() untuk admin
+        // Admin tidak punya SGT balance dan tidak boleh overwrite data user
+        sgtBalance = 0;
+        sgtTransactions = [];
         showSGTElements(false);
         updateUI();
+        // Langsung load data admin dari Firestore
+        loadDataFromFirebase();
+        setTimeout(() => updateSGTAdminStats(), 1000);
         closeModal('adminLoginModal');
         showToast('Login Admin berhasil!', 'success');
         setTimeout(() => switchView('admin-dashboard'), 500);
@@ -4727,14 +4427,6 @@ window.continueAsGuest = function() {
 };
 
 window.logout = function() {
-    // PERBAIKAN: Cleanup SGT listener sebelum logout
-    // Ini mencegah listener dari user lama tetap aktif
-    if (unsubscribeSGT) {
-        unsubscribeSGT();
-        unsubscribeSGT = null;
-    }
-    sgtListenerActive = false;
-    
     currentUser = null;
     userRole = 'guest';
     piAuth = null;
@@ -5203,7 +4895,7 @@ window.switchView = function(view) {
             case 'orders': renderOrders(); break;
             case 'account': renderAccount(); break;
             case 'wallet': renderWallet(); loadSupplyStats().catch(()=>{}); break;
-            case 'admin-dashboard': renderAdminDashboard(); loadSupplyStats().catch(()=>{}); break;
+            case 'admin-dashboard': renderAdminDashboard(); break;
             case 'admin-products': currentAdminProductFilter = 'all'; renderAdminProducts(); break;
             case 'admin-orders': currentAdminOrderFilter = 'all'; renderAdminOrders(); break;
             case 'admin-analytics': renderAdminAnalytics(); break;
@@ -5637,26 +5329,20 @@ function updateAdminStats() {
 }
 
 async function updateSGTAdminStats() {
-    console.log('[v0] updateSGTAdminStats: Starting...');
+    // Guard: pastikan tidak overwrite data user
+    if (!currentUser || currentUser.role !== 'admin') return;
     try {
-        if (!db) {
-            console.log('[v0] updateSGTAdminStats: No db');
-            return;
-        }
-        
+        if (!db) return;
         // Ambil semua user dari Firestore untuk hitung SGT stats
         const usersSnap = await getDocs(collection(db, 'users'));
-        console.log('[v0] updateSGTAdminStats: Found', usersSnap.size, 'users');
-        
         let totalSGT = 0;
         let totalHolders = 0;
         let totalDistributed = 0;
-        const userLogRows = [];
+        const logRows = [];
 
         usersSnap.forEach(docSnap => {
             const data = docSnap.data();
             const bal = data.sgtBalance || 0;
-            console.log('[v0] User:', data.username, 'Balance:', bal);
             if (bal > 0) {
                 totalSGT += bal;
                 totalHolders++;
@@ -5666,41 +5352,16 @@ async function updateSGTAdminStats() {
             txs.forEach(tx => {
                 if (tx.type === 'earn') {
                     totalDistributed += tx.amount || 0;
-                    userLogRows.push({
-                        date: tx.date,
-                        username: data.username || docSnap.id,
-                        amount: tx.amount
-                    });
-                }
-            });
-        });
-        
-        console.log('[v0] updateSGTAdminStats: totalSGT=', totalSGT, 'holders=', totalHolders, 'distributed=', totalDistributed);
-
-        // Juga ambil dari sgt_logs collection untuk data yang lebih lengkap
-        try {
-            const logsSnap = await getDocs(collection(db, 'sgt_logs'));
-            console.log('[v0] updateSGTAdminStats: Found', logsSnap.size, 'log entries');
-            logsSnap.forEach(logDoc => {
-                const logData = logDoc.data();
-                if (logData.type === 'manual_distribution') {
-                    // Cek apakah sudah ada di userLogRows
-                    const exists = userLogRows.some(r => 
-                        r.username === logData.targetUser && 
-                        r.amount === logData.amount
-                    );
-                    if (!exists) {
-                        userLogRows.push({
-                            date: logData.timestamp?.toDate?.() || logData.timestamp,
-                            username: logData.targetUser,
-                            amount: logData.amount
+                    if (logRows.length < 10) {
+                        logRows.push({
+                            date: tx.date,
+                            username: data.username || docSnap.id,
+                            amount: tx.amount
                         });
                     }
                 }
             });
-        } catch (logErr) {
-            console.log('[v0] updateSGTAdminStats: sgt_logs error', logErr.message);
-        }
+        });
 
         // Baca total burned dari localStorage admin (sementara)
         const totalBurned = sgtTotalBurned || 0; // from Firestore via loadSupplyStats
@@ -5712,24 +5373,15 @@ async function updateSGTAdminStats() {
         upd('admin-total-burned', totalBurned.toLocaleString() + ' SGT');
         upd('statTotalSGTIssued', totalDistributed.toLocaleString());
 
-        // Render log distribusi (ambil 20 terbaru)
+        // Render log distribusi
         const tbody = document.getElementById('sgt-logs-body');
         if (tbody) {
-            if (userLogRows.length === 0) {
+            if (logRows.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:16px;color:#9CA3AF;font-style:italic;">Belum ada riwayat distribusi</td></tr>';
             } else {
-                userLogRows.sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
-                const displayRows = userLogRows.slice(0, 20);
-                tbody.innerHTML = displayRows.map(r => {
-                    let d = '-';
-                    try {
-                        if (r.date) {
-                            const dateObj = r.date instanceof Date ? r.date : new Date(r.date);
-                            if (!isNaN(dateObj.getTime())) {
-                                d = dateObj.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
-                            }
-                        }
-                    } catch(e) {}
+                logRows.sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+                tbody.innerHTML = logRows.map(r => {
+                    const d = r.date ? new Date(r.date).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '-';
                     return `<tr style="border-bottom:1px solid #F3F4F6;">
                         <td style="padding:8px 4px;color:#6B7280;">${d}</td>
                         <td style="padding:8px 4px;font-weight:600;color:#1F2937;">@${r.username}</td>
@@ -5742,7 +5394,6 @@ async function updateSGTAdminStats() {
         await loadSupplyStats();
         logDebug("SGT Admin stats updated: " + totalHolders + " holders, " + totalSGT + " SGT beredar");
     } catch (e) {
-        console.log('[v0] updateSGTAdminStats: Error', e.message);
         logDebug("SGT admin stats error: " + e.message);
     }
 }
@@ -5832,19 +5483,9 @@ function renderAdminOrders() {
         </div>`).join('');
 }
 
-// Global chart instance
-let salesChartInstance = null;
-
 function renderAdminAnalytics() {
     const container = document.getElementById('topProductsList');
     if (!container) return;
-    
-    // Render sales chart
-    renderSalesChart();
-    
-    // Update SGT Supply stats in analytics
-    updateAnalyticsSupplyStats();
-    
     const productSales = {};
     orders.forEach(o => {
         if (['completed','shipped'].includes(o.status)) {
@@ -5862,215 +5503,9 @@ function renderAdminAnalytics() {
             <div style="width:36px;height:36px;background:linear-gradient(135deg,#8B5CF6,#7C3AED);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;">${idx+1}</div>
             <div style="flex:1;min-width:0;">
                 <p style="font-weight:700;color:#1F2937;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</p>
-                <p style="font-size:11px;color:#6B7280;">${data.qty} terjual - ${data.revenue.toFixed(8)} Pi</p>
+                <p style="font-size:11px;color:#6B7280;">${data.qty} terjual • π ${data.revenue.toFixed(8)}</p>
             </div>
         </div>`).join('');
-}
-
-// Update SGT Supply stats in Analytics page
-async function updateAnalyticsSupplyStats() {
-    try {
-        const circEl = document.getElementById('analyticsCirculating');
-        const burnedEl = document.getElementById('analyticsBurned');
-        const pctEl = document.getElementById('analyticsSupplyPct');
-        const hardCapEl = document.getElementById('analyticsHardCap');
-        
-        if (!db) return;
-        
-        const supplySnap = await getDoc(doc(db, 'sgt_config', 'supply'));
-        if (supplySnap.exists()) {
-            const data = supplySnap.data();
-            const circulating = data.circulating || 0;
-            const burned = data.totalBurned || 0;
-            const hardCap = data.hardCap || SGT_HARD_CAP;
-            const pct = hardCap > 0 ? ((circulating / hardCap) * 100).toFixed(2) : 0;
-            
-            if (circEl) circEl.textContent = circulating.toLocaleString('id-ID');
-            if (burnedEl) burnedEl.textContent = burned.toLocaleString('id-ID');
-            if (pctEl) pctEl.textContent = pct + '%';
-            if (hardCapEl) hardCapEl.textContent = (hardCap / 1000000).toFixed(0) + 'M';
-        }
-    } catch (e) {
-        logDebug('updateAnalyticsSupplyStats error: ' + e.message);
-    }
-}
-
-// Render sales chart using Chart.js
-function renderSalesChart() {
-    console.log('[v0] renderSalesChart called');
-    const canvas = document.getElementById('salesChart');
-    const loadingEl = document.getElementById('salesChartLoading');
-    
-    if (!canvas) {
-        console.log('[v0] salesChart canvas not found');
-        return;
-    }
-    
-    console.log('[v0] Chart.js available:', typeof Chart !== 'undefined');
-    console.log('[v0] Orders count:', orders.length);
-    
-    // Hide loading
-    if (loadingEl) loadingEl.style.display = 'none';
-    
-    // Destroy existing chart if any
-    if (salesChartInstance) {
-        salesChartInstance.destroy();
-        salesChartInstance = null;
-    }
-    
-    // Prepare data - group orders by date (last 7 days)
-    const today = new Date();
-    const last7Days = [];
-    const salesByDate = {};
-    const revenueByDate = {};
-    
-    for (let i = 6; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
-        const dateKey = date.toISOString().split('T')[0];
-        last7Days.push(dateStr);
-        salesByDate[dateKey] = 0;
-        revenueByDate[dateKey] = 0;
-    }
-    
-    // Count orders and revenue per day
-    orders.forEach(order => {
-        if (!order.createdAt) return;
-        let orderDate;
-        try {
-            if (order.createdAt.toDate && typeof order.createdAt.toDate === 'function') {
-                orderDate = order.createdAt.toDate();
-            } else if (order.createdAt.seconds) {
-                orderDate = new Date(order.createdAt.seconds * 1000);
-            } else if (typeof order.createdAt === 'string') {
-                orderDate = new Date(order.createdAt);
-            } else if (typeof order.createdAt === 'number') {
-                orderDate = new Date(order.createdAt);
-            } else {
-                return; // Skip invalid date format
-            }
-            
-            // Validate the date is valid
-            if (isNaN(orderDate.getTime())) {
-                return; // Skip invalid dates
-            }
-            
-            const dateKey = orderDate.toISOString().split('T')[0];
-            if (salesByDate.hasOwnProperty(dateKey)) {
-                salesByDate[dateKey]++;
-                revenueByDate[dateKey] += parseFloat(order.amount) || parseFloat(order.totalPi) || 0;
-            }
-        } catch (e) {
-            // Skip orders with invalid date format
-            console.warn('Invalid order date:', order.createdAt);
-        }
-    });
-    
-    const salesData = Object.values(salesByDate);
-    const revenueData = Object.values(revenueByDate);
-    
-    // Check if Chart.js is loaded
-    if (typeof Chart === 'undefined') {
-        if (loadingEl) {
-            loadingEl.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#F59E0B;font-size:24px;margin-right:8px;"></i><span>Chart.js belum dimuat</span>';
-            loadingEl.style.display = 'flex';
-        }
-        return;
-    }
-    
-    const ctx = canvas.getContext('2d');
-    salesChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: last7Days,
-            datasets: [
-                {
-                    label: 'Jumlah Order',
-                    data: salesData,
-                    borderColor: '#8B5CF6',
-                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    yAxisID: 'y'
-                },
-                {
-                    label: 'Revenue (Pi)',
-                    data: revenueData,
-                    borderColor: '#10B981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    yAxisID: 'y1'
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false
-            },
-            plugins: {
-                legend: {
-                    position: 'top',
-                    labels: {
-                        usePointStyle: true,
-                        boxWidth: 8,
-                        font: { size: 11 }
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(31, 41, 55, 0.95)',
-                    titleFont: { size: 12 },
-                    bodyFont: { size: 11 },
-                    padding: 10,
-                    cornerRadius: 8
-                }
-            },
-            scales: {
-                x: {
-                    grid: { display: false },
-                    ticks: { font: { size: 10 } }
-                },
-                y: {
-                    type: 'linear',
-                    display: true,
-                    position: 'left',
-                    beginAtZero: true,
-                    grid: { color: 'rgba(0,0,0,0.05)' },
-                    ticks: { 
-                        font: { size: 10 },
-                        stepSize: 1
-                    },
-                    title: {
-                        display: true,
-                        text: 'Orders',
-                        font: { size: 10 }
-                    }
-                },
-                y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    beginAtZero: true,
-                    grid: { drawOnChartArea: false },
-                    ticks: { 
-                        font: { size: 10 },
-                        callback: function(value) {
-                            return value.toFixed(2) + ' Pi';
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: 'Revenue',
-                        font: { size: 10 }
-                    }
-                }
-            }
-        }
-    });
 }
 
 // ============================================
@@ -6669,13 +6104,9 @@ window.submitStaking = async function() {
         sgtFeePool = Math.max(0, sgtFeePool - feePoolCover);
         const reward = grossReward; // keep variable name for compatibility
 
-        // PERBAIKAN: Ambil username dengan urutan prioritas yang benar
-        // Pi Auth menggunakan currentUser.username, bukan displayName
-        const stakingUsername = currentUser.username || currentUser.displayName || currentUser.email || 'anonymous';
-        
         const stakingDoc = {
             userId: currentUser.uid,
-            username: stakingUsername,
+            username: currentUser.displayName || currentUser.email,
             amount: amt, days: selectedStakingDays, apy: selectedStakingAPY,
             startDate: startDate.toISOString(), endDate: endDate.toISOString(),
             reward, zakat, netReward,
@@ -6984,33 +6415,61 @@ async function loadAdminStaking() {
 
 // ---- ADMIN: DISTRIBUSI MANUAL ----
 window.adminDistribusiSGT = async function() {
-    const tujuan = document.getElementById('distTujuan')?.value;
-    const username = document.getElementById('distUsername')?.value.trim().replace('@','');
-    const jumlah = parseInt(document.getElementById('distJumlah')?.value);
-    const catatan = document.getElementById('distCatatan')?.value.trim();
+    const tujuan   = document.getElementById('distTujuan')?.value;
+    const username = document.getElementById('distUsername')?.value.trim().replace('@','').toLowerCase();
+    const jumlah   = parseInt(document.getElementById('distJumlah')?.value);
+    const catatan  = document.getElementById('distCatatan')?.value.trim();
     if (!username||!jumlah||jumlah<1) { showToast('Lengkapi data distribusi', 'error'); return; }
 
     try {
-        const q = query(collection(db,'users'), where('username','==',username), limit(1));
-        const snap = await getDocs(q);
-        if (snap.empty) { showToast('User @'+username+' tidak ditemukan', 'error'); return; }
+        // Coba exact match, lalu lowercase, lalu usernameLower field
+        let snap = await getDocs(query(collection(db,'users'), where('username','==',username), limit(1)));
+        if (snap.empty) {
+            snap = await getDocs(query(collection(db,'users'), where('username','==',username.toLowerCase()), limit(1)));
+        }
+        if (snap.empty) {
+            snap = await getDocs(query(collection(db,'users'), where('usernameLower','==',username.toLowerCase()), limit(1)));
+        }
+        if (snap.empty) { showToast('User @'+username+' tidak ditemukan. Pastikan sudah pernah login.', 'error'); return; }
+
         const userDoc = snap.docs[0];
-        const curBal = userDoc.data().sgtBalance || 0;
-        await setDoc(doc(db,'users',userDoc.id), {
-            sgtBalance: curBal + jumlah,
-            sgtTransactions: [{ type:'earn', amount:jumlah, description: catatan || 'Distribusi SGT: '+tujuan, date:new Date().toISOString() }, ...(userDoc.data().sgtTransactions||[]).slice(0,49)],
+        // Guard: jangan kirim ke admin
+        if (userDoc.id === 'sagatama_admin_fixed' || userDoc.data().role === 'admin') {
+            showToast('Tidak bisa kirim SGT ke akun admin', 'error'); return;
+        }
+
+        // FRESH READ — hindari pakai data cache dari snapshot
+        const freshRef  = doc(db,'users',userDoc.id);
+        const freshSnap = await getDoc(freshRef);
+        const freshData = freshSnap.exists() ? freshSnap.data() : userDoc.data();
+        const curBal    = freshData.sgtBalance || 0;
+        const curTxs    = freshData.sgtTransactions || [];
+        const newBal    = curBal + jumlah;
+        const newTx     = { type:'earn', amount:jumlah,
+            description: catatan || 'Distribusi SGT: '+tujuan,
+            date: new Date().toISOString(), adminBy: currentUser?.username };
+
+        await setDoc(freshRef, {
+            sgtBalance: newBal,
+            sgtTransactions: [newTx, ...curTxs].slice(0, 50),
             sgtUpdatedAt: serverTimestamp()
         }, { merge: true });
+
         await addDoc(collection(db,'sgt_logs'), {
-            adminId:currentUser?.uid, targetUser:username, targetUserId:userDoc.id,
-            amount:jumlah, type:tujuan, description:catatan||tujuan, timestamp:serverTimestamp()
+            adminId: currentUser?.uid, adminUsername: currentUser?.username||'admin',
+            targetUser: username, targetUserId: userDoc.id,
+            amount: jumlah, type: tujuan,
+            description: catatan||tujuan, timestamp: serverTimestamp()
         });
+
+        logDebug(`adminDistribusiSGT OK: @${username} | ${curBal} → ${newBal} SGT | uid:${userDoc.id}`);
         showToast(`✅ ${jumlah} SGT berhasil dikirim ke @${username}`, 'success');
-        logDebug('adminDistribusiSGT sukses: ' + jumlah + ' SGT → ' + username + ' (uid: ' + userDoc.id + ')');
         ['distUsername','distJumlah','distCatatan'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
-        // Delay agar Firestore commit selesai sebelum re-read
         setTimeout(() => { loadAdminDistLog(); updateSGTAdminStats(); }, 2000);
-    } catch(e) { showToast('Gagal distribusi: '+e.message, 'error'); }
+    } catch(e) {
+        logDebug('adminDistribusiSGT error: '+e.message);
+        showToast('Gagal distribusi: '+e.message, 'error');
+    }
 };
 
 async function loadAdminDistLog() {
@@ -7685,7 +7144,5 @@ window.openModal = function(id) {
 
 
     </script>
-    <!-- Chart.js CDN - loaded at end for better performance -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </body>
 </html>
