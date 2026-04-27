@@ -3265,6 +3265,20 @@ let currentAdminOrderFilter = 'all';
 let pendingPayment = null;
 let paymentTimeout = null;
 
+let piSDKInitAttempts = 0;
+const MAX_PI_INIT_ATTEMPTS = 3;
+const PI_INIT_TIMEOUT = 10000; // 10 detik
+
+// Tambahkan ini di <head> sebelum script Pi SDK
+// untuk mendeteksi jika script gagal load
+window.piSDKLoadFailed = false;
+window.addEventListener('error', function(e) {
+    if (e.target && e.target.src && e.target.src.includes('pi-sdk.js')) {
+        console.warn('⚠️ Pi SDK script gagal load (404)');
+        window.piSDKLoadFailed = true;
+    }
+}, true);
+
 
 // SGT Transfer button managed by processSGTTransfer()
 
@@ -3380,6 +3394,51 @@ async function handleSSO() {
             setTimeout(() => { loader.style.display = 'none'; }, 500);
         }
     }
+}
+
+function showNonPiBrowserModal() {
+    // Hapus modal lama jika ada
+    const existingModal = document.getElementById('nonPiBrowserModal');
+    if (existingModal) existingModal.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'nonPiBrowserModal';
+    modal.className = 'modal active';
+    modal.innerHTML = `
+        <div class="modal-content" style="text-align:center;max-width:380px;">
+            <div style="width:80px;height:80px;background:linear-gradient(135deg,#FEF3C7,#FDE68A);border-radius:20px;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;color:#D97706;font-size:36px;">
+                <i class="fas fa-mobile-alt"></i>
+            </div>
+            <h3 style="font-size:22px;font-weight:800;color:#1F2937;margin-bottom:8px;">Buka di Pi Browser</h3>
+            <p style="color:#6B7280;font-size:14px;margin-bottom:24px;line-height:1.6;">
+                Untuk login dengan Pi Network dan melakukan pembayaran Pi, 
+                buka aplikasi ini melalui <strong>Pi Browser</strong>.
+            </p>
+            
+            <div style="background:#FFFBEB;border:1.5px solid #FCD34D;border-radius:14px;padding:16px;margin-bottom:20px;text-align:left;">
+                <p style="font-size:13px;color:#92400E;margin:0 0 12px;font-weight:700;">
+                    <i class="fas fa-info-circle" style="margin-right:6px;"></i>Cara membuka:
+                </p>
+                <ol style="font-size:12px;color:#92400E;margin:0;padding-left:18px;line-height:1.8;">
+                    <li>Buka aplikasi <strong>Pi Network</strong> di HP Anda</li>
+                    <li>Ketuk tombol <strong>"Pi Browser"</strong> di menu</li>
+                    <li>Masukkan URL: <code style="background:#FEF3C7;padding:2px 6px;border-radius:4px;">sagatama-mart.vercel.app</code></li>
+                    <li>Tekan <strong>Enter</strong> dan login kembali</li>
+                </ol>
+            </div>
+            
+            <button onclick="closeModal('nonPiBrowserModal'); continueAsGuest();" 
+                    style="width:100%;background:#F3F4F6;color:#6B7280;border:none;padding:14px;border-radius:12px;font-weight:700;cursor:pointer;margin-bottom:10px;">
+                <i class="fas fa-user" style="margin-right:6px;"></i>Lanjutkan sebagai Tamu
+            </button>
+            
+            <button onclick="closeModal('nonPiBrowserModal'); openAdminLoginModal();" 
+                    style="width:100%;background:linear-gradient(135deg,#F59E0B,#D97706);color:white;border:none;padding:14px;border-radius:12px;font-weight:700;cursor:pointer;">
+                <i class="fas fa-user-shield" style="margin-right:6px;"></i>Login sebagai Admin
+            </button>
+        </div>
+    `;
+    document.body.appendChild(modal);
 }
 
 // ============================================
@@ -4224,30 +4283,32 @@ window.quickFilter = function(category) {
 // INITIALIZATION
 // ============================================
 async function init() {
-    logDebug("Starting initialization...");
-
-    // Restore cart dari localStorage dulu (instant, tidak perlu tunggu DB)
+    logDebug("🚀 Starting initialization...");
+    
+    // Restore cart dari localStorage
     try {
         cart = JSON.parse(localStorage.getItem('sagatama_cart') || '[]');
-    } catch (e) { cart = []; }
-
-    // Restore user session dari localStorage (instant, UI langsung tampil)
+    } catch (e) { 
+        cart = []; 
+    }
+    
+    // Restore user session
     try {
         const savedUser = localStorage.getItem('sagatama_user');
         if (savedUser) {
             currentUser = JSON.parse(savedUser);
             userRole = currentUser.role || 'user';
-            logDebug("Restored user session: " + currentUser.username);
-            // Langsung update UI dengan data cache - tidak perlu tunggu network
+            logDebug("👤 Restored user session: " + currentUser.username);
             updateUI();
             updateCartUI();
-            // Restore SGT dari localStorage (instant)
+            
+            // Restore SGT
             const savedRate = localStorage.getItem('sgt_rate');
-            const savedMin  = localStorage.getItem('sgt_min_purchase');
+            const savedMin = localStorage.getItem('sgt_min_purchase');
             if (savedRate) sgtRatePerPi = parseInt(savedRate);
-            if (savedMin)  sgtMinPurchase = parseFloat(savedMin);
-            const savedBal  = localStorage.getItem('sgt_balance_' + currentUser.uid);
-            const savedTxs  = localStorage.getItem('sgt_transactions_' + currentUser.uid);
+            if (savedMin) sgtMinPurchase = parseFloat(savedMin);
+            const savedBal = localStorage.getItem('sgt_balance_' + currentUser.uid);
+            const savedTxs = localStorage.getItem('sgt_transactions_' + currentUser.uid);
             if (savedBal) sgtBalance = parseInt(savedBal);
             if (savedTxs) try { sgtTransactions = JSON.parse(savedTxs); } catch(e) {}
             updateSGTUI();
@@ -4257,57 +4318,64 @@ async function init() {
         currentUser = null;
         logDebug("Session restore error: " + e.message);
     }
-
+    
     const loading = document.getElementById('loadingOverlay');
-    // Tampilkan loading hanya jika belum ada user cache (first time load)
     if (!currentUser && loading) loading.style.display = 'flex';
-
+    
     try {
-        detectPiEnv();
-
-        // Pi SDK dan Firebase jalan paralel untuk lebih cepat
+        // Deteksi environment
+        const env = detectPiEnvironment();
+        logDebug(`🔍 Environment: ${env.isPiBrowser ? 'Pi Browser' : 'External Browser'}, SDK Loaded: ${env.piScriptLoaded}`);
+        
+        // Pi SDK dan Firebase jalan paralel
         const [, firebaseOk] = await Promise.allSettled([
             initPiSDK(),
             initFirebase()
         ]);
-
-        // Tangani SSO setelah Firebase siap
+        
+        // Tangani SSO
         await handleSSO();
-
-        // Jika ada user session, refresh data dari Firestore di background
+        
+        // Jika ada user session, refresh data
         if (currentUser && db) {
-            // Refresh SGT dari Firestore (background, tidak block UI)
-            loadSGTData().catch(e => logDebug("BGround SGT load: " + e.message));
-            // Start realtime listener for SGT balance updates
+            loadSGTData().catch(e => logDebug("BG SGT load: " + e.message));
             if (currentUser.uid && currentUser.role !== 'admin') {
                 listenUserSGTBalance(currentUser.uid);
             }
-            // Verifikasi user masih valid di Firestore
             verifyUserSession().catch(e => logDebug("User verify: " + e.message));
         }
-
+        
         updateUI();
         updateCartUI();
         await loadDataWithCache();
-
+        
+        // Tampilkan login modal dengan delay
         if (!currentUser) {
-            setTimeout(() => openModal('loginOptionsModal'), 800);
+            setTimeout(() => {
+                const env = detectPiEnvironment();
+                if (env.isPiBrowser && env.piScriptLoaded) {
+                    openModal('loginOptionsModal');
+                } else {
+                    // Bukan Pi Browser, tampilkan opsi guest/admin saja
+                    showNonPiBrowserModal();
+                }
+            }, 800);
         }
-
-        logDebug("Initialization complete!");
-        // Init supply & mint rate from Firestore
+        
+        logDebug("✅ Initialization complete!");
         loadSupplyStats().catch(e => logDebug("Supply stats init: " + e.message));
-        loadMintRateFromFirestore().catch(()=>{});
+        loadMintRateFromFirestore().catch(() => {});
+        
     } catch (e) {
-        logDebug("Init error: " + e.message);
+        logDebug("❌ Init error: " + e.message);
         console.error("INIT ERROR:", e);
         if (loading) {
             loading.innerHTML = `
-                <div style="text-align:center; padding:20px;">
-                    <i class="fas fa-exclamation-circle" style="font-size:48px; color:#EF4444; margin-bottom:16px; display:block;"></i>
-                    <p style="font-size:16px; font-weight:700; color:#1F2937; margin-bottom:8px;">Gagal Memuat</p>
-                    <p style="font-size:13px; color:#6B7280; margin-bottom:20px;">${e.message}</p>
-                    <button onclick="location.reload()" style="background:#8B5CF6; color:white; border:none; padding:12px 24px; border-radius:10px; font-weight:700; cursor:pointer; font-size:14px;">
+                <div style="text-align:center;padding:20px;">
+                    <i class="fas fa-exclamation-circle" style="font-size:48px;color:#EF4444;margin-bottom:16px;display:block;"></i>
+                    <p style="font-size:16px;font-weight:700;color:#1F2937;margin-bottom:8px;">Gagal Memuat</p>
+                    <p style="font-size:13px;color:#6B7280;margin-bottom:20px;">${e.message}</p>
+                    <button onclick="location.reload()" style="background:#8B5CF6;color:white;border:none;padding:12px 24px;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px;">
                         <i class="fas fa-redo" style="margin-right:8px;"></i>Muat Ulang
                     </button>
                 </div>`;
@@ -4348,32 +4416,65 @@ function detectPiEnv() {
 }
 
 async function initPiSDK() {
-    return new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-            logDebug("Pi SDK init timeout (10s) - lanjut tanpa Pi SDK");
-            resolve(false);
-        }, 10000);
-
-        if (!window.Pi) {
-            clearTimeout(timeout);
-            logDebug("Pi SDK tidak tersedia");
-            resolve(false);
-            return;
+    const env = detectPiEnvironment();
+    
+    // Jika bukan Pi Browser, langsung return false tanpa error
+    if (!env.isPiBrowser) {
+        logDebug("⚠️ Bukan Pi Browser - Pi SDK tidak tersedia. User Agent: " + env.userAgent.substring(0, 50));
+        isPiSDKReady = false;
+        return false;
+    }
+    
+    // Jika Pi object tidak tersedia (script 404 atau gagal load)
+    if (!env.piScriptLoaded) {
+        logDebug("⚠️ window.Pi tidak tersedia - Pi SDK script gagal load (404?)");
+        isPiSDKReady = false;
+        return false;
+    }
+    
+    // Jika sudah ready, tidak perlu init lagi
+    if (isPiSDKReady) {
+        logDebug("✅ Pi SDK sudah ready");
+        return true;
+    }
+    
+    // Coba init dengan retry
+    while (piSDKInitAttempts < MAX_PI_INIT_ATTEMPTS) {
+        piSDKInitAttempts++;
+        logDebug(`🔄 Pi SDK init attempt ${piSDKInitAttempts}/${MAX_PI_INIT_ATTEMPTS}`);
+        
+        try {
+            const initResult = await Promise.race([
+                window.Pi.init({ version: "2.0", sandbox: USE_SANDBOX }),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Pi.init() timeout')), PI_INIT_TIMEOUT)
+                )
+            ]);
+            
+            isPiSDKReady = true;
+            piSDKInitAttempts = 0; // Reset counter
+            logDebug("✅ Pi SDK initialized successfully");
+            return true;
+            
+        } catch (err) {
+            logDebug(`❌ Pi SDK init attempt ${piSDKInitAttempts} gagal: ${err.message}`);
+            
+            // Jika timeout, tunggu sebentar lalu retry
+            if (err.message.includes('timeout') && piSDKInitAttempts < MAX_PI_INIT_ATTEMPTS) {
+                logDebug(`⏳ Menunggu 2 detik sebelum retry...`);
+                await new Promise(r => setTimeout(r, 2000));
+                continue;
+            }
+            
+            // Jika bukan timeout atau sudah max attempts, berhenti
+            isPiSDKReady = false;
+            return false;
         }
-
-        window.Pi.init({ version: "2.0", sandbox: USE_SANDBOX })
-            .then(() => {
-                clearTimeout(timeout);
-                isPiSDKReady = true;
-                logDebug("Pi SDK initialized (sandbox: " + USE_SANDBOX + ")");
-                resolve(true);
-            })
-            .catch((err) => {
-                clearTimeout(timeout);
-                logDebug("Pi SDK error: " + err.message);
-                resolve(false);
-            });
-    });
+    }
+    
+    logDebug("❌ Pi SDK init gagal setelah semua attempts");
+    isPiSDKReady = false;
+    return false;
 }
 
 async function initFirebase() {
@@ -4583,62 +4684,97 @@ async function withPiTimeout(promise, timeoutMs = 30000, operationName = 'Pi ope
 // ============================================
 // AUTHENTICATION
 // ============================================
-window.authenticatePi = async function() {
-    logDebug("authenticatePi called, SDK ready: " + isPiSDKReady);
+let isAuthenticating = false; // Prevent double-click
 
-    if (!window.Pi) {
-        showToast('Pi SDK tidak tersedia. Buka di Pi Browser.', 'error');
+window.authenticatePi = async function() {
+    // Prevent double submission
+    if (isAuthenticating) {
+        showToast('Autentikasi sedang berjalan...', 'info');
         return;
     }
-
-    // Bug 3 fix: pastikan Pi.init() sudah selesai sebelum authenticate
-    if (!isPiSDKReady) {
-        showToast('Menginisialisasi Pi SDK...', 'info');
-        try {
-            await window.Pi.init({ version: "2.0", sandbox: USE_SANDBOX });
-            isPiSDKReady = true;
-            logDebug("Pi SDK re-initialized sebelum auth");
-        } catch (initErr) {
-            logDebug("Pi SDK re-init gagal: " + initErr.message);
-            showToast('Pi SDK belum siap. Coba lagi dalam beberapa detik.', 'error');
+    
+    isAuthenticating = true;
+    
+    try {
+        const env = detectPiEnvironment();
+        
+        // ===== CEK 1: Apakah di Pi Browser? =====
+        if (!env.isPiBrowser) {
+            showToast('Pi Network hanya tersedia di Pi Browser', 'warning');
+            logDebug("❌ authenticatePi: Bukan Pi Browser");
+            
+            // Tampilkan modal khusus non-Pi Browser
+            showNonPiBrowserModal();
+            isAuthenticating = false;
             return;
         }
-    }
-
-    try {
+        
+        // ===== CEK 2: Apakah Pi SDK script berhasil load? =====
+        if (!env.piScriptLoaded) {
+            showToast('Pi SDK gagal dimuat. Coba refresh halaman.', 'error');
+            logDebug("❌ authenticatePi: Pi SDK script tidak tersedia (404?)");
+            isAuthenticating = false;
+            return;
+        }
+        
+        // ===== CEK 3: Init Pi SDK jika belum ready =====
+        if (!isPiSDKReady) {
+            showToast('Menginisialisasi Pi SDK...', 'info');
+            const initSuccess = await initPiSDK();
+            
+            if (!initSuccess) {
+                showToast('Pi SDK gagal diinisialisasi. Tutup dan buka kembali Pi Browser.', 'error');
+                logDebug("❌ authenticatePi: Pi SDK init gagal");
+                isAuthenticating = false;
+                return;
+            }
+        }
+        
+        // ===== PROSES AUTHENTICATE =====
         showToast('Menghubungkan ke Pi Network...', 'info');
+        
         const scopes = ['username', 'payments'];
-
+        
         const onIncompletePaymentFound = async (payment) => {
-            logDebug("Incomplete payment: " + payment?.identifier);
-            try { await handleIncompletePayment(payment); } catch (err) {
-                logDebug("Handle incomplete error: " + err.message);
+            logDebug("Incomplete payment ditemukan: " + (payment?.identifier || 'unknown'));
+            try { 
+                await handleIncompletePayment(payment); 
+            } catch (err) { 
+                logDebug("Handle incomplete payment error: " + err.message);
             }
         };
-
+        
+        // Gunakan timeout wrapper untuk mencegah hang
+        const AUTH_TIMEOUT = 60000; // 60 detik
+        
         const authResult = await Promise.race([
             window.Pi.authenticate(scopes, onIncompletePaymentFound),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout 60s')), 60000))
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('AUTH_TIMEOUT')), AUTH_TIMEOUT)
+            )
         ]);
-
-        if (!authResult?.user) throw new Error('Auth result tidak valid');
-
+        
+        // Validasi hasil auth
+        if (!authResult || !authResult.user) {
+            throw new Error('Auth result tidak valid - user data kosong');
+        }
+        
+        // ===== SUKSES - SETUP USER =====
         piAuth = authResult;
         isPiAuthenticated = true;
-
+        
         currentUser = {
-            uid: authResult.user.uid || ('pi_user_' + (authResult.user.username || 'unknown')), // FIX #2b: UID stabil, bukan timestamp
+            uid: authResult.user.uid || ('pi_user_' + (authResult.user.username || 'unknown')),
             username: authResult.user.username || 'pioneer',
             role: 'buyer',
             accessToken: authResult.accessToken,
             walletAddress: authResult.user.wallet_address || null,
             authType: 'pi'
         };
-
+        
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
-
-        // PERBAIKAN: Pastikan Firebase auth aktif setelah Pi auth
-        // Gunakan anonymous auth sebagai "session holder" di Firebase
+        
+        // Setup Firebase anonymous auth sebagai session holder
         if (auth && !auth.currentUser) {
             try {
                 await signInAnonymously(auth);
@@ -4647,8 +4783,8 @@ window.authenticatePi = async function() {
                 logDebug("Firebase anon auth gagal (non-kritis): " + fbErr.message);
             }
         }
-
-        // Simpan user ke Firestore - HARUS await agar data tersimpan sebelum load
+        
+        // Simpan user ke Firestore
         if (db) {
             try {
                 await setDoc(doc(db, 'users', currentUser.uid), {
@@ -4659,53 +4795,67 @@ window.authenticatePi = async function() {
                 }, { merge: true });
                 logDebug("User profile saved to Firestore");
             } catch (e) {
-                logDebug("Save user profile error: " + e.message);
+                logDebug("Save user profile error (non-kritis): " + e.message);
             }
         }
-
+        
+        // Load SGT data
         await loadSGTData();
-        // Start realtime listener for SGT balance updates
+        
+        // Start realtime listener
         if (currentUser.uid) {
             listenUserSGTBalance(currentUser.uid);
         }
+        
         showSGTElements(true);
         updateUI();
-        // Refresh sosial module after login
-        if (typeof updateSosialUI === 'function') setTimeout(updateSosialUI, 500);
-        if (typeof updateAdminSosialBadge === 'function' && userRole==='admin') setTimeout(updateAdminSosialBadge, 600);
-
+        
+        // Init fase 3
+        setTimeout(() => {
+            if (typeof initFase3 === 'function') initFase3();
+        }, 800);
+        
         closeModal('piAuthModal');
         closeModal('loginOptionsModal');
         showToast(`Selamat datang, @${currentUser.username}!`, 'success');
-        logDebug("Auth sukses: @" + currentUser.username);
-
+        logDebug("✅ Auth sukses: @" + currentUser.username);
+        
         loadDataFromFirebase();
-        // FIX #1: Re-filter myOrders setelah login berhasil agar riwayat pesanan muncul
+        
+        // Re-filter orders setelah login
         if (orders.length > 0) {
             myOrders = orders.filter(o =>
                 o.customer === currentUser.username || o.customerUid === currentUser.uid
             );
             renderOrders();
         }
-        // Init fase 3 data after login
-        setTimeout(() => {
-            if (typeof initFase3 === 'function') initFase3();
-        }, 800);
+        
         switchView('home');
-
+        
     } catch (error) {
-        logDebug("Auth error: " + error.message);
-        // FIX #2a: Selalu reset isPiSDKReady agar user bisa retry login untuk semua jenis error
+        logDebug("❌ Auth error: " + error.message);
+        
+        // Reset SDK state agar bisa retry
         isPiSDKReady = false;
-        if (error.message.includes('consent')) {
+        piSDKInitAttempts = 0;
+        
+        // Kategorikan error dan beri pesan yang sesuai
+        const errorMsg = error.message?.toLowerCase() || '';
+        
+        if (errorMsg.includes('consent') || errorMsg.includes('cancel')) {
             showToast('Login dibatalkan', 'warning');
-        } else if (error.message.includes('Timeout') || error.message.includes('timeout') || error.message.includes('timed out')) {
-            showToast('Koneksi timeout. Ketuk tombol login sekali lagi.', 'error');
-        } else if (error.message.includes('Messaging promise')) {
-            showToast('Pi SDK error. Ketuk tombol login sekali lagi.', 'error');
+        } else if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
+            showToast('Koneksi timeout. Pi Browser tidak merespons. Coba lagi.', 'error');
+        } else if (errorMsg.includes('messaging promise')) {
+            showToast('Pi SDK error internal. Tutup tab dan buka kembali Pi Browser.', 'error');
+        } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+            showToast('Masalah jaringan. Periksa koneksi internet Anda.', 'error');
         } else {
             showToast('Gagal login: ' + error.message, 'error');
         }
+        
+    } finally {
+        isAuthenticating = false;
     }
 };
 
@@ -4759,6 +4909,24 @@ window.loginAdmin = function() {
         if (errorDiv) errorDiv.style.display = 'block';
     }
 };
+
+function detectPiEnvironment() {
+    const ua = navigator.userAgent || '';
+    const isPiBrowser = ua.includes('PiBrowser') || 
+                       ua.includes('Pi Browser') ||
+                       typeof window.Pi !== 'undefined';
+    
+    // Cek juga apakah Pi SDK script berhasil di-load
+    const piScriptLoaded = typeof window.Pi === 'object' && 
+                          window.Pi !== null &&
+                          typeof window.Pi.init === 'function';
+    
+    return {
+        isPiBrowser: isPiBrowser,
+        piScriptLoaded: piScriptLoaded,
+        userAgent: ua
+    };
+}
 
 window.continueAsGuest = function() {
     currentUser = null;
@@ -4845,43 +5013,51 @@ async function createPiPayment() {
         showToast('Transaksi sedang diproses...', 'warning');
         return;
     }
-
+    
+    // Cek Pi SDK availability
+    const env = detectPiEnvironment();
+    if (!env.piScriptLoaded || !isPiSDKReady) {
+        showToast('Pi SDK tidak tersedia. Buka di Pi Browser untuk pembayaran.', 'error');
+        showNonPiBrowserModal();
+        return;
+    }
+    
     if (!isPiAuthenticated || !piAuth) {
         showToast('Silakan login dengan Pi terlebih dahulu', 'warning');
         openModal('loginOptionsModal');
         return;
     }
-
+    
     const totalPi = cart.reduce((sum, item) =>
         sum + ((parseFloat(item.pricePi) || 0) * item.qty), 0
     );
-
+    
     if (totalPi <= 0) {
         showToast('Keranjang kosong!', 'error');
         return;
     }
-
+    
     paymentInProgress = true;
-
+    
     if (paymentTimeout) {
         clearTimeout(paymentTimeout);
         paymentTimeout = null;
     }
-
+    
     const resetPaymentState = () => {
         paymentInProgress = false;
         pendingPayment = null;
-
+        
         const btn = document.getElementById('btnProcessPayment');
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-lock"></i> Konfirmasi & Bayar';
         }
     };
-
+    
     try {
         const cartSnapshot = JSON.parse(JSON.stringify(cart));
-
+        
         const orderMetadata = {
             orderId: 'ORD_' + Date.now(),
             items: cartSnapshot.map(i => ({
@@ -4896,7 +5072,7 @@ async function createPiPayment() {
             totalPi,
             shippingAddress: currentUser?.address || null
         };
-
+        
         pendingPayment = {
             amount: totalPi,
             items: cartSnapshot,
@@ -4904,92 +5080,87 @@ async function createPiPayment() {
             status: 'pending',
             createdAt: Date.now()
         };
-
+        
         const callbacks = {
-
             onReadyForServerApproval: async (paymentId) => {
                 logDebug("APPROVAL: " + paymentId);
-
                 try {
                     const res = await approvePaymentOnServer(paymentId);
-
                     if (!res || res.error) {
                         throw new Error(res?.error || 'Approve gagal');
                     }
-
-                    logDebug("Approve SUCCESS");
-
+                    logDebug("✅ Approve SUCCESS");
                 } catch (err) {
-                    logDebug("Approve FAILED: " + err.message);
+                    logDebug("❌ Approve FAILED: " + err.message);
                     showToast('Gagal verifikasi pembayaran', 'error');
                     resetPaymentState();
                 }
             },
-
+            
             onReadyForServerCompletion: async (paymentId, txid) => {
                 logDebug("COMPLETE: " + paymentId);
-
                 try {
                     const res = await completePaymentOnServer(paymentId, txid, cartSnapshot);
-
                     if (!res || res.error) {
                         throw new Error(res?.error || 'Complete gagal');
                     }
-
                     showToast('Pembayaran berhasil!', 'success');
-
                     cart.length = 0;
                     renderCart?.();
-
                     resetPaymentState();
-
                 } catch (err) {
-                    logDebug("Complete FAILED: " + err.message);
+                    logDebug("❌ Complete FAILED: " + err.message);
                     showToast('Transaksi gagal disimpan', 'error');
                     resetPaymentState();
                 }
             },
-
-            onCancel: () => {
-                logDebug("CANCEL");
+            
+            onCancel: (paymentId) => {
+                logDebug("CANCEL: " + paymentId);
                 showToast('Pembayaran dibatalkan', 'warning');
                 resetPaymentState();
             },
-
-            onError: (error) => {
-                logDebug("ERROR: " + (error?.message || error));
-
+            
+            onError: (error, payment) => {
+                logDebug("❌ PAYMENT ERROR: " + (error?.message || error));
                 const msg = (error?.message || '').toLowerCase();
-
+                
                 if (msg.includes('insufficient')) {
-                    showToast('Saldo tidak cukup', 'error');
+                    showToast('Saldo Pi tidak cukup', 'error');
                 } else if (msg.includes('cancel')) {
-                    showToast('Dibatalkan', 'warning');
+                    showToast('Pembayaran dibatalkan', 'warning');
+                } else if (msg.includes('timeout') || msg.includes('messaging')) {
+                    showToast('Koneksi Pi timeout. Coba lagi.', 'error');
                 } else {
-                    showToast('Error pembayaran', 'error');
+                    showToast('Error pembayaran: ' + error.message, 'error');
                 }
-
+                
                 resetPaymentState();
             }
         };
-
+        
+        // Cek ulang Pi SDK sebelum create payment
+        if (!window.Pi || !isPiSDKReady) {
+            throw new Error('Pi SDK tidak tersedia saat create payment');
+        }
+        
         window.Pi.createPayment({
             amount: parseFloat(totalPi.toFixed(8)),
             memo: `Sagatama Mart - ${cart.length} item`,
             metadata: orderMetadata
         }, callbacks);
-
-        logDebug("CREATE PAYMENT START");
-
+        
+        logDebug("✅ CREATE PAYMENT STARTED");
+        
         paymentTimeout = setTimeout(() => {
-            logDebug("TIMEOUT 10 MIN");
-            showToast('Timeout, coba lagi', 'error');
+            logDebug("⏱️ PAYMENT TIMEOUT 10 MIN");
+            showToast('Timeout pembayaran. Coba lagi.', 'error');
             resetPaymentState();
         }, 600000);
-
+        
     } catch (error) {
-        logDebug("CREATE ERROR: " + error.message);
-        showToast('Gagal membuat pembayaran', 'error');
+        logDebug("❌ CREATE PAYMENT ERROR: " + error.message);
+        showToast('Gagal membuat pembayaran: ' + error.message, 'error');
         resetPaymentState();
     }
 }
