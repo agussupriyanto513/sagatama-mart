@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sagatama Mart | Pi Native E-Commerce</title>
-    <meta name="viewer-pi-app-id" content="https://sagatama-mart.vercel.app" />
+    <meta name="viewport-content" content="sagatama-mart.vercel.app" />
 	<link rel="icon" href="data:;base64,iVBORw0KGgo=">
 
     <!-- GLOBAL FUNCTION STUBS — must run first, before any onclick is parsed -->
@@ -3293,40 +3293,27 @@ function logDebug(msg) {
 // ============================================
 // SGT TOKEN FUNCTIONS
 // ============================================
-function saveSGTData() {
+function saveSGTData(forceFirestore = false) {
     if (!currentUser) return;
-    // SECURITY: Admin tidak boleh simpan sgtBalance ke Firestore
-    // (mencegah overwrite saldo user lain saat admin distribusi)
     const isAdminSession = currentUser.role === 'admin' || currentUser.username === 'sagatama_admin';
-    
-    // PERBAIKAN: Skip save ke Firestore jika listener aktif
-    // Karena listener sudah handle sync dari Firestore, kita tidak perlu write balik
-    // Ini mencegah race condition dimana auto-save bisa overwrite data baru dari admin
-    if (sgtListenerActive && !isAdminSession) {
-        // Hanya update localStorage sebagai cache, JANGAN write ke Firestore
-        localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
-        localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
-        localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
-        logDebug("SGT save: listener aktif, skip Firestore write");
-        return;
-    }
-    
-    try {
-        // localStorage selalu OK (per-device, per-uid)
-        localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
-        localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
-        localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
 
-        // Firestore HANYA untuk user biasa (bukan admin session) DAN listener tidak aktif
-        if (db && currentUser.uid && !isAdminSession && !sgtListenerActive) {
-            setDoc(doc(db, 'users', currentUser.uid), {
-                sgtBalance: sgtBalance,
-                sgtTransactions: sgtTransactions.slice(0, 50),
-                sgtUpdatedAt: serverTimestamp()
-            }, { merge: true }).catch(e => logDebug("SGT Firestore save error: " + e.message));
-        }
-    } catch (e) {
-        logDebug("SGT save error: " + e.message);
+    // Selalu update localStorage sebagai cache cepat
+    try {
+        localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
+        localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
+        localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
+    } catch(e) {}
+
+    // Tulis ke Firestore jika: bukan admin, dan (listener tidak aktif ATAU forceFirestore=true)
+    // forceFirestore=true dipakai untuk operasi penting: staking, redeem, transfer
+    if (db && currentUser.uid && !isAdminSession && (!sgtListenerActive || forceFirestore)) {
+        setDoc(doc(db, 'users', currentUser.uid), {
+            sgtBalance: sgtBalance,
+            sgtTransactions: sgtTransactions.slice(0, 50),
+            sgtUpdatedAt: serverTimestamp()
+        }, { merge: true }).catch(e => logDebug("SGT Firestore save error: " + e.message));
+    } else if (sgtListenerActive && !forceFirestore) {
+        logDebug("SGT save: listener aktif, skip Firestore write (gunakan forceFirestore=true untuk operasi penting)");
     }
 }
 
@@ -3540,7 +3527,7 @@ async function awardSGT(piAmount, description) {
     // 5% ke Baitul Maal
     if (sosialShare > 0) await addDanaToPool('baitul_maal', sosialShare);
 
-    saveSGTData();
+    saveSGTData(true);
     updateSGTUI();
     if (typeof updateSosialUI === 'function') updateSosialUI();
     showToast(`+${userShare.toLocaleString()} SGT (Tier ${tier.name}) 🎉`, 'success');
@@ -3622,7 +3609,7 @@ window.processSGTTransfer = async function() {
 
         // Auto-burn 2% dari transfer
         autoBurnOnSpend(amount).catch(()=>{});
-        saveSGTData();
+        saveSGTData(true);
         updateSGTUI();
         closeModal('sgtTransferModal');
         const burnedAmt = Math.floor(amount * SGT_AUTOBURN_RATE);
@@ -3670,7 +3657,7 @@ window.redeemSGT = function(rewardType) {
             userId: currentUser.uid
         });
     }
-    saveSGTData();
+    saveSGTData(true);
     updateSGTUI();
     closeModal('sgtRedeemModal');
     showToast(`Reward "${reward.label}" berhasil ditukar! 🎁`, 'success');
@@ -4013,7 +4000,7 @@ setInterval(() => {
         // PERBAIKAN: Jika listener aktif, jangan auto-save ke Firestore
         // Listener sudah menjaga sinkronisasi real-time dari Firestore
         if (!sgtListenerActive) {
-            saveSGTData();
+            saveSGTData(true);
         } else {
             logDebug("Auto-save skipped: SGT listener aktif");
         }
@@ -4472,6 +4459,20 @@ window.authenticatePi = async function() {
         return;
     }
 
+    // Bug 3 fix: pastikan Pi.init() sudah selesai sebelum authenticate
+    if (!isPiSDKReady) {
+        showToast('Menginisialisasi Pi SDK...', 'info');
+        try {
+            await window.Pi.init({ version: "2.0", sandbox: USE_SANDBOX });
+            isPiSDKReady = true;
+            logDebug("Pi SDK re-initialized sebelum auth");
+        } catch (initErr) {
+            logDebug("Pi SDK re-init gagal: " + initErr.message);
+            showToast('Pi SDK belum siap. Coba lagi dalam beberapa detik.', 'error');
+            return;
+        }
+    }
+
     try {
         showToast('Menghubungkan ke Pi Network...', 'info');
         const scopes = ['username', 'payments'];
@@ -4555,14 +4556,16 @@ window.authenticatePi = async function() {
 
     } catch (error) {
         logDebug("Auth error: " + error.message);
+        // Reset isPiSDKReady jika timeout agar user bisa retry login
+        if (error.message.includes('Timeout') || error.message.includes('timeout') || error.message.includes('timed out') || error.message.includes('Messaging promise')) {
+            isPiSDKReady = false;
+        }
         if (error.message.includes('consent')) {
             showToast('Login dibatalkan', 'warning');
         } else if (error.message.includes('Timeout') || error.message.includes('timeout') || error.message.includes('timed out')) {
-            // PERBAIKAN: Handle "Messaging promise with id X timed out" error
-            showToast('Koneksi timeout. Pastikan Anda membuka di Pi Browser dan coba lagi.', 'error');
+            showToast('Koneksi timeout. Ketuk tombol login sekali lagi.', 'error');
         } else if (error.message.includes('Messaging promise')) {
-            // Handle Pi SDK messaging error
-            showToast('Pi SDK error. Refresh halaman dan coba lagi.', 'error');
+            showToast('Pi SDK error. Ketuk tombol login sekali lagi.', 'error');
         } else {
             showToast('Gagal login: ' + error.message, 'error');
         }
@@ -4631,14 +4634,29 @@ window.continueAsGuest = function() {
 };
 
 window.logout = function() {
-    // PERBAIKAN: Cleanup SGT listener sebelum logout
-    // Ini mencegah listener dari user lama tetap aktif
+    // Simpan UID dulu sebelum currentUser di-null
+    const logoutUid = currentUser?.uid;
+
+    // Cleanup SGT listener sebelum logout
     if (unsubscribeSGT) {
         unsubscribeSGT();
         unsubscribeSGT = null;
     }
+    // Reset flag listener SEBELUM reset sgtBalance
+    // agar saveSGTData tidak skip Firestore write di sesi berikutnya
     sgtListenerActive = false;
-    
+
+    // Flush saldo ke Firestore sebelum logout (jika user biasa)
+    if (db && logoutUid && currentUser?.role !== 'admin' && currentUser?.username !== 'sagatama_admin') {
+        try {
+            setDoc(doc(db, 'users', logoutUid), {
+                sgtBalance: sgtBalance,
+                sgtTransactions: sgtTransactions.slice(0, 50),
+                sgtUpdatedAt: serverTimestamp()
+            }, { merge: true }).catch(e => logDebug("Logout SGT flush error: " + e.message));
+        } catch(e) {}
+    }
+
     currentUser = null;
     userRole = 'guest';
     piAuth = null;
@@ -4647,6 +4665,8 @@ window.logout = function() {
     sgtTransactions = [];
     localStorage.removeItem('sagatama_user');
     localStorage.removeItem('sagatama_cart');
+    // Jangan hapus sgt_balance_[uid] dari localStorage
+    // agar saldo bisa di-restore dari cache jika Firestore lambat
     cart = [];
     showSGTElements(false);
     updateUI();
@@ -6575,7 +6595,7 @@ window.submitStaking = async function() {
 
         const stakingDoc = {
             userId: currentUser.uid,
-            username: currentUser.displayName || currentUser.email,
+            username: currentUser.username || currentUser.displayName || currentUser.email || 'unknown',
             amount: amt, days: selectedStakingDays, apy: selectedStakingAPY,
             startDate: startDate.toISOString(), endDate: endDate.toISOString(),
             reward, zakat, netReward,
@@ -6591,7 +6611,7 @@ window.submitStaking = async function() {
             description: `Staking ${selectedStakingDays} hari (${selectedStakingAPY}% APY)`,
             date: startDate.toISOString(), userId: currentUser.uid
         });
-        saveSGTData();
+        saveSGTData(true);
         updateSGTUI();
 
         // Add zakat to baitul maal pool
@@ -7140,7 +7160,7 @@ window.bayarZakat = async function() {
         sgtBalance -= zakatAmt;
         sgtTransactions.unshift({ type:'zakat', amount:zakatAmt,
             description:'Zakat mal 2.5%', date:new Date().toISOString(), userId:currentUser.uid });
-        saveSGTData(); updateSGTUI();
+        saveSGTData(true); updateSGTUI();
         // Auto-burn 2% of zakat, rest to Baitul Maal
         const burnAmt  = Math.floor(zakatAmt * 0.02);
         const baitulAmt = zakatAmt - burnAmt;
@@ -7290,7 +7310,7 @@ window.claimReferral = async function() {
         // Give bonus to claimer (100 SGT welcome bonus)
         sgtBalance += 100;
         sgtTransactions.unshift({ type:'earn', amount:100, description:'Bonus referral selamat datang', date:new Date().toISOString() });
-        saveSGTData(); updateSGTUI();
+        saveSGTData(true); updateSGTUI();
         await mintSGT(100, currentUser.uid);
         // Give bonus to referrer (200 SGT)
         const refUserSnap = await getDoc(doc(db,'users',refData.userId));
