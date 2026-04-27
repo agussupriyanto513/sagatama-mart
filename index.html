@@ -3868,7 +3868,7 @@ window._real_.distributeSGTManual = async function() {
         });
 
         showToast(`${amount} SGT berhasil dikirim ke @${targetUser}`, 'success');
-        logDebug('Distribusi sukses: ' + amount + ' SGT → ' + targetUser + ' (uid: ' + usersSnap.docs[0].id + ')');
+        logDebug('Distribusi sukses: ' + amount + ' SGT → @' + targetUser + ' | docId=' + docId + ' | targetUid=' + targetUid);
 
         document.getElementById('sgtDistUser').value = '';
         document.getElementById('sgtDistAmount').value = '';
@@ -4052,6 +4052,7 @@ function listenUserSGTBalance(userId) {
     }
 
     console.log('[v0] listenUserSGTBalance: Starting listener for userId:', userId);
+    logDebug('SGT listener → doc: users/' + userId + ' | username: ' + (currentUser?.username || '?'));
     sgtListenerActive = true;
 
     unsubscribeSGT = onSnapshot(
@@ -4138,6 +4139,20 @@ function listenUserSGTBalance(userId) {
 
     return unsubscribeSGT;
 }
+
+// FIX: Reload SGT otomatis saat koneksi internet pulih (dari offline → online)
+window.addEventListener('online', () => {
+    logDebug('Koneksi online, memuat ulang data SGT...');
+    if (currentUser && currentUser.role !== 'admin' && db) {
+        // Restart listener karena Firestore listener mati saat offline
+        sgtListenerActive = false;
+        if (unsubscribeSGT) { unsubscribeSGT(); unsubscribeSGT = null; }
+        setTimeout(() => {
+            loadSGTData().catch(e => logDebug('Reload SGT error: ' + e.message));
+            if (currentUser.uid) listenUserSGTBalance(currentUser.uid);
+        }, 1500);
+    }
+});
 
 // Autosave SGT tiap 30 detik
 // Auto-save hanya untuk non-admin, setiap 60 detik
