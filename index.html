@@ -1579,6 +1579,28 @@
                 <i class="fas fa-chart-line" style="color:#8B5CF6; margin-right:8px;"></i>Dashboard Admin
             </h2>
             
+            <!-- Permission Warning Banner -->
+            <div id="adminPermissionWarning" style="display:none; background:#FEF3C7; border:2px solid #F59E0B; border-radius:12px; padding:14px 16px; margin-bottom:16px;">
+                <div style="display:flex; align-items:flex-start; gap:10px;">
+                    <i class="fas fa-exclamation-triangle" style="color:#D97706; font-size:20px; flex-shrink:0; margin-top:2px;"></i>
+                    <div>
+                        <p style="font-weight:800; color:#92400E; margin:0 0 4px;">Firestore: Permission Denied</p>
+                        <p style="font-size:12px; color:#B45309; margin:0 0 10px;">Data tidak bisa diakses. Perbarui Firestore Security Rules di Firebase Console:</p>
+                        <div style="background:white; border-radius:8px; padding:10px; font-family:monospace; font-size:10px; color:#374151; border:1px solid #FCD34D; white-space:pre-wrap; overflow-x:auto;">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}</div>
+                        <button onclick="if(auth)signInAnonymously(auth).then(()=>{document.getElementById('adminPermissionWarning').style.display='none';loadDataFromFirebase();setTimeout(()=>updateSGTAdminStats(),1000);showToast('Reconnected!','success');}).catch(()=>{})" style="margin-top:10px; background:#F59E0B; color:white; border:none; padding:8px 16px; border-radius:8px; font-weight:700; cursor:pointer; font-size:12px;">
+                            <i class="fas fa-redo" style="margin-right:6px;"></i>Coba Reconnect
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Stats Grid -->
             <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; margin-bottom:20px;">
                 <div class="stat-card">
@@ -3057,6 +3079,53 @@ const firebaseConfig = {
     appId: "1:372845954028:web:189f2a3127ea8189b9f6c9"
 };
 
+/*
+ * =========================================================
+ * FIRESTORE SECURITY RULES — paste ke Firebase Console
+ * Firestore > Rules > Edit rules
+ * =========================================================
+ * rules_version = '2';
+ * service cloud.firestore {
+ *   match /databases/{database}/documents {
+ *     // Allow read/write jika user authenticated (termasuk anonymous)
+ *     match /{document=**} {
+ *       allow read, write: if request.auth != null;
+ *     }
+ *   }
+ * }
+ * =========================================================
+ * ATAU rules yang lebih granular (lebih aman):
+ * rules_version = '2';
+ * service cloud.firestore {
+ *   match /databases/{database}/documents {
+ *     match /products/{id} {
+ *       allow read: if true;  // semua bisa baca produk
+ *       allow write: if request.auth != null; // hanya authenticated
+ *     }
+ *     match /orders/{id} {
+ *       allow read, write: if request.auth != null;
+ *     }
+ *     match /users/{userId} {
+ *       allow read, write: if request.auth != null;
+ *     }
+ *     match /sgt_config/{id} {
+ *       allow read: if request.auth != null;
+ *       allow write: if request.auth != null;
+ *     }
+ *     match /sgt_logs/{id} {
+ *       allow read, write: if request.auth != null;
+ *     }
+ *     match /sgt_stakings/{id} {
+ *       allow read, write: if request.auth != null;
+ *     }
+ *     match /vote_proposals/{id} {
+ *       allow read, write: if request.auth != null;
+ *     }
+ *   }
+ * }
+ * =========================================================
+ */
+
 let app, auth, db;
 let products = [];
 let orders = [];
@@ -3997,10 +4066,22 @@ async function init() {
 
         // Jika ada user session, refresh data dari Firestore di background
         if (currentUser && db) {
-            // Refresh SGT dari Firestore (background, tidak block UI)
-            loadSGTData().catch(e => logDebug("BGround SGT load: " + e.message));
-            // Verifikasi user masih valid di Firestore
-            verifyUserSession().catch(e => logDebug("User verify: " + e.message));
+            const isAdminSess = currentUser.role === 'admin' || currentUser.username === 'sagatama_admin';
+            if (!isAdminSess) {
+                // Hanya user biasa yang perlu load SGT dari Firestore
+                loadSGTData().catch(e => logDebug("BGround SGT load: " + e.message));
+                // Verifikasi user masih valid di Firestore (skip untuk admin)
+                verifyUserSession().catch(e => logDebug("User verify: " + e.message));
+            } else {
+                logDebug("Admin session: skipping Firestore user verification");
+                // Admin: langsung sign in anonymously ke Firebase agar rules bisa baca/tulis
+                try {
+                    if (auth && !auth.currentUser) {
+                        await signInAnonymously(auth);
+                        logDebug("Admin: Firebase anonymous auth aktif untuk akses Firestore");
+                    }
+                } catch(ae) { logDebug("Admin anon auth: " + ae.message); }
+            }
         }
 
         updateUI();
@@ -4080,30 +4161,60 @@ function adjustBannerPadding() {
 
 async function initPiSDK() {
     return new Promise((resolve) => {
+        // Pi Browser production: SDKMessaging butuh lebih lama untuk handshake
+        // Timeout 30 detik untuk production, 10 detik untuk external browser
+        const sdkTimeout = isPiBrowser ? 30000 : 10000;
+        let resolved = false;
+
+        const doResolve = (val) => {
+            if (!resolved) {
+                resolved = true;
+                clearTimeout(timeout);
+                resolve(val);
+            }
+        };
+
         const timeout = setTimeout(() => {
-            logDebug("Pi SDK init timeout (10s) - lanjut tanpa Pi SDK");
-            resolve(false);
-        }, 10000);
+            logDebug("Pi SDK init timeout (" + (sdkTimeout/1000) + "s) - lanjut tanpa Pi SDK");
+            doResolve(false);
+        }, sdkTimeout);
 
-        if (!window.Pi) {
-            clearTimeout(timeout);
-            logDebug("Pi SDK tidak tersedia");
-            resolve(false);
-            return;
-        }
+        // Tunggu Pi object tersedia (bisa terlambat di beberapa device)
+        let waitCount = 0;
+        const waitForPi = setInterval(() => {
+            waitCount++;
+            if (window.Pi) {
+                clearInterval(waitForPi);
+                // Coba version 2.0, fallback ke tanpa version jika gagal
+        const tryInit = (ver) => window.Pi.init(ver
+            ? { version: ver, sandbox: USE_SANDBOX }
+            : { sandbox: USE_SANDBOX }
+        );
 
-        window.Pi.init({ version: "2.0", sandbox: USE_SANDBOX })
+        tryInit("2.0")
             .then(() => {
-                clearTimeout(timeout);
                 isPiSDKReady = true;
-                logDebug("Pi SDK initialized (sandbox: " + USE_SANDBOX + ")");
-                resolve(true);
+                logDebug("Pi SDK initialized v2.0 (wait: " + waitCount + "x)");
+                doResolve(true);
             })
-            .catch((err) => {
-                clearTimeout(timeout);
-                logDebug("Pi SDK error: " + err.message);
-                resolve(false);
-            });
+            .catch(() => tryInit(null)
+                .then(() => {
+                    isPiSDKReady = true;
+                    logDebug("Pi SDK initialized (no version, wait: " + waitCount + "x)");
+                    doResolve(true);
+                })
+                .catch((err) => {
+                    logDebug("Pi SDK init error: " + err.message);
+                    doResolve(false);
+                })
+            );
+            } else if (waitCount >= 20) {
+                // window.Pi tidak ada setelah 2 detik polling
+                clearInterval(waitForPi);
+                logDebug("Pi SDK tidak tersedia (window.Pi not found)");
+                doResolve(false);
+            }
+        }, 100); // poll setiap 100ms, max 2 detik sebelum lanjut ke Pi.init wait
     });
 }
 
@@ -4113,6 +4224,18 @@ async function initFirebase() {
         auth = getAuth(app);
         db = getFirestore(app);
         logDebug("Firebase initialized");
+
+        // Auto sign-in anonymously agar Firestore rules berjalan
+        // Ini diperlukan untuk admin session maupun Pi users yang belum auth ke Firebase
+        try {
+            if (!auth.currentUser) {
+                await signInAnonymously(auth);
+                logDebug("Firebase: anonymous auth aktif (untuk Firestore access)");
+            }
+        } catch (ae) {
+            logDebug("Firebase anon auth (non-critical): " + ae.message);
+        }
+
         return true;
     } catch (e) {
         logDebug("Firebase error: " + e.message);
@@ -4243,7 +4366,21 @@ function loadDataFromFirebase() {
             renderAdminRecentOrders();
             renderWallet();
             updateAdminStats();
-        }, (err) => logDebug("Orders error: " + err.message));
+        }, (err) => {
+            logDebug("Orders error: " + err.message);
+            if (err.code === 'permission-denied') {
+                // Tampilkan warning di admin dashboard
+                const warn = document.getElementById('adminPermissionWarning');
+                if (warn) warn.style.display = 'block';
+                // Coba dengan anon auth lalu retry
+                if (auth && !auth.currentUser) {
+                    signInAnonymously(auth).then(() => {
+                        logDebug("Retry orders listener dengan anon auth...");
+                        setTimeout(() => loadDataFromFirebase(), 1000);
+                    }).catch(()=>{});
+                }
+            }
+        });
     } catch (e) {
         logDebug("Orders query error: " + e.message);
     }
@@ -4287,7 +4424,14 @@ function loadDataFromFirebase() {
                         </tr>`;
                     }).join('');
                 }
-            }, (err) => logDebug("Users listener error: " + err.message));
+            }, (err) => {
+            logDebug("Users listener error: " + err.message);
+            if (err.code === 'permission-denied' && auth && !auth.currentUser) {
+                signInAnonymously(auth).then(() => {
+                    logDebug("Retry users listener dengan anon auth...");
+                }).catch(()=>{});
+            }
+        });
         } catch (e) {
             logDebug("Users query error: " + e.message);
         }
@@ -4439,18 +4583,31 @@ window.loginAdmin = function() {
             walletAddress: null
         };
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
-        // JANGAN panggil loadSGTData() untuk admin
-        // Admin tidak punya SGT balance dan tidak boleh overwrite data user
+        // Admin tidak perlu SGT balance
         sgtBalance = 0;
         sgtTransactions = [];
         showSGTElements(false);
         updateUI();
-        // Langsung load data admin dari Firestore
-        loadDataFromFirebase();
-        setTimeout(() => updateSGTAdminStats(), 1000);
         closeModal('adminLoginModal');
-        showToast('Login Admin berhasil!', 'success');
-        setTimeout(() => switchView('admin-dashboard'), 500);
+        showToast('Login Admin berhasil! Menghubungkan...', 'info');
+
+        // Sign in anonymously ke Firebase agar Firestore rules allow
+        (async function() {
+            try {
+                if (auth && !auth.currentUser) {
+                    await signInAnonymously(auth);
+                    logDebug("Admin: Firebase anon auth berhasil");
+                }
+            } catch(ae) {
+                logDebug("Admin anon auth gagal (non-kritis): " + ae.message);
+            } finally {
+                // Load data setelah auth (berhasil atau tidak)
+                loadDataFromFirebase();
+                setTimeout(() => updateSGTAdminStats(), 1500);
+                setTimeout(() => switchView('admin-dashboard'), 500);
+                showToast('Selamat datang, Admin!', 'success');
+            }
+        })();
     } else {
         if (errorText) errorText.innerText = 'Username atau password salah!';
         if (errorDiv) errorDiv.style.display = 'block';
@@ -5435,7 +5592,19 @@ async function updateSGTAdminStats() {
         await loadSupplyStats();
         logDebug("SGT Admin stats updated: " + totalHolders + " holders, " + totalSGT + " SGT beredar");
     } catch (e) {
-        logDebug("SGT admin stats error: " + e.message);
+        if (e.code === 'permission-denied') {
+            logDebug("SGT admin stats: permission denied — update Firestore Security Rules");
+            const warn = document.getElementById('adminPermissionWarning');
+            if (warn) warn.style.display = 'block';
+            // Coba anon auth lagi
+            if (auth && !auth.currentUser) {
+                signInAnonymously(auth).then(() => {
+                    setTimeout(() => updateSGTAdminStats(), 2000);
+                }).catch(()=>{});
+            }
+        } else {
+            logDebug("SGT admin stats error: " + e.message);
+        }
     }
 }
 
@@ -5981,6 +6150,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- State ---
 let stakingData = []; // active stakings by user
+let selectedStakingDays = 0;
+let selectedStakingAPY = 0;
 let beasiswaApplications = []; // cached from Firestore
 let bansosApplications  = [];
 
