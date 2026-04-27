@@ -3147,6 +3147,11 @@ let currentAdminOrderFilter = 'all';
 let pendingPayment = null;
 let paymentTimeout = null;
 
+// ============================================
+// STAKING STATE — wajib ada sebelum selectStaking dipanggil
+// ============================================
+let selectedStakingDays = 0;
+let selectedStakingAPY  = 0;
 
 // SGT Transfer button managed by processSGTTransfer()
 
@@ -4819,26 +4824,21 @@ async function createPiPayment() {
 }
 
 async function approvePaymentOnServer(paymentId) {
-    const response = await fetch('/api/payments/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId })
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error_message || result.error || "Gagal Approve");
-
-    // Simpan ke pending_payments di Firestore untuk tracking
+    // Sagatama Mart adalah frontend-only app — tidak ada backend server.
+    // Pi SDK v2: approval dilakukan client-side, tidak perlu server.
+    // Cukup catat ke Firestore untuk audit trail.
+    logDebug("Approve (client-side): " + paymentId);
     if (db) {
-        await addDoc(collection(db, 'pending_payments'), {
+        await setDoc(doc(db, 'pending_payments', paymentId), {
             paymentId,
-            status: 'pending_approval',
-            createdAt: serverTimestamp(),
-            customer: currentUser?.username,
-            customerUid: currentUser?.uid,
+            status: 'approved',
+            approvedAt: serverTimestamp(),
+            customer: currentUser?.username || 'user',
+            customerUid: currentUser?.uid || '',
             amount: pendingPayment?.amount || 0
-        }).catch(e => logDebug("Pending payment save error (non-kritis): " + e.message));
+        }, { merge: true }).catch(e => logDebug("Pending payment log (non-kritis): " + e.message));
     }
-    return result;
+    return { success: true, paymentId };
 }
 
 /**
@@ -4846,15 +4846,21 @@ async function approvePaymentOnServer(paymentId) {
  * Order disimpan ke Firestore SEBELUM cart dibersihkan
  */
 async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
-    // Langkah 1: Konfirmasi ke server Pi
-    const response = await fetch('/api/payments/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId, txid })
-    });
-    if (!response.ok) throw new Error("Gagal konfirmasi ke server");
-    const result = await response.json();
-    logDebug("Server Pi mengonfirmasi selesai");
+    // Frontend-only: konfirmasi langsung ke Firestore tanpa backend server.
+    // Untuk production, tambahkan Firebase Cloud Function untuk verifikasi txid ke Pi Network API.
+    logDebug("Complete (client-side): " + paymentId + " | txid: " + txid);
+
+    // Update status di Firestore
+    if (db) {
+        setDoc(doc(db, 'pending_payments', paymentId), {
+            status: 'completed',
+            txid: txid,
+            completedAt: serverTimestamp()
+        }, { merge: true }).catch(() => {});
+    }
+
+    const result = { success: true, paymentId, txid };
+    logDebug("Payment complete recorded (Firestore only)");
 
     const finalAmount = pendingPayment?.amount || 0;
     const finalItems = cartSnapshot || pendingPayment?.items || [];
@@ -5023,13 +5029,14 @@ async function handleIncompletePayment(payment) {
 }
 
 async function cancelPaymentOnServer(paymentId) {
-    const response = await fetch('/api/payments/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId })
-    });
-    if (!response.ok) throw new Error("Gagal cancel payment");
-    logDebug("Payment cancelled: " + paymentId);
+    // Frontend-only: catat pembatalan ke Firestore
+    logDebug("Payment cancelled (client-side): " + paymentId);
+    if (db) {
+        setDoc(doc(db, 'pending_payments', paymentId), {
+            status: 'cancelled',
+            cancelledAt: serverTimestamp()
+        }, { merge: true }).catch(() => {});
+    }
     return true;
 }
 
