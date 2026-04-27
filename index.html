@@ -4276,6 +4276,8 @@ async function init() {
             initPiSDK(),
             initFirebase()
         ]);
+        // FIX: re-detect setelah Pi SDK selesai init, bukan sebelumnya
+        detectPiEnv();
 
         // Tangani SSO setelah Firebase siap
         await handleSSO();
@@ -4371,6 +4373,7 @@ async function initPiSDK() {
             .then(() => {
                 clearTimeout(timeout);
                 isPiSDKReady = true;
+                isPiBrowser = true; // FIX: update setelah Pi.init() sukses
                 logDebug("Pi SDK initialized (sandbox: " + USE_SANDBOX + ")");
                 resolve(true);
             })
