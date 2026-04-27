@@ -6,7 +6,6 @@
     <title>Sagatama Mart | Pi Native E-Commerce</title>
     <meta name="viewport-content" content="sagatama-mart.vercel.app" />
 	<link rel="icon" href="data:;base64,iVBORw0KGgo=">
-	<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <!-- GLOBAL FUNCTION STUBS — must run first, before any onclick is parsed -->
     <script>
@@ -5172,7 +5171,7 @@ window.loginAdmin = function() {
             walletAddress: null
         };
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
-        loadSGTData();
+        loadSGTDataFixed();
         showSGTElements(false);
         updateUI();
         closeModal('adminLoginModal');
@@ -5845,7 +5844,7 @@ function renderHomeCategories() {
 }
 
 function renderWallet() {
-    if (currentUser) loadSGTData();
+    if (currentUser) loadSGTDataFixed();
     const historyContainer = document.getElementById('transactionHistory');
     if (!historyContainer) return;
 
@@ -8339,6 +8338,10 @@ window.openModal = function(id) {
 
 
     </script>
-   
+    <!-- Chart.js CDN - loaded at end for better performance -->
+console.log('[SAGATAMA-v3] Perbaikan lengkap dimuat ✅');
+console.log('[SAGATAMA-v3] Gunakan diagnoseSGTForUser("username") untuk debug');
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </body>
 </html>
