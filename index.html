@@ -790,6 +790,57 @@
             background: #FECACA;
         }
 
+
+        /* ============ FASE 3: ZAKAT / REFERRAL / VOTING / BADGE ============ */
+        .zakat-card {
+            background: linear-gradient(135deg,#064E3B,#065F46,#047857);
+            border-radius:22px; padding:22px; color:white; margin-bottom:14px;
+        }
+        .nisab-bar { height:8px; background:rgba(255,255,255,0.15); border-radius:4px; overflow:hidden; margin:8px 0; }
+        .nisab-fill { height:100%; background:linear-gradient(90deg,#6EE7B7,#FCD34D); border-radius:4px; transition:width 0.6s; }
+
+        .referral-card {
+            background:linear-gradient(135deg,#1D4ED8,#2563EB); border-radius:22px;
+            padding:22px; color:white; margin-bottom:14px;
+        }
+        .ref-stat { background:rgba(255,255,255,0.12); border-radius:12px; padding:12px; text-align:center; }
+
+        .vote-card {
+            background:white; border-radius:16px; border:1px solid #E2E8F0;
+            padding:16px; margin-bottom:10px; box-shadow:0 2px 8px rgba(0,0,0,0.05);
+        }
+        .vote-bar-wrap { height:8px; background:#F3F4F6; border-radius:4px; overflow:hidden; margin:6px 0; }
+        .vote-bar-fill { height:100%; border-radius:4px; transition:width 0.5s; }
+        .vote-btn { border:none; padding:8px 18px; border-radius:10px; font-weight:700; cursor:pointer;
+                    font-family:inherit; font-size:12px; transition:all 0.2s; }
+        .vote-btn.setuju  { background:#D1FAE5; color:#065F46; }
+        .vote-btn.tolak   { background:#FEE2E2; color:#991B1B; }
+        .vote-btn.voted   { opacity:0.6; cursor:not-allowed; }
+
+        .badge-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
+        .badge-item {
+            background:white; border:1px solid #E2E8F0; border-radius:16px;
+            padding:14px 10px; text-align:center; position:relative; transition:all 0.2s;
+        }
+        .badge-item.unlocked { border-color:#F59E0B; background:#FFFBEB; }
+        .badge-item.locked   { opacity:0.45; filter:grayscale(1); }
+        .badge-icon { font-size:32px; margin-bottom:6px; display:block; }
+        .badge-name { font-size:11px; font-weight:700; color:#1F2937; }
+        .badge-desc { font-size:10px; color:#6B7280; margin-top:2px; }
+        .badge-new  { position:absolute; top:-5px; right:-5px; background:#EF4444;
+                      color:white; font-size:9px; font-weight:800; padding:2px 6px;
+                      border-radius:8px; }
+
+        .tab-fase3 { display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; margin-bottom:16px; }
+        .tab-fase3 button { white-space:nowrap; padding:8px 16px; border-radius:20px; border:none;
+            font-size:12px; font-weight:700; cursor:pointer; transition:all 0.2s;
+            background:#F3F4F6; color:#6B7280; font-family:inherit; }
+        .tab-fase3 button.active { background:#8B5CF6; color:white; }
+
+        .referral-link-box {
+            background:#F0FDF4; border:1.5px dashed #6EE7B7; border-radius:12px;
+            padding:12px 16px; display:flex; align-items:center; gap:10px; margin-bottom:12px;
+        }
         /* Quick load animation */
         .fade-in {
             animation: fadeIn 0.3s ease-in;
@@ -1794,6 +1845,7 @@
                 <button onclick="switchSosialTab('beasiswa',this)">Beasiswa</button>
                 <button onclick="switchSosialTab('bansos',this)">Bantuan Sosial</button>
                 <button onclick="switchSosialTab('staking',this)">Staking</button>
+                <button onclick="switchSosialTab('zakat',this)">Zakat</button>
             </div>
 
             <!-- TAB: REWARDS BELANJA -->
@@ -2153,6 +2205,258 @@
                     <h4 style="font-weight:800;color:#1F2937;margin-bottom:12px;font-size:14px;"><i class="fas fa-history" style="color:#F59E0B;margin-right:8px;"></i>Riwayat Distribusi Terbaru</h4>
                     <div id="adminDistLog">
                         <div class="empty-state" style="padding:24px;"><i class="fas fa-history" style="font-size:36px;"></i><p>Belum ada riwayat</p></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+            <!-- TAB: ZAKAT CALCULATOR -->
+            <div id="sosial-tab-zakat" style="display:none;">
+                <!-- Zakat header -->
+                <div class="zakat-card">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+                        <div style="width:52px;height:52px;background:rgba(255,255,255,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;">🌙</div>
+                        <div><p style="font-size:11px;opacity:0.8;margin:0;">ZAKAT DIGITAL SGT</p><p style="font-size:17px;font-weight:900;margin:0;">Kalkulator Zakat Mal</p></div>
+                    </div>
+                    <p style="font-size:11px;opacity:0.8;margin-bottom:12px;line-height:1.5;">SGT diperlakukan sebagai harta digital. Nisab setara 85 gram emas. Zakat 2.5% bila sudah haul (1 tahun).</p>
+                    <!-- Nisab progress -->
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span style="font-size:11px;opacity:0.75;">Saldo SGT kamu</span>
+                        <span id="zakatSaldoLabel" style="font-size:11px;color:#FCD34D;font-weight:700;">0 SGT</span>
+                    </div>
+                    <div class="nisab-bar"><div class="nisab-fill" id="nisabBar" style="width:0%;"></div></div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span style="font-size:10px;opacity:0.6;">0</span>
+                        <span style="font-size:10px;opacity:0.6;">Nisab: <span id="nisabLabel">5,000 SGT</span></span>
+                    </div>
+                </div>
+
+                <!-- Nisab setting -->
+                <div class="sosial-card">
+                    <h4 style="font-weight:800;color:#1F2937;margin-bottom:12px;font-size:14px;"><i class="fas fa-calculator" style="color:#059669;margin-right:8px;"></i>Pengaturan Nisab</h4>
+                    <div class="form-group">
+                        <label class="form-label">Nilai Nisab (SGT)</label>
+                        <div style="display:flex;gap:8px;">
+                            <input type="number" id="nisabInput" class="form-input" style="flex:1;" placeholder="Default: 5000" value="5000" min="100">
+                            <button onclick="updateNisab()" style="background:#059669;color:white;border:none;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px;white-space:nowrap;"><i class="fas fa-check"></i></button>
+                        </div>
+                        <p style="font-size:10px;color:#6B7280;margin:4px 0 0;">Sesuaikan dengan nilai emas saat ini. Admin dapat update secara berkala.</p>
+                    </div>
+
+                    <!-- Hasil kalkulasi -->
+                    <div id="zakatResult" style="display:none;background:#F0FDF4;border:1px solid #A7F3D0;border-radius:12px;padding:14px;margin-top:12px;">
+                        <p style="font-weight:800;color:#065F46;font-size:13px;margin:0 0 8px;"><i class="fas fa-mosque" style="margin-right:6px;"></i>Hasil Kalkulasi Zakat</p>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                            <div style="background:white;border-radius:10px;padding:10px;text-align:center;">
+                                <p id="zakatAmount" style="font-size:20px;font-weight:900;color:#059669;margin:0;">0 SGT</p>
+                                <p style="font-size:10px;color:#6B7280;margin:3px 0 0;">Wajib dizakatkan</p>
+                            </div>
+                            <div style="background:white;border-radius:10px;padding:10px;text-align:center;">
+                                <p id="zakatSisa" style="font-size:20px;font-weight:900;color:#1D4ED8;margin:0;">0 SGT</p>
+                                <p style="font-size:10px;color:#6B7280;margin:3px 0 0;">Sisa setelah zakat</p>
+                            </div>
+                        </div>
+                        <button onclick="bayarZakat()" style="width:100%;background:linear-gradient(135deg,#059669,#047857);color:white;border:none;padding:12px;border-radius:10px;font-weight:700;cursor:pointer;margin-top:12px;font-size:13px;font-family:inherit;">
+                            <i class="fas fa-hand-holding-heart" style="margin-right:8px;"></i>Bayar Zakat ke Baitul Maal
+                        </button>
+                    </div>
+                    <div id="zakatBelumNisab" style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:12px;padding:14px;margin-top:12px;">
+                        <p style="font-size:12px;color:#92400E;text-align:center;"><i class="fas fa-info-circle" style="margin-right:6px;"></i>Saldo belum mencapai nisab. Teruslah beramal dan belanja untuk menambah SGT.</p>
+                    </div>
+                </div>
+
+                <!-- Riwayat zakat -->
+                <div class="sosial-card">
+                    <h4 style="font-weight:800;color:#1F2937;margin-bottom:12px;font-size:14px;"><i class="fas fa-history" style="color:#8B5CF6;margin-right:8px;"></i>Riwayat Zakat</h4>
+                    <div id="zakatHistory"><div class="empty-state" style="padding:24px;"><i class="fas fa-mosque" style="font-size:36px;"></i><p>Belum ada riwayat zakat</p></div></div>
+                </div>
+            </div>
+
+        <!-- ======== VIEW: REFERRAL ======== -->
+        <div id="referral-view" class="view">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <div style="width:44px;height:44px;background:linear-gradient(135deg,#1D4ED8,#3B82F6);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div>
+                    <h2 style="font-size:20px;font-weight:800;color:#1F2937;margin:0;">Referral SGT</h2>
+                    <p style="font-size:12px;color:#6B7280;margin:0;">Ajak teman, dapat bonus SGT berdua</p>
+                </div>
+            </div>
+
+            <!-- Referral card -->
+            <div class="referral-card">
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
+                    <div class="ref-stat"><p id="refTotal" style="font-size:18px;font-weight:900;color:#93C5FD;margin:0;">0</p><p style="font-size:9px;opacity:0.7;margin:2px 0 0;">Total Referral</p></div>
+                    <div class="ref-stat"><p id="refBonus" style="font-size:18px;font-weight:900;color:#FCD34D;margin:0;">0</p><p style="font-size:9px;opacity:0.7;margin:2px 0 0;">SGT Earned</p></div>
+                    <div class="ref-stat"><p id="refActive" style="font-size:18px;font-weight:900;color:#6EE7B7;margin:0;">0</p><p style="font-size:9px;opacity:0.7;margin:2px 0 0;">Aktif Belanja</p></div>
+                </div>
+                <p style="font-size:12px;opacity:0.85;line-height:1.5;">Kamu dapat <strong>200 SGT</strong> untuk setiap teman yang berhasil mendaftar dan melakukan transaksi pertama. Teman kamu juga dapat <strong>100 SGT</strong> bonus selamat datang.</p>
+            </div>
+
+            <!-- Kode referral -->
+            <div class="sosial-card">
+                <h4 style="font-weight:800;color:#1F2937;margin-bottom:12px;font-size:14px;"><i class="fas fa-link" style="color:#3B82F6;margin-right:8px;"></i>Kode Referralmu</h4>
+                <div class="referral-link-box">
+                    <i class="fas fa-tag" style="color:#059669;font-size:16px;flex-shrink:0;"></i>
+                    <span id="refCodeDisplay" style="font-size:16px;font-weight:900;color:#1F2937;letter-spacing:2px;flex:1;">...</span>
+                    <button onclick="copyRefCode()" style="background:#059669;color:white;border:none;padding:8px 14px;border-radius:8px;font-weight:700;cursor:pointer;font-size:12px;font-family:inherit;">
+                        <i class="fas fa-copy" style="margin-right:4px;"></i>Salin
+                    </button>
+                </div>
+                <button onclick="shareReferral()" style="width:100%;background:linear-gradient(135deg,#1D4ED8,#3B82F6);color:white;border:none;padding:12px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">
+                    <i class="fas fa-share-alt" style="margin-right:8px;"></i>Bagikan ke Teman
+                </button>
+            </div>
+
+            <!-- Masukkan kode referral -->
+            <div class="sosial-card">
+                <h4 style="font-weight:800;color:#1F2937;margin-bottom:12px;font-size:14px;"><i class="fas fa-gift" style="color:#F59E0B;margin-right:8px;"></i>Punya Kode Referral?</h4>
+                <div id="refInputArea">
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="refCodeInput" class="form-input" style="flex:1;text-transform:uppercase;letter-spacing:2px;" placeholder="Masukkan kode" maxlength="8">
+                        <button onclick="claimReferral()" style="background:#F59E0B;color:white;border:none;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;font-size:12px;white-space:nowrap;">Klaim</button>
+                    </div>
+                    <p style="font-size:11px;color:#6B7280;margin:6px 0 0;">Hanya bisa diklaim sekali. Kamu dan pemberi kode sama-sama dapat bonus.</p>
+                </div>
+                <div id="refAlreadyClaimed" style="display:none;background:#D1FAE5;border-radius:10px;padding:12px;text-align:center;">
+                    <p style="font-size:13px;color:#065F46;font-weight:700;"><i class="fas fa-check-circle" style="margin-right:6px;"></i>Kamu sudah menggunakan kode referral</p>
+                </div>
+            </div>
+
+            <!-- Daftar referral -->
+            <div class="sosial-card">
+                <h4 style="font-weight:800;color:#1F2937;margin-bottom:12px;font-size:14px;"><i class="fas fa-user-friends" style="color:#8B5CF6;margin-right:8px;"></i>Teman yang Kamu Referral</h4>
+                <div id="refFriendsList"><div class="empty-state" style="padding:24px;"><i class="fas fa-user-plus" style="font-size:36px;"></i><p>Belum ada teman yang bergabung</p></div></div>
+            </div>
+        </div>
+
+        <!-- ======== VIEW: VOTING KOMUNITAS ======== -->
+        <div id="voting-view" class="view">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <div style="width:44px;height:44px;background:linear-gradient(135deg,#D97706,#F59E0B);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;">
+                    <i class="fas fa-vote-yea"></i>
+                </div>
+                <div>
+                    <h2 style="font-size:20px;font-weight:800;color:#1F2937;margin:0;">Voting Komunitas</h2>
+                    <p style="font-size:12px;color:#6B7280;margin:0;">Tentukan siapa yang layak dapat bantuan</p>
+                </div>
+                <div style="margin-left:auto;background:#FEF3C7;border:1.5px solid #F59E0B;border-radius:16px;padding:5px 12px;font-size:11px;font-weight:800;color:#92400E;">
+                    <i class="fas fa-coins" style="margin-right:4px;"></i><span id="voteWeight">1 Suara</span>
+                </div>
+            </div>
+
+            <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:14px;padding:14px;margin-bottom:14px;">
+                <p style="font-size:12px;color:#92400E;"><i class="fas fa-info-circle" style="margin-right:6px;"></i><strong>Bobot suara:</strong> Bronze = 1, Silver = 2, Gold = 3, Platinum = 5. Semakin tinggi tier, suaramu lebih berpengaruh. Setiap user bisa vote sekali per proposal.</p>
+            </div>
+
+            <div class="tab-fase3">
+                <button class="active" onclick="switchVoteTab('aktif',this)">Proposal Aktif</button>
+                <button onclick="switchVoteTab('selesai',this)">Selesai</button>
+                <button onclick="switchVoteTab('buatproposal',this)">+ Ajukan</button>
+            </div>
+
+            <div id="vote-tab-aktif">
+                <div id="voteActiveList"><div class="empty-state" style="padding:40px;"><i class="fas fa-vote-yea" style="font-size:40px;"></i><p>Belum ada proposal aktif</p></div></div>
+            </div>
+
+            <div id="vote-tab-selesai" style="display:none;">
+                <div id="voteClosedList"><div class="empty-state" style="padding:40px;"><i class="fas fa-check-square" style="font-size:40px;"></i><p>Belum ada voting selesai</p></div></div>
+            </div>
+
+            <div id="vote-tab-buatproposal" style="display:none;">
+                <div class="sosial-card">
+                    <h4 style="font-weight:800;color:#1F2937;margin-bottom:14px;font-size:14px;"><i class="fas fa-plus" style="color:#D97706;margin-right:8px;"></i>Ajukan Proposal Bantuan</h4>
+                    <div class="form-group">
+                        <label class="form-label">Nama Penerima</label>
+                        <input type="text" id="propNama" class="form-input" placeholder="Nama lengkap penerima">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Jenis Bantuan</label>
+                        <select id="propJenis" class="form-input">
+                            <option value="">Pilih jenis</option>
+                            <option value="sembako">Sembako (300 SGT)</option>
+                            <option value="kesehatan">Kesehatan (500 SGT)</option>
+                            <option value="darurat">Darurat / Musibah (1000 SGT)</option>
+                            <option value="pendidikan">Pendidikan (500 SGT)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Alasan Pengajuan</label>
+                        <textarea id="propAlasan" class="form-input" rows="3" placeholder="Jelaskan situasi penerima secara singkat..." style="resize:vertical;font-family:inherit;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Durasi Voting (hari)</label>
+                        <select id="propDurasi" class="form-input">
+                            <option value="3">3 hari</option>
+                            <option value="5" selected>5 hari</option>
+                            <option value="7">7 hari</option>
+                        </select>
+                    </div>
+                    <div style="background:#EFF6FF;border-radius:10px;padding:10px;margin-bottom:12px;">
+                        <p style="font-size:11px;color:#1D4ED8;"><i class="fas fa-info-circle" style="margin-right:4px;"></i>Proposal disetujui jika 60% suara mendukung setelah masa voting berakhir.</p>
+                    </div>
+                    <button onclick="submitProposal()" style="width:100%;background:linear-gradient(135deg,#D97706,#F59E0B);color:white;border:none;padding:12px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">
+                        <i class="fas fa-paper-plane" style="margin-right:8px;"></i>Kirim Proposal
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======== VIEW: BADGE & ACHIEVEMENT ======== -->
+        <div id="badge-view" class="view">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <div style="width:44px;height:44px;background:linear-gradient(135deg,#D97706,#F59E0B);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;">
+                    <i class="fas fa-medal"></i>
+                </div>
+                <div>
+                    <h2 style="font-size:20px;font-weight:800;color:#1F2937;margin:0;">Badge & Achievement</h2>
+                    <p style="font-size:12px;color:#6B7280;margin:0;">Kumpulkan lencana, unlock reward eksklusif</p>
+                </div>
+            </div>
+
+            <!-- Progress summary -->
+            <div style="background:linear-gradient(135deg,#7C3AED,#8B5CF6);border-radius:22px;padding:20px;margin-bottom:16px;color:white;">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                    <div style="width:56px;height:56px;background:rgba(255,255,255,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;" id="userRankIcon">🥉</div>
+                    <div>
+                        <p style="font-size:11px;opacity:0.8;margin:0;">RANK KAMU</p>
+                        <p id="userRankLabel" style="font-size:18px;font-weight:900;margin:0;">Pemula</p>
+                    </div>
+                    <div style="margin-left:auto;text-align:right;">
+                        <p style="font-size:10px;opacity:0.75;margin:0;">Badge diraih</p>
+                        <p id="badgeCount" style="font-size:22px;font-weight:900;color:#FCD34D;margin:0;">0/12</p>
+                    </div>
+                </div>
+                <div style="height:6px;background:rgba(255,255,255,0.15);border-radius:3px;overflow:hidden;">
+                    <div id="rankBar" style="height:100%;width:0%;background:linear-gradient(90deg,#FCD34D,#F59E0B);border-radius:3px;transition:width 0.5s;"></div>
+                </div>
+            </div>
+
+            <!-- Badge grid -->
+            <div id="badgeGrid" class="badge-grid">
+                <!-- Rendered by JS -->
+            </div>
+
+            <!-- Reward eksklusif -->
+            <div class="sosial-card">
+                <h4 style="font-weight:800;color:#1F2937;margin-bottom:12px;font-size:14px;"><i class="fas fa-star" style="color:#F59E0B;margin-right:8px;"></i>Reward Eksklusif dari Badge</h4>
+                <div id="badgeRewardList">
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px;background:#FFFBEB;border-radius:12px;margin-bottom:8px;border:1px solid #FDE68A;">
+                        <div style="font-size:22px;">🎁</div>
+                        <div style="flex:1;"><p style="font-weight:700;font-size:13px;color:#1F2937;margin:0;">Diskon 20% (unlock 3 badge)</p><p style="font-size:11px;color:#6B7280;margin:0;">Berlaku untuk semua produk</p></div>
+                        <span id="reward3badge" style="font-size:11px;background:#FEF3C7;color:#92400E;padding:3px 8px;border-radius:8px;font-weight:700;">Terkunci</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px;background:#EFF6FF;border-radius:12px;margin-bottom:8px;border:1px solid #BFDBFE;">
+                        <div style="font-size:22px;">💎</div>
+                        <div style="flex:1;"><p style="font-weight:700;font-size:13px;color:#1F2937;margin:0;">Tier Upgrade Instan (unlock 6 badge)</p><p style="font-size:11px;color:#6B7280;margin:0;">Naik satu tier tanpa syarat saldo</p></div>
+                        <span id="reward6badge" style="font-size:11px;background:#DBEAFE;color:#1D4ED8;padding:3px 8px;border-radius:8px;font-weight:700;">Terkunci</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px;background:#F5F3FF;border-radius:12px;border:1px solid #DDD6FE;">
+                        <div style="font-size:22px;">👑</div>
+                        <div style="flex:1;"><p style="font-weight:700;font-size:13px;color:#1F2937;margin:0;">Platinum Lifetime (unlock semua badge)</p><p style="font-size:11px;color:#6B7280;margin:0;">Tier Platinum permanen tanpa syarat</p></div>
+                        <span id="reward12badge" style="font-size:11px;background:#EDE9FE;color:#4C1D95;padding:3px 8px;border-radius:8px;font-weight:700;">Terkunci</span>
                     </div>
                 </div>
             </div>
@@ -3989,6 +4293,10 @@ window.authenticatePi = async function() {
         logDebug("Auth sukses: @" + currentUser.username);
 
         loadDataFromFirebase();
+        // Init fase 3 data after login
+        setTimeout(() => {
+            if (typeof initFase3 === 'function') initFase3();
+        }, 800);
         switchView('home');
 
     } catch (error) {
@@ -4484,7 +4792,8 @@ async function cancelPaymentOnServer(paymentId) {
 window.switchView = function(view) {
     const validViews = ['home', 'products', 'cart', 'orders', 'account', 'wallet',
                         'admin-dashboard', 'admin-products', 'admin-orders', 'admin-analytics',
-                        'sgt-sosial', 'admin-sgt-sosial'];
+                        'sgt-sosial', 'admin-sgt-sosial',
+                        'referral', 'voting', 'badge'];
     if (!validViews.includes(view)) {
         logDebug("Invalid view: " + view);
         return;
@@ -4517,7 +4826,8 @@ window.switchView = function(view) {
         'orders': 'nav-orders', 'account': 'nav-account', 'wallet': 'nav-account',
         'admin-dashboard': 'nav-account', 'admin-products': 'nav-account',
         'admin-orders': 'nav-account', 'admin-analytics': 'nav-account',
-        'sgt-sosial': 'nav-sgt-sosial', 'admin-sgt-sosial': 'nav-account'
+        'sgt-sosial': 'nav-sgt-sosial', 'admin-sgt-sosial': 'nav-account',
+        'referral': 'nav-account', 'voting': 'nav-account', 'badge': 'nav-account'
     };
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     const navId = navMap[view];
@@ -4537,6 +4847,9 @@ window.switchView = function(view) {
             case 'admin-analytics': renderAdminAnalytics(); break;
             case 'sgt-sosial': if(typeof updateSosialUI==='function'){updateSosialUI(); if(typeof switchSosialTab==='function') switchSosialTab('rewards',null);} break;
             case 'admin-sgt-sosial': if(typeof switchAdminSosialTab==='function') switchAdminSosialTab('beasiswa',null); if(typeof updateAdminSosialBadge==='function') updateAdminSosialBadge(); break;
+            case 'referral': loadReferralData(); break;
+            case 'voting': loadVotingData(); break;
+            case 'badge': renderBadges(); break;
         }
     }, 50);
 };
@@ -4911,6 +5224,30 @@ function renderAccount() {
                 <div style="flex:1;">
                     <p style="font-weight:700;color:#1F2937;">Pesanan Saya</p>
                     <p style="font-size:12px;color:#6B7280;">${myOrders.length} pesanan</p>
+                </div>
+                <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
+            </div>
+            <div class="card" onclick="switchView('referral')" style="cursor:pointer;display:flex;align-items:center;gap:12px;border-left:3px solid #3B82F6;">
+                <div style="width:48px;height:48px;background:#DBEAFE;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#1D4ED8;font-size:20px;"><i class="fas fa-users"></i></div>
+                <div style="flex:1;">
+                    <p style="font-weight:700;color:#1F2937;">Referral</p>
+                    <p style="font-size:12px;color:#6B7280;">Ajak teman, dapat +200 SGT berdua</p>
+                </div>
+                <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
+            </div>
+            <div class="card" onclick="switchView('voting')" style="cursor:pointer;display:flex;align-items:center;gap:12px;border-left:3px solid #D97706;">
+                <div style="width:48px;height:48px;background:#FEF3C7;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#D97706;font-size:20px;"><i class="fas fa-vote-yea"></i></div>
+                <div style="flex:1;">
+                    <p style="font-weight:700;color:#1F2937;">Voting Komunitas</p>
+                    <p style="font-size:12px;color:#6B7280;">Tentukan penerima bantuan sosial</p>
+                </div>
+                <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
+            </div>
+            <div class="card" onclick="switchView('badge')" style="cursor:pointer;display:flex;align-items:center;gap:12px;border-left:3px solid #8B5CF6;">
+                <div style="width:48px;height:48px;background:#EDE9FE;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#7C3AED;font-size:20px;"><i class="fas fa-medal"></i></div>
+                <div style="flex:1;">
+                    <p style="font-weight:700;color:#1F2937;">Badge & Achievement</p>
+                    <p style="font-size:12px;color:#6B7280;">Kumpulkan lencana & reward eksklusif</p>
                 </div>
                 <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
             </div>
@@ -6098,6 +6435,525 @@ window.loadSGTDataWithSosial = async function() {
 // ============================================
 
 // Register ke sistem antrian (jika ada)
+
+// ============================================================
+// FASE 3: ZAKAT · REFERRAL · VOTING · BADGE
+// ============================================================
+
+// ── BADGE DEFINITIONS ──────────────────────────────────────
+const BADGE_DEFS = [
+    { id:'first_buy',    icon:'🛒', name:'Pembeli Pertama',  desc:'Transaksi pertama',           req: s => s.totalOrders >= 1 },
+    { id:'loyal5',       icon:'⭐', name:'Pelanggan Setia',  desc:'5 kali transaksi',            req: s => s.totalOrders >= 5 },
+    { id:'loyal20',      icon:'🌟', name:'Super Loyal',      desc:'20 kali transaksi',           req: s => s.totalOrders >= 20 },
+    { id:'sgt500',       icon:'💰', name:'Kolektor SGT',     desc:'Kumpulkan 500 SGT',           req: s => s.sgtEarned >= 500 },
+    { id:'sgt5000',      icon:'💎', name:'SGT Whale',        desc:'Kumpulkan 5000 SGT',          req: s => s.sgtEarned >= 5000 },
+    { id:'staker',       icon:'🔐', name:'Staker Pertama',   desc:'Lakukan 1 staking',           req: s => s.totalStaking >= 1 },
+    { id:'zakat1',       icon:'🌙', name:'Muzakki',          desc:'Bayar zakat pertama',         req: s => s.totalZakat >= 1 },
+    { id:'referral1',    icon:'🤝', name:'Pengajak',         desc:'Referral 1 teman',            req: s => s.totalReferrals >= 1 },
+    { id:'referral5',    icon:'👥', name:'Duta Sagatama',    desc:'Referral 5 teman',            req: s => s.totalReferrals >= 5 },
+    { id:'voter1',       icon:'🗳️', name:'Suara Rakyat',    desc:'Vote 1 proposal',             req: s => s.totalVotes >= 1 },
+    { id:'beasiswa1',    icon:'🎓', name:'Dermawan Ilmu',    desc:'Bantu 1 beasiswa approved',   req: s => s.totalBeasiswa >= 1 },
+    { id:'platinum',     icon:'👑', name:'Legenda SGT',      desc:'Raih tier Platinum',          req: s => s.tierName === 'Platinum' },
+];
+
+const RANK_LEVELS = [
+    { name:'Pemula',     icon:'🥉', min:0  },
+    { name:'Pejuang',    icon:'🥈', min:3  },
+    { name:'Pahlawan',   icon:'🥇', min:6  },
+    { name:'Legenda',    icon:'👑', min:10 },
+];
+
+// ── USER STATS (cached, refreshed on demand) ────────────────
+let userStats = {
+    totalOrders:0, sgtEarned:0, totalStaking:0,
+    totalZakat:0, totalReferrals:0, totalVotes:0,
+    totalBeasiswa:0, tierName:'Bronze',
+    unlockedBadges:[], newBadges:[]
+};
+
+async function loadUserStats() {
+    if (!currentUser || !db) return;
+    try {
+        const snap = await getDoc(doc(db, 'user_stats', currentUser.uid));
+        if (snap.exists()) userStats = { ...userStats, ...snap.data() };
+        // Also update sgtEarned from live balance
+        userStats.sgtEarned = Math.max(userStats.sgtEarned, sgtBalance);
+        userStats.tierName   = getUserTier(sgtBalance).name;
+    } catch(e) { logDebug('loadUserStats err: ' + e.message); }
+}
+
+async function saveUserStats() {
+    if (!currentUser || !db) return;
+    try {
+        await setDoc(doc(db, 'user_stats', currentUser.uid), {
+            ...userStats, uid: currentUser.uid,
+            username: currentUser.username,
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+    } catch(e) {}
+}
+
+async function incrementStat(field, amount=1) {
+    await loadUserStats();
+    userStats[field] = (userStats[field] || 0) + amount;
+    await saveUserStats();
+    await checkNewBadges();
+}
+
+// ── BADGES ──────────────────────────────────────────────────
+window.checkNewBadges = async function() {
+    await loadUserStats();
+    const prev = userStats.unlockedBadges || [];
+    const newly = [];
+    BADGE_DEFS.forEach(b => {
+        if (!prev.includes(b.id) && b.req(userStats)) {
+            prev.push(b.id);
+            newly.push(b);
+        }
+    });
+    if (newly.length) {
+        userStats.unlockedBadges = prev;
+        userStats.newBadges      = (userStats.newBadges || []).concat(newly.map(b=>b.id));
+        await saveUserStats();
+        newly.forEach(b => showToast(`🏅 Badge baru: "${b.name}" ${b.icon}`, 'success'));
+        // Badge reward unlocks
+        if (prev.length >= 12) { unlockBadgeReward('reward12badge','✅ Platinum Lifetime'); }
+        else if (prev.length >= 6) { unlockBadgeReward('reward6badge','✅ Tier Upgrade Aktif'); }
+        else if (prev.length >= 3) { unlockBadgeReward('reward3badge','✅ Diskon 20% Aktif'); }
+    }
+    if (document.getElementById('badgeGrid')) renderBadges();
+};
+
+function unlockBadgeReward(elId, label) {
+    const el = document.getElementById(elId);
+    if (el) { el.textContent = label; el.style.background='#D1FAE5'; el.style.color='#065F46'; }
+}
+
+window.renderBadges = async function() {
+    await loadUserStats();
+    const grid = document.getElementById('badgeGrid');
+    if (!grid) return;
+    const unlocked = userStats.unlockedBadges || [];
+    const isNew    = userStats.newBadges      || [];
+    const count    = unlocked.length;
+    const rank     = RANK_LEVELS.slice().reverse().find(r => count >= r.min) || RANK_LEVELS[0];
+    const nextRank = RANK_LEVELS.find(r => r.min > count);
+    const pct      = nextRank ? Math.min(100, Math.round(((count-rank.min)/(nextRank.min-rank.min))*100)) : 100;
+
+    const el = id => document.getElementById(id);
+    if (el('userRankLabel')) el('userRankLabel').textContent = rank.name;
+    if (el('userRankIcon'))  el('userRankIcon').textContent  = rank.icon;
+    if (el('badgeCount'))    el('badgeCount').textContent    = count+'/'+BADGE_DEFS.length;
+    if (el('rankBar'))       el('rankBar').style.width       = pct+'%';
+
+    grid.innerHTML = BADGE_DEFS.map(b => {
+        const has    = unlocked.includes(b.id);
+        const fresh  = isNew.includes(b.id);
+        return `<div class="badge-item ${has?'unlocked':'locked'}">
+            ${fresh ? '<span class="badge-new">NEW</span>' : ''}
+            <span class="badge-icon">${b.icon}</span>
+            <div class="badge-name">${b.name}</div>
+            <div class="badge-desc">${b.desc}</div>
+        </div>`;
+    }).join('');
+
+    // Clear new badges after display
+    if (isNew.length) {
+        userStats.newBadges = [];
+        saveUserStats().catch(()=>{});
+    }
+    // Update badge rewards
+    if (count >= 3)  unlockBadgeReward('reward3badge','✅ Diskon 20% Aktif');
+    if (count >= 6)  unlockBadgeReward('reward6badge','✅ Tier Upgrade Aktif');
+    if (count >= 12) unlockBadgeReward('reward12badge','✅ Platinum Lifetime');
+};
+
+// ── ZAKAT ───────────────────────────────────────────────────
+let currentNisab = 5000; // Default: 5000 SGT ≈ nisab emas
+
+window.updateNisabUI = function() {
+    if (!document.getElementById('zakatSaldoLabel')) return;
+    const el = id => document.getElementById(id);
+    const nisab = currentNisab;
+    const bal   = sgtBalance;
+    if (el('zakatSaldoLabel')) el('zakatSaldoLabel').textContent = bal.toLocaleString()+' SGT';
+    if (el('nisabLabel'))      el('nisabLabel').textContent      = nisab.toLocaleString()+' SGT';
+    const pct = Math.min(100, Math.round((bal/nisab)*100));
+    if (el('nisabBar'))        el('nisabBar').style.width        = pct+'%';
+    const zakatAmt = bal >= nisab ? Math.floor(bal * 0.025) : 0;
+    if (zakatAmt > 0) {
+        if (el('zakatResult'))     el('zakatResult').style.display     = 'block';
+        if (el('zakatBelumNisab')) el('zakatBelumNisab').style.display = 'none';
+        if (el('zakatAmount'))     el('zakatAmount').textContent        = zakatAmt.toLocaleString()+' SGT';
+        if (el('zakatSisa'))       el('zakatSisa').textContent          = (bal-zakatAmt).toLocaleString()+' SGT';
+    } else {
+        if (el('zakatResult'))     el('zakatResult').style.display     = 'none';
+        if (el('zakatBelumNisab')) el('zakatBelumNisab').style.display = 'block';
+    }
+    loadZakatHistory();
+};
+
+window.updateNisab = function() {
+    const val = parseInt(document.getElementById('nisabInput')?.value);
+    if (!val || val < 100) { showToast('Nisab minimal 100 SGT','error'); return; }
+    currentNisab = val;
+    updateNisabUI();
+    showToast('Nisab diperbarui: '+val.toLocaleString()+' SGT','success');
+};
+
+window.bayarZakat = async function() {
+    if (!currentUser) { showToast('Silakan login dahulu','warning'); return; }
+    const zakatAmt = sgtBalance >= currentNisab ? Math.floor(sgtBalance * 0.025) : 0;
+    if (zakatAmt <= 0) { showToast('Saldo belum mencapai nisab','warning'); return; }
+    if (!confirm(`Bayar zakat ${zakatAmt.toLocaleString()} SGT ke Baitul Maal?`)) return;
+    try {
+        // Deduct from user balance
+        sgtBalance -= zakatAmt;
+        sgtTransactions.unshift({ type:'zakat', amount:zakatAmt,
+            description:'Zakat mal 2.5%', date:new Date().toISOString(), userId:currentUser.uid });
+        saveSGTData(); updateSGTUI();
+        // Auto-burn 2% of zakat, rest to Baitul Maal
+        const burnAmt  = Math.floor(zakatAmt * 0.02);
+        const baitulAmt = zakatAmt - burnAmt;
+        await burnSGTFromSupply(burnAmt, 'zakat_burn');
+        await addDanaToPool('baitul_maal', baitulAmt);
+        // Log to Firestore
+        await addDoc(collection(db,'zakat_logs'), {
+            userId:currentUser.uid, username:currentUser.username,
+            amount:zakatAmt, burnAmt, baitulAmt,
+            nisab:currentNisab, timestamp:serverTimestamp()
+        });
+        await incrementStat('totalZakat');
+        showToast(`✅ Zakat ${zakatAmt.toLocaleString()} SGT berhasil dibayar! JazakallahuKhairan 🌙`,'success');
+        updateNisabUI();
+        updateSosialUI();
+    } catch(e) { showToast('Gagal bayar zakat: '+e.message,'error'); }
+};
+
+async function loadZakatHistory() {
+    if (!currentUser||!db) return;
+    const c = document.getElementById('zakatHistory');
+    if (!c) return;
+    try {
+        const snap = await getDocs(query(collection(db,'zakat_logs'),
+            where('userId','==',currentUser.uid), orderBy('timestamp','desc'), limit(5)));
+        if (snap.empty) { c.innerHTML='<div class="empty-state" style="padding:24px;"><i class="fas fa-mosque" style="font-size:36px;"></i><p>Belum ada riwayat zakat</p></div>'; return; }
+        c.innerHTML='';
+        snap.forEach(d => {
+            const s=d.data();
+            const dt=s.timestamp?.toDate?s.timestamp.toDate().toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):'-';
+            c.innerHTML+=`<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#F0FDF4;border-radius:12px;margin-bottom:8px;">
+                <div style="width:38px;height:38px;background:#D1FAE5;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;">🌙</div>
+                <div style="flex:1;"><p style="font-weight:700;color:#065F46;font-size:13px;margin:0;">Zakat Mal 2.5%</p><p style="font-size:10px;color:#6B7280;margin:0;">${dt}</p></div>
+                <p style="font-weight:800;color:#059669;">-${s.amount?.toLocaleString()} SGT</p>
+            </div>`;
+        });
+    } catch(e) {}
+}
+
+// Hook zakat tab: refresh UI when opened
+const _origSwitchSosialTab = window.switchSosialTab;
+window.switchSosialTab = function(tab, btn) {
+    if (typeof _origSwitchSosialTab === 'function') _origSwitchSosialTab(tab, btn);
+    if (tab === 'zakat') setTimeout(updateNisabUI, 100);
+};
+
+// ── REFERRAL ────────────────────────────────────────────────
+function genRefCode(username) {
+    const raw = (username||'SGT').toUpperCase().replace(/[^A-Z0-9]/g,'').substring(0,4);
+    const hash = Math.abs(Array.from(raw+username).reduce((a,c)=>((a<<5)-a)+c.charCodeAt(0),0)) % 9999;
+    return raw + String(hash).padStart(4,'0');
+}
+
+window.initReferralCode = async function() {
+    if (!currentUser||!db) return;
+    const code = genRefCode(currentUser.username);
+    try {
+        await setDoc(doc(db,'referral_codes',code), {
+            code, userId:currentUser.uid, username:currentUser.username,
+            createdAt:serverTimestamp()
+        }, { merge:true });
+        currentUser.refCode = code;
+    } catch(e) {}
+    const el = document.getElementById('refCodeDisplay');
+    if (el) el.textContent = code;
+};
+
+window.loadReferralData = async function() {
+    if (!currentUser||!db) return;
+    const code = currentUser.refCode || genRefCode(currentUser.username);
+    const el = id => document.getElementById(id);
+    if (el('refCodeDisplay')) el('refCodeDisplay').textContent = code;
+    try {
+        // Load referral stats
+        const snap = await getDocs(query(collection(db,'referrals'),
+            where('refBy','==',currentUser.uid), orderBy('createdAt','desc')));
+        const active = snap.docs.filter(d=>d.data().hasTransacted).length;
+        const bonus  = snap.docs.reduce((s,d)=>s+(d.data().bonusGiven||0),0);
+        if (el('refTotal'))  el('refTotal').textContent  = snap.size;
+        if (el('refBonus'))  el('refBonus').textContent  = bonus.toLocaleString();
+        if (el('refActive')) el('refActive').textContent = active;
+        // Friends list
+        const list = document.getElementById('refFriendsList');
+        if (list) {
+            if (snap.empty) { list.innerHTML='<div class="empty-state" style="padding:24px;"><i class="fas fa-user-plus" style="font-size:36px;"></i><p>Belum ada teman</p></div>'; }
+            else {
+                list.innerHTML='';
+                snap.forEach(d => {
+                    const s=d.data();
+                    const dt=s.createdAt?.toDate?s.createdAt.toDate().toLocaleDateString('id-ID',{day:'numeric',month:'short'}):'-';
+                    list.innerHTML+=`<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#EFF6FF;border-radius:12px;margin-bottom:8px;">
+                        <div style="width:38px;height:38px;background:#DBEAFE;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;">👤</div>
+                        <div style="flex:1;"><p style="font-weight:700;color:#1D4ED8;font-size:13px;margin:0;">@${s.username||'user'}</p><p style="font-size:10px;color:#6B7280;margin:0;">${dt} · ${s.hasTransacted?'<span style=color:#059669>Aktif</span>':'<span style=color:#6B7280>Belum transaksi</span>'}</p></div>
+                        <p style="font-weight:800;color:#1D4ED8;font-size:12px;">+${s.bonusGiven||200} SGT</p>
+                    </div>`;
+                });
+            }
+        }
+        // Check if already claimed a ref code
+        const myRef = await getDoc(doc(db,'users',currentUser.uid));
+        const claimedCode = myRef.exists() ? myRef.data().claimedRefCode : null;
+        const inputArea  = document.getElementById('refInputArea');
+        const claimedDiv = document.getElementById('refAlreadyClaimed');
+        if (claimedCode) {
+            if (inputArea)  inputArea.style.display  = 'none';
+            if (claimedDiv) claimedDiv.style.display = 'block';
+        }
+    } catch(e) { logDebug('loadReferralData err: '+e.message); }
+};
+
+window.copyRefCode = function() {
+    const code = currentUser?.refCode || genRefCode(currentUser?.username||'');
+    navigator.clipboard?.writeText(code).then(()=>showToast('Kode disalin: '+code,'success'))
+        .catch(()=>showToast('Kode kamu: '+code,'info'));
+};
+
+window.shareReferral = function() {
+    const code = currentUser?.refCode || genRefCode(currentUser?.username||'');
+    const text  = `Hei! Bergabung di Sagatama Mart dan gunakan kode referralku: ${code} — kita berdua dapat bonus SGT! 🎁`;
+    if (navigator.share) { navigator.share({ title:'Sagatama Mart', text }).catch(()=>{}); }
+    else { navigator.clipboard?.writeText(text); showToast('Pesan disalin ke clipboard!','success'); }
+};
+
+window.claimReferral = async function() {
+    if (!currentUser) { showToast('Silakan login dahulu','warning'); return; }
+    const codeInput = document.getElementById('refCodeInput')?.value.trim().toUpperCase();
+    if (!codeInput || codeInput.length < 4) { showToast('Masukkan kode referral yang valid','error'); return; }
+    const myCode = currentUser.refCode || genRefCode(currentUser.username);
+    if (codeInput === myCode) { showToast('Tidak bisa pakai kode sendiri','error'); return; }
+    try {
+        // Check code exists
+        const codeSnap = await getDoc(doc(db,'referral_codes',codeInput));
+        if (!codeSnap.exists()) { showToast('Kode tidak ditemukan','error'); return; }
+        const refData = codeSnap.data();
+        if (refData.userId === currentUser.uid) { showToast('Tidak bisa pakai kode sendiri','error'); return; }
+        // Check already claimed
+        const mySnap = await getDoc(doc(db,'users',currentUser.uid));
+        if (mySnap.data()?.claimedRefCode) { showToast('Kamu sudah menggunakan kode referral','warning'); return; }
+        // Apply referral
+        await setDoc(doc(db,'users',currentUser.uid), { claimedRefCode:codeInput, updatedAt:serverTimestamp() }, {merge:true});
+        await addDoc(collection(db,'referrals'), {
+            refBy:refData.userId, refByUsername:refData.username,
+            userId:currentUser.uid, username:currentUser.username,
+            code:codeInput, hasTransacted:false, bonusGiven:200,
+            createdAt:serverTimestamp()
+        });
+        // Give bonus to claimer (100 SGT welcome bonus)
+        sgtBalance += 100;
+        sgtTransactions.unshift({ type:'earn', amount:100, description:'Bonus referral selamat datang', date:new Date().toISOString() });
+        saveSGTData(); updateSGTUI();
+        await mintSGT(100, currentUser.uid);
+        // Give bonus to referrer (200 SGT)
+        const refUserSnap = await getDoc(doc(db,'users',refData.userId));
+        if (refUserSnap.exists()) {
+            const curBal = refUserSnap.data().sgtBalance || 0;
+            await setDoc(doc(db,'users',refData.userId), {
+                sgtBalance: curBal+200,
+                sgtTransactions: [{type:'earn',amount:200,description:`Referral bonus dari @${currentUser.username}`,date:new Date().toISOString()},...(refUserSnap.data().sgtTransactions||[])].slice(0,50),
+                updatedAt:serverTimestamp()
+            }, {merge:true});
+            await mintSGT(200, refData.userId);
+        }
+        // Log
+        await incrementStat('totalReferrals', 0); // for claimer stats
+        // Update referrer stats
+        const refStats = await getDoc(doc(db,'user_stats',refData.userId));
+        if (refStats.exists()) {
+            await setDoc(doc(db,'user_stats',refData.userId), {
+                totalReferrals:(refStats.data().totalReferrals||0)+1, updatedAt:serverTimestamp()
+            }, {merge:true});
+        }
+        document.getElementById('refInputArea').style.display  = 'none';
+        document.getElementById('refAlreadyClaimed').style.display = 'block';
+        showToast('🎁 +100 SGT bonus referral! Terima kasih sudah bergabung','success');
+    } catch(e) { showToast('Gagal klaim: '+e.message,'error'); }
+};
+
+// ── VOTING KOMUNITAS ─────────────────────────────────────────
+window.switchVoteTab = function(tab, btn) {
+    ['aktif','selesai','buatproposal'].forEach(t => {
+        const el = document.getElementById('vote-tab-'+t);
+        if (el) el.style.display = t===tab?'block':'none';
+    });
+    document.querySelectorAll('.tab-fase3 button').forEach(b=>b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    if (tab==='aktif')   loadVotingData('active');
+    if (tab==='selesai') loadVotingData('closed');
+};
+
+function getVoteWeight() {
+    const tier = getUserTier(sgtBalance);
+    return { Bronze:1, Silver:2, Gold:3, Platinum:5 }[tier.name] || 1;
+}
+
+window.loadVotingData = async function(status='active') {
+    if (!db) return;
+    const listId = status==='active' ? 'voteActiveList' : 'voteClosedList';
+    const c = document.getElementById(listId);
+    if (!c) return;
+    // Update vote weight display
+    const w = getVoteWeight();
+    const wEl = document.getElementById('voteWeight');
+    if (wEl) wEl.textContent = w+' Suara ('+getUserTier(sgtBalance).name+')';
+    try {
+        const q = query(collection(db,'vote_proposals'), where('status','==',status), orderBy('createdAt','desc'), limit(10));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+            c.innerHTML=`<div class="empty-state" style="padding:40px;"><i class="fas fa-vote-yea" style="font-size:40px;"></i><p>${status==='active'?'Belum ada proposal aktif':'Belum ada voting selesai'}</p></div>`;
+            return;
+        }
+        c.innerHTML='';
+        const myVotes = new Set();
+        if (currentUser) {
+            const mySnap = await getDocs(query(collection(db,'votes'), where('userId','==',currentUser.uid)));
+            mySnap.forEach(d=>myVotes.add(d.data().proposalId));
+        }
+        snap.forEach(d => {
+            const p = d.data(); const pid = d.id;
+            const total   = (p.votesSetuju||0)+(p.votesTolak||0);
+            const pctSetuju = total>0?Math.round((p.votesSetuju||0)/total*100):0;
+            const pctTolak  = 100-pctSetuju;
+            const voted     = myVotes.has(pid);
+            const deadline  = p.deadline?.toDate?p.deadline.toDate():null;
+            const daysLeft  = deadline?Math.max(0,Math.ceil((deadline-new Date())/86400000)):0;
+            const sgtNeeded = {sembako:300,kesehatan:500,darurat:1000,pendidikan:500}[p.jenis]||300;
+            const jenisLabel= {sembako:'Sembako',kesehatan:'Kesehatan',darurat:'Darurat',pendidikan:'Pendidikan'}[p.jenis]||p.jenis;
+            c.innerHTML+=`<div class="vote-card">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                    <div style="flex:1;">
+                        <p style="font-weight:800;color:#1F2937;font-size:14px;margin:0;">${p.nama}</p>
+                        <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">${jenisLabel} · ${sgtNeeded} SGT ${status==='active'?`· <span style="color:${daysLeft<=1?'#EF4444':'#059669'}">${daysLeft} hari lagi</span>`:''}</p>
+                    </div>
+                    <span style="font-size:10px;background:${p.status==='active'?'#D1FAE5':'#F3F4F6'};color:${p.status==='active'?'#065F46':'#6B7280'};padding:3px 8px;border-radius:8px;font-weight:700;">${p.status==='active'?'Aktif':'Selesai'}</span>
+                </div>
+                <p style="font-size:12px;color:#374151;background:#F9FAFB;padding:8px;border-radius:8px;margin-bottom:10px;">${p.alasan}</p>
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:#6B7280;margin-bottom:4px;">
+                        <span>✅ Setuju ${pctSetuju}% (${p.votesSetuju||0} suara)</span>
+                        <span>❌ Tolak ${pctTolak}% (${p.votesTolak||0} suara)</span>
+                    </div>
+                    <div class="vote-bar-wrap"><div class="vote-bar-fill" style="width:${pctSetuju}%;background:linear-gradient(90deg,#059669,#6EE7B7);"></div></div>
+                    <p style="font-size:10px;color:#9CA3AF;margin:3px 0 0;">Butuh 60% untuk disetujui · Total ${total} suara</p>
+                </div>
+                ${status==='active'&&!voted ? `<div style="display:flex;gap:8px;">
+                    <button class="vote-btn setuju" style="flex:1;" onclick="castVote('${pid}','setuju')">✅ Setuju</button>
+                    <button class="vote-btn tolak" style="flex:1;" onclick="castVote('${pid}','tolak')">❌ Tolak</button>
+                </div>` : voted ? `<p style="text-align:center;font-size:12px;color:#059669;font-weight:700;">✅ Kamu sudah memberikan suara</p>` : `<p style="text-align:center;font-size:12px;color:#6B7280;">Voting selesai · ${pctSetuju>=60?'✅ Disetujui':'❌ Ditolak'}</p>`}
+            </div>`;
+        });
+    } catch(e) { logDebug('loadVotingData err: '+e.message); }
+};
+
+window.castVote = async function(proposalId, pilihan) {
+    if (!currentUser) { showToast('Silakan login dahulu','warning'); return; }
+    const w = getVoteWeight();
+    try {
+        // Check already voted
+        const existing = await getDocs(query(collection(db,'votes'),
+            where('userId','==',currentUser.uid), where('proposalId','==',proposalId), limit(1)));
+        if (!existing.empty) { showToast('Kamu sudah memberikan suara','warning'); return; }
+        // Save vote
+        await addDoc(collection(db,'votes'), {
+            userId:currentUser.uid, username:currentUser.username,
+            proposalId, pilihan, weight:w, timestamp:serverTimestamp()
+        });
+        // Update proposal tally
+        const propRef = doc(db,'vote_proposals',proposalId);
+        const propSnap = await getDoc(propRef);
+        if (propSnap.exists()) {
+            const cur = propSnap.data();
+            const field = pilihan==='setuju' ? 'votesSetuju' : 'votesTolak';
+            await updateDoc(propRef, { [field]: (cur[field]||0)+w, totalVotes:(cur.totalVotes||0)+w });
+        }
+        await incrementStat('totalVotes');
+        showToast(`✅ Suaramu (${w} poin) berhasil diberikan!`,'success');
+        loadVotingData('active');
+    } catch(e) { showToast('Gagal vote: '+e.message,'error'); }
+};
+
+window.submitProposal = async function() {
+    if (!currentUser) { showToast('Silakan login dahulu','warning'); return; }
+    const nama   = document.getElementById('propNama')?.value.trim();
+    const jenis  = document.getElementById('propJenis')?.value;
+    const alasan = document.getElementById('propAlasan')?.value.trim();
+    const durasi = parseInt(document.getElementById('propDurasi')?.value)||5;
+    if (!nama||!jenis||!alasan) { showToast('Lengkapi semua data proposal','error'); return; }
+    const deadline = new Date(Date.now()+durasi*86400000);
+    try {
+        await addDoc(collection(db,'vote_proposals'), {
+            nama, jenis, alasan, durasi,
+            deadline, status:'active',
+            proposedBy:currentUser.uid, proposedByUsername:currentUser.username,
+            votesSetuju:0, votesTolak:0, totalVotes:0,
+            createdAt:serverTimestamp()
+        });
+        ['propNama','propAlasan'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+        document.getElementById('propJenis').value='';
+        showToast('✅ Proposal berhasil diajukan! Komunitas akan memilih dalam '+durasi+' hari','success');
+        switchVoteTab('aktif', document.querySelector('.tab-fase3 button'));
+    } catch(e) { showToast('Gagal submit: '+e.message,'error'); }
+};
+
+// ── HOOK: init all fase 3 when user is set ──────────────────
+window.initFase3 = async function() {
+    if (!currentUser) return;
+    await initReferralCode();
+    await checkNewBadges();
+    updateNisabUI();
+};
+
+// ── HOOK: increment orders on purchase ──────────────────────
+const _origLoadDataFromFirebase_fase3 = window.loadDataFromFirebase;
+window.loadDataFromFirebase = function() {
+    if (typeof _origLoadDataFromFirebase_fase3 === 'function') _origLoadDataFromFirebase_fase3();
+};
+
+// ── SCHEDULE CHECK: close expired proposals ─────────────────
+async function checkExpiredProposals() {
+    if (!db) return;
+    try {
+        const now = new Date();
+        const snap = await getDocs(query(collection(db,'vote_proposals'),
+            where('status','==','active'), where('deadline','<=',now), limit(20)));
+        snap.forEach(async d => {
+            const p = d.data();
+            const total = (p.votesSetuju||0)+(p.votesTolak||0);
+            const pct   = total>0 ? (p.votesSetuju||0)/total*100 : 0;
+            const result= pct>=60 ? 'approved' : 'rejected';
+            await updateDoc(doc(db,'vote_proposals',d.id), { status:'closed', result, closedAt:serverTimestamp() });
+            // If approved, auto-disburse from Baitul Maal
+            if (result==='approved') {
+                const sgtNeeded = {sembako:300,kesehatan:500,darurat:1000,pendidikan:500}[p.jenis]||300;
+                await addDanaToPool('bansos_disbursed', sgtNeeded);
+                logDebug('Proposal disetujui komunitas: '+p.nama+' ('+sgtNeeded+' SGT)');
+            }
+        });
+    } catch(e) {}
+}
+// Run check every 5 minutes
+setInterval(checkExpiredProposals, 5*60*1000);
+
+
 if (typeof window._registerReal === 'function') {
     window._registerReal({
         switchView, openModal, closeModal, addToCart, toggleWallet,
@@ -6130,6 +6986,22 @@ if (typeof window._registerReal === 'function') {
         rejectApplication: window.rejectApplication,
         adminDistribusiSGT: window.adminDistribusiSGT,
         awardSGTTiered: window.awardSGTTiered,
+        // Fase 3
+        updateNisabUI: window.updateNisabUI,
+        updateNisab: window.updateNisab,
+        bayarZakat: window.bayarZakat,
+        initReferralCode: window.initReferralCode,
+        loadReferralData: window.loadReferralData,
+        copyRefCode: window.copyRefCode,
+        shareReferral: window.shareReferral,
+        claimReferral: window.claimReferral,
+        loadVotingData: window.loadVotingData,
+        switchVoteTab: window.switchVoteTab,
+        castVote: window.castVote,
+        submitProposal: window.submitProposal,
+        renderBadges: window.renderBadges,
+        checkNewBadges: window.checkNewBadges,
+        initFase3: window.initFase3,
     });
 } // end if (_registerReal)
 
