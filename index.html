@@ -3071,6 +3071,15 @@
                 <p style="font-size:10px;color:#065F46;margin:6px 0 0;">Rate saat ini: <strong id="currentMintRateDisplay">100</strong> SGT/Pi · Ubah dengan hati-hati</p>
             </div>
 
+            <!-- DEBUG: Lihat Semua User & Balance -->
+            <div style="background:#F0F9FF; border-radius:14px; padding:16px; margin-bottom:16px; border:1px solid #BAE6FD;">
+                <h4 style="font-weight:800; margin-bottom:12px; font-size:14px; color:#0369A1;">🔍 Debug: Lihat Semua User</h4>
+                <button onclick="debugListAllUsers()" style="background:#0284C7;color:white;border:none;padding:12px;border-radius:10px;width:100%;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">
+                    <i class="fas fa-users"></i> Tampilkan Semua User & Balance
+                </button>
+                <div id="debugUsersList" style="margin-top:12px;max-height:200px;overflow-y:auto;font-size:12px;display:none;"></div>
+            </div>
+
             <div style="background:#FEF2F2; border-radius:14px; padding:16px; margin-bottom:16px; border:1px solid #FECACA;">
                 <h4 style="font-weight:800; margin-bottom:12px; font-size:14px; color:#B91C1C;">🔥 Burn Token</h4>
                 <div class="form-group">
@@ -3745,6 +3754,14 @@ window._real_.distributeSGTManual = async function() {
             sgtUpdatedAt: serverTimestamp()
         }, { merge: true });
         console.log('[v0] User balance updated successfully');
+        
+        // PERBAIKAN: Verifikasi data tersimpan dengan benar
+        const verifySnap = await getDoc(userDocRef);
+        if (verifySnap.exists()) {
+            const verifyData = verifySnap.data();
+            console.log('[v0] VERIFIKASI - Balance di Firestore:', verifyData.sgtBalance);
+            logDebug('Verifikasi: Balance ' + targetUser + ' = ' + verifyData.sgtBalance + ' SGT');
+        }
 
         await addDoc(collection(db, 'sgt_logs'), {
             adminId: currentUser?.uid || 'admin_manual',
@@ -3777,6 +3794,68 @@ window._real_.distributeSGTManual = async function() {
 
 // 🔥 INI WAJIB (JANGAN SAMPAI GAK ADA)
 window.distributeSGTManual = window._real_.distributeSGTManual;
+
+// DEBUG: Lihat semua user dan balance mereka
+window.debugListAllUsers = async function() {
+    const container = document.getElementById('debugUsersList');
+    if (!container) return;
+    
+    container.style.display = 'block';
+    container.innerHTML = '<p style="color:#0369A1;">Loading...</p>';
+    
+    try {
+        if (!db) {
+            container.innerHTML = '<p style="color:#DC2626;">Database tidak tersedia</p>';
+            return;
+        }
+        
+        const usersSnap = await getDocs(collection(db, 'users'));
+        
+        if (usersSnap.empty) {
+            container.innerHTML = '<p style="color:#DC2626;">Tidak ada user di database</p>';
+            return;
+        }
+        
+        let html = '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
+        html += '<tr style="background:#E0F2FE;"><th style="padding:6px;text-align:left;">Username</th><th style="padding:6px;text-align:right;">Balance</th><th style="padding:6px;text-align:right;">Tx</th></tr>';
+        
+        let totalUsers = 0;
+        let usersWithBalance = 0;
+        let totalBalance = 0;
+        
+        usersSnap.forEach(docSnap => {
+            const data = docSnap.data();
+            const username = data.username || docSnap.id.substring(0,8);
+            const balance = data.sgtBalance || 0;
+            const txCount = (data.sgtTransactions || []).length;
+            
+            totalUsers++;
+            if (balance > 0) {
+                usersWithBalance++;
+                totalBalance += balance;
+            }
+            
+            const rowColor = balance > 0 ? '#ECFDF5' : '#FEF2F2';
+            html += `<tr style="background:${rowColor};border-bottom:1px solid #E5E7EB;">
+                <td style="padding:6px;">@${username}</td>
+                <td style="padding:6px;text-align:right;font-weight:600;color:${balance > 0 ? '#059669' : '#DC2626'};">${balance.toLocaleString()}</td>
+                <td style="padding:6px;text-align:right;color:#6B7280;">${txCount}</td>
+            </tr>`;
+        });
+        
+        html += '</table>';
+        html += `<div style="margin-top:8px;padding:8px;background:#FEF3C7;border-radius:8px;font-size:11px;">
+            <strong>Summary:</strong> ${totalUsers} total users, ${usersWithBalance} dengan balance, Total: ${totalBalance.toLocaleString()} SGT
+        </div>`;
+        
+        container.innerHTML = html;
+        logDebug('Debug: ' + totalUsers + ' users, ' + usersWithBalance + ' dengan balance');
+        
+    } catch (error) {
+        container.innerHTML = `<p style="color:#DC2626;">Error: ${error.message}</p>`;
+        logDebug('Debug error: ' + error.message);
+    }
+};
 
 window.burnSGT = async function() {
     const amount = parseInt(document.getElementById('sgtBurnAmount')?.value);
