@@ -6,6 +6,7 @@
     <title>Sagatama Mart | Pi Native E-Commerce</title>
     <meta name="viewport-content" content="sagatama-mart.vercel.app" />
 	<link rel="icon" href="data:;base64,iVBORw0KGgo=">
+	<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <!-- GLOBAL FUNCTION STUBS — must run first, before any onclick is parsed -->
     <script>
@@ -3428,56 +3429,68 @@ function saveSGTData(forceFirestore = false) {
 }
 
 async function loadSGTData() {
+    return loadSGTDataFixed();
+}
+
+// ============================================
+// SGT LOAD FIXED - Multi-Strategy Fallback (v3)
+// ============================================
+async function loadSGTDataFixed() {
     if (!currentUser) {
-        console.log('[v0] loadSGTData: No currentUser');
+        logDebug('[SGT-v3] No currentUser');
         return;
     }
-    console.log('[v0] loadSGTData: Loading for user', currentUser.uid, currentUser.username);
+    
+    const uid = currentUser.uid;
+    const username = currentUser.username;
+    logDebug(`[SGT-v3] Loading SGT for uid=${uid}, username=${username}`);
+    
     try {
-        // Coba load dari Firestore dulu (lebih akurat)
-        if (db && currentUser.uid) {
-            try {
-                console.log('[v0] loadSGTData: Fetching from Firestore...');
-                const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-                console.log('[v0] loadSGTData: Doc exists?', userDoc.exists());
-                if (userDoc.exists()) {
-                    const data = userDoc.data();
-                    console.log('[v0] loadSGTData: Raw data', JSON.stringify(data));
-                    // Selalu ambil data dari Firestore, bahkan jika sgtBalance undefined (set ke 0)
-                    sgtBalance = data.sgtBalance || 0;
-                    sgtTransactions = data.sgtTransactions || [];
-                    console.log('[v0] loadSGTData: Balance=', sgtBalance, 'Transactions=', sgtTransactions.length);
-                    
-                    // Sinkronkan ke localStorage untuk cache saat refresh
-                    localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
-                    localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
-                    
-                    logDebug("SGT loaded from Firestore: " + sgtBalance);
-                    updateSGTUI();
-                    return;
-                } else {
-                    console.log('[v0] loadSGTData: User doc does not exist in Firestore');
-                }
-            } catch (fsErr) {
-                console.log('[v0] loadSGTData: Firestore error', fsErr.message);
-                logDebug("Firestore SGT load failed, fallback to localStorage: " + fsErr.message);
+        // Strategy 1: Baca dengan UID utama (PI UID)
+        if (db && uid) {
+            const userRef = doc(db, 'users', uid);
+            const userSnap = await getDoc(userRef);
+            
+            if (userSnap.exists()) {
+                const data = userSnap.data();
+                sgtBalance = data.sgtBalance || 0;
+                sgtTransactions = data.sgtTransactions || [];
+                localStorage.setItem('sgt_balance_' + uid, sgtBalance.toString());
+                localStorage.setItem('sgt_transactions_' + uid, JSON.stringify(sgtTransactions));
+                logDebug(`[SGT-v3] ✅ Loaded from UID doc: ${sgtBalance} SGT`);
+                updateSGTUI();
+                return;
             }
         }
-
-        // Fallback ke localStorage
-        console.log('[v0] loadSGTData: Falling back to localStorage');
-        const bal = localStorage.getItem('sgt_balance_' + currentUser.uid);
-        const tx = localStorage.getItem('sgt_transactions_' + currentUser.uid);
+        
+        // Strategy 2: Cari by username
+        if (db && username) {
+            const snap = await getDocs(
+                query(collection(db, 'users'), where('username', '==', username), limit(1))
+            );
+            if (!snap.empty) {
+                const data = snap.docs[0].data();
+                sgtBalance = data.sgtBalance || 0;
+                sgtTransactions = data.sgtTransactions || [];
+                logDebug(`[SGT-v3] ✅ Loaded from username: ${sgtBalance} SGT`);
+                updateSGTUI();
+                return;
+            }
+        }
+        
+        // Strategy 3: Fallback ke localStorage
+        const bal = localStorage.getItem('sgt_balance_' + uid);
+        const tx = localStorage.getItem('sgt_transactions_' + uid);
         const rate = localStorage.getItem('sgt_rate');
-        sgtBalance = bal ? parseInt(bal) : 0;
-        sgtTransactions = tx ? JSON.parse(tx) : [];
+        if (bal) sgtBalance = parseInt(bal);
+        if (tx) sgtTransactions = JSON.parse(tx);
         if (rate) sgtRatePerPi = parseInt(rate);
-        console.log('[v0] loadSGTData: localStorage Balance=', sgtBalance);
-        logDebug("SGT loaded from localStorage: " + sgtBalance);
+        logDebug(`[SGT-v3] ⚠️ Loaded from localStorage: ${sgtBalance} SGT`);
         updateSGTUI();
+        
     } catch (e) {
-        console.log('[v0] loadSGTData: Error', e.message);
-        logDebug("SGT load error: " + e.message);
+        logDebug(`[SGT-v3] Error load: ${e.message}`);
+        updateSGTUI();
     }
 }
 
@@ -3787,100 +3800,131 @@ window.saveSGTSettings = function() {
 window._real_ = window._real_ || {};
 
 window._real_.distributeSGTManual = async function() {
-    console.log('[v0] distributeSGTManual called');
-    const targetUser = document.getElementById('sgtDistUser')?.value.trim();
+    console.log('[SGT-v3] distributeSGTManual called');
+    
+    const targetUser = document.getElementById('sgtDistUser')?.value.trim().toLowerCase();
     const amount = parseInt(document.getElementById('sgtDistAmount')?.value);
-
-    console.log('[v0] Target user:', targetUser, 'Amount:', amount);
-
+    
+    console.log('[SGT-v3] Target:', targetUser, 'Amount:', amount);
+    
     if (!targetUser) { showToast('Masukkan username penerima', 'error'); return; }
     if (!amount || amount <= 0) { showToast('Jumlah SGT tidak valid', 'error'); return; }
-
-    showToast('Sedang memproses distribusi...', 'info');
-
+    
+    showToast('Memproses distribusi...', 'info');
+    
     try {
         if (!db) throw new Error('Database tidak siap');
-        console.log('[v0] Database ready, searching for user...');
-
+        
+        // STEP 1: Cari user by username
         const usersSnap = await getDocs(
             query(collection(db, 'users'), where('username', '==', targetUser))
         );
-
+        
         if (usersSnap.empty) {
-            showToast(`User @${targetUser} tidak ditemukan di database`, 'error');
+            showToast(`User @${targetUser} tidak ditemukan`, 'error');
             return;
         }
-
-        const docId = usersSnap.docs[0].id;
-        const userData = usersSnap.docs[0].data();
-        // FIX: gunakan userData.uid jika ada (Pi UID), bukan document ID
-        // Ini memastikan SGT masuk ke dokumen yang sama dengan yang dibaca user saat login
-        const targetUid = (userData.uid && userData.uid !== docId) ? userData.uid : docId;
-        const userDocRef = doc(db, 'users', targetUid);
-        console.log('[v0] Found user docId:', docId, 'targetUid:', targetUid, 'Current balance:', userData.sgtBalance);
-
-        // Jika target berbeda dari doc ditemukan, baca dulu data dari doc target
-        let currentBal, currentTxs;
+        
+        // STEP 2: Dapatkan target UID yang BENAR
+        const userDoc = usersSnap.docs[0];
+        const userData = userDoc.data();
+        
+        // 🔥 KRITIS: Gunakan uid field jika ada (PI UID), bukan document ID!
+        const docId = userDoc.id;
+        const targetUid = userData.uid || docId;
+        
+        console.log('[SGT-v3] docId:', docId, 'targetUid (field):', targetUid);
+        console.log('[SGT-v3] Current balance in doc:', userData.sgtBalance);
+        
+        // STEP 3: Baca saldo saat ini dari dokumen TARGET (bukan docId)
+        let currentBal = 0;
+        let currentTxs = [];
+        
         if (targetUid !== docId) {
-            const targetDoc = await getDoc(userDocRef);
-            const targetData = targetDoc.exists() ? targetDoc.data() : userData;
-            currentBal = targetData.sgtBalance || userData.sgtBalance || 0;
-            currentTxs = Array.isArray(targetData.sgtTransactions) ? targetData.sgtTransactions : [];
+            const targetDoc = await getDoc(doc(db, 'users', targetUid));
+            if (targetDoc.exists()) {
+                const targetData = targetDoc.data();
+                currentBal = targetData.sgtBalance || 0;
+                currentTxs = Array.isArray(targetData.sgtTransactions) ? targetData.sgtTransactions : [];
+                console.log('[SGT-v3] Data dari UID doc:', currentBal);
+            } else {
+                currentBal = userData.sgtBalance || 0;
+                currentTxs = Array.isArray(userData.sgtTransactions) ? userData.sgtTransactions : [];
+            }
         } else {
             currentBal = userData.sgtBalance || 0;
             currentTxs = Array.isArray(userData.sgtTransactions) ? userData.sgtTransactions : [];
         }
-
-        const newTx = {
-            type: 'earn',
-            amount,
-            description: 'Distribusi manual dari Admin',
-            date: new Date().toISOString(),
-            userId: targetUid
-        };
-
-        // Update circulating supply SEBELUM credit ke user
-        console.log('[v0] Calling mintSGT with amount:', amount);
+        
+        // STEP 4: Update circulating supply
         const mintResult = await mintSGT(amount, targetUid);
-        console.log('[v0] mintSGT result:', mintResult);
         if (!mintResult) {
-            showToast('Gagal: Hard cap tercapai atau error minting', 'error');
+            showToast('Gagal: Hard cap tercapai', 'error');
             return;
         }
-
-        console.log('[v0] Updating user balance to:', currentBal + amount);
-        await setDoc(userDocRef, {
-            sgtBalance: currentBal + amount,
-            sgtTransactions: [newTx, ...currentTxs].slice(0, 50),
-            sgtUpdatedAt: serverTimestamp()
+        
+        // STEP 5: Update user document dengan UID yang benar
+        const newTx = {
+            type: 'earn',
+            amount: amount,
+            description: 'Distribusi manual dari Admin',
+            date: new Date().toISOString(),
+            userId: targetUid,
+            adminId: currentUser?.uid || 'admin'
+        };
+        
+        const newBalance = currentBal + amount;
+        const newTransactions = [newTx, ...currentTxs].slice(0, 50);
+        
+        await setDoc(doc(db, 'users', targetUid), {
+            username: targetUser,
+            uid: targetUid,
+            sgtBalance: newBalance,
+            sgtTransactions: newTransactions,
+            sgtUpdatedAt: serverTimestamp(),
+            lastDistribution: {
+                amount: amount,
+                admin: currentUser?.username || 'admin',
+                timestamp: serverTimestamp()
+            }
         }, { merge: true });
-        console.log('[v0] User balance updated successfully');
-
+        
+        console.log('[SGT-v3] ✅ Updated user doc:', targetUid, 'New balance:', newBalance);
+        
+        // STEP 6: Jika docId berbeda dari targetUid, update juga doc lama
+        if (docId !== targetUid) {
+            await setDoc(doc(db, 'users', docId), {
+                sgtBalance: 0,
+                migratedTo: targetUid,
+                migrationDate: serverTimestamp()
+            }, { merge: true });
+            logDebug(`[SGT-v3] Marked old doc ${docId} as migrated to ${targetUid}`);
+        }
+        
+        // STEP 7: Log distribusi
         await addDoc(collection(db, 'sgt_logs'), {
             adminId: currentUser?.uid || 'admin_manual',
             adminUsername: currentUser?.username || 'admin',
-            targetUser,
+            targetUser: targetUser,
             targetUserId: targetUid,
-            amount,
+            targetDocId: docId,
+            amount: amount,
             type: 'manual_distribution',
-            description: 'Distribusi manual oleh admin',
+            description: 'Distribusi manual oleh admin (v3)',
             timestamp: serverTimestamp()
         });
-
-        showToast(`${amount} SGT berhasil dikirim ke @${targetUser}`, 'success');
-        logDebug('Distribusi sukses: ' + amount + ' SGT → @' + targetUser + ' | docId=' + docId + ' | targetUid=' + targetUid);
-
+        
+        showToast(`✅ ${amount.toLocaleString()} SGT berhasil dikirim ke @${targetUser}!`, 'success');
+        logDebug(`[SGT-v3] Sukses: ${amount} SGT → @${targetUser} | uid=${targetUid}`);
+        
         document.getElementById('sgtDistUser').value = '';
         document.getElementById('sgtDistAmount').value = '';
-
-        // Refresh stats dan supply - langsung setelah data tersimpan
-        console.log('[v0] Refreshing admin stats after distribution...');
+        
         await updateSGTAdminStats();
         await loadSupplyStats();
-        console.log('[v0] Admin stats refreshed');
-
+        
     } catch (error) {
-        logDebug("Distribusi error: " + error.message);
+        logDebug(`[SGT-v3] Error distribusi: ${error.message}`);
         showToast('Gagal mendistribusikan: ' + error.message, 'error');
     }
 };
@@ -4038,107 +4082,193 @@ let unsubscribeSGT = null;
 let sgtListenerActive = false; // PERBAIKAN: Flag untuk mencegah race condition
 
 function listenUserSGTBalance(userId) {
+    return listenUserSGTBalanceFixed(userId);
+}
+
+// ============================================
+// SGT REALTIME LISTENER FIXED - v3
+// ============================================
+function listenUserSGTBalanceFixed(userId) {
     if (currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin') {
         logDebug('Skip SGT listener: admin session');
         return null;
     }
-    if (!userId) {
-        console.warn('listenUserSGTBalance: userId kosong');
-        return;
-    }
-
+    if (!userId || !db) return;
+    
+    // Hapus listener lama
     if (unsubscribeSGT) {
         unsubscribeSGT();
+        unsubscribeSGT = null;
     }
-
-    console.log('[v0] listenUserSGTBalance: Starting listener for userId:', userId);
-    logDebug('SGT listener → doc: users/' + userId + ' | username: ' + (currentUser?.username || '?'));
+    
+    logDebug(`[SGT-v3] Listener start: ${userId}`);
     sgtListenerActive = true;
-
+    
     unsubscribeSGT = onSnapshot(
         doc(db, 'users', userId),
-        async (docSnap) => {
-            console.log('[v0] SGT Listener: Snapshot received, exists?', docSnap.exists());
-
-            // PERBAIKAN: Jika doc tidak ada by UID, coba cari by username (fix agussupriyanto case)
-            if (!docSnap.exists()) {
-                console.warn('[v0] SGT Listener: User doc tidak ditemukan by UID, mencoba lookup by username...');
-                if (currentUser?.username && db) {
-                    try {
-                        const snap = await getDocs(query(collection(db,'users'), where('username','==',currentUser.username), limit(1)));
-                        if (!snap.empty) {
-                            const altDoc = snap.docs[0];
-                            const altData = altDoc.data();
-                            console.log('[v0] SGT Listener: Ditemukan by username! altUID=', altDoc.id, 'balance=', altData.sgtBalance);
-                            // Migrate: copy saldo ke doc dengan UID yang benar
-                            if (altDoc.id !== userId) {
-                                await setDoc(doc(db,'users', userId), {
-                                    ...altData,
-                                    uid: userId,
-                                    sgtUpdatedAt: serverTimestamp()
-                                }, { merge: true });
-                                console.log('[v0] SGT migration done: saldo dipindah ke UID yang benar');
-                            }
-                            sgtBalance = altData.sgtBalance || 0;
-                            sgtTransactions = altData.sgtTransactions || [];
-                        }
-                    } catch(lookupErr) {
-                        console.warn('[v0] SGT lookup by username error:', lookupErr.message);
-                    }
+        (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                const newBalance = data.sgtBalance || 0;
+                
+                // Hanya update jika berbeda (mencegah flicker)
+                if (newBalance !== sgtBalance) {
+                    sgtBalance = newBalance;
+                    sgtTransactions = data.sgtTransactions || [];
+                    
+                    // Sync ke localStorage
+                    localStorage.setItem('sgt_balance_' + userId, sgtBalance.toString());
+                    localStorage.setItem('sgt_transactions_' + userId, JSON.stringify(sgtTransactions));
+                    
+                    updateSGTUI();
+                    logDebug(`[SGT-v3] 🔔 Realtime update: ${sgtBalance} SGT`);
                 }
-                updateSGTUI();
-                return;
+            } else {
+                logDebug(`[SGT-v3] Doc not found: ${userId}, trying fallback...`);
+                fallbackListenerByUsername(userId);
             }
-
-            const data = docSnap.data();
-            const balance = data.sgtBalance || 0;
-            console.log('[v0] SGT Listener: balance=', balance, 'txCount=', (data.sgtTransactions||[]).length);
-
-            sgtBalance = balance;
-            sgtTransactions = data.sgtTransactions || [];
-
-            if (currentUser && currentUser.uid) {
-                localStorage.setItem('sgt_balance_' + currentUser.uid, balance.toString());
-                localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions));
-            }
-
-            const walletEl = document.getElementById('walletSgtBalance');
-            const headerEl = document.getElementById('sgtHeaderBalance');
-            const promoEl  = document.getElementById('sgtPromoBalance');
-            const sosialEl = document.getElementById('sgtSosialBadge');
-            if (walletEl) walletEl.innerText = balance.toLocaleString();
-            if (headerEl) headerEl.innerText = balance.toLocaleString() + ' SGT';
-            if (promoEl)  promoEl.innerText  = balance.toLocaleString();
-            if (sosialEl) sosialEl.innerText = balance.toLocaleString() + ' SGT';
-
-            const earned = sgtTransactions.filter(t => t.type === 'earn').reduce((s,t) => s+(t.amount||0), 0);
-            const spent  = sgtTransactions.filter(t => t.type !== 'earn').reduce((s,t) => s+(t.amount||0), 0);
-            const seEl = document.getElementById('statSgtEarned');
-            const ssEl = document.getElementById('statSgtSpent');
-            const stEl = document.getElementById('statSgtTx');
-            if (seEl) seEl.textContent = earned.toLocaleString();
-            if (ssEl) ssEl.textContent = spent.toLocaleString();
-            if (stEl) stEl.textContent = sgtTransactions.length;
-
-            updateSGTUI();
-            logDebug('SGT realtime update: ' + balance + ' SGT');
         },
         (error) => {
-            console.log('[v0] SGT Listener Error:', error.message);
-            logDebug('Listener SGT error: ' + error.message);
-            // Auto-retry listener setelah 5 detik jika error
+            logDebug(`[SGT-v3] Listener error: ${error.message}`);
             sgtListenerActive = false;
+            // Auto-retry setelah 5 detik
             setTimeout(() => {
-                if (currentUser?.uid && db) {
-                    logDebug('SGT listener retry...');
-                    listenUserSGTBalance(currentUser.uid);
-                }
+                if (currentUser?.uid) listenUserSGTBalanceFixed(currentUser.uid);
             }, 5000);
         }
     );
-
+    
     return unsubscribeSGT;
 }
+
+async function fallbackListenerByUsername(userId) {
+    if (!currentUser?.username || !db) return;
+    
+    try {
+        const snap = await getDocs(
+            query(collection(db, 'users'), where('username', '==', currentUser.username), limit(1))
+        );
+        
+        if (!snap.empty) {
+            const data = snap.docs[0].data();
+            sgtBalance = data.sgtBalance || 0;
+            sgtTransactions = data.sgtTransactions || [];
+            updateSGTUI();
+            logDebug(`[SGT-v3] Fallback loaded: ${sgtBalance} SGT`);
+            
+            // Auto-migrate jika perlu
+            if (snap.docs[0].id !== userId && data.sgtBalance > 0) {
+                migrateUserData(snap.docs[0].id, userId);
+            }
+        }
+    } catch (e) {
+        logDebug(`[SGT-v3] Fallback error: ${e.message}`);
+    }
+}
+
+// ============================================
+// USER DATA MIGRATION HELPER - v3
+// ============================================
+async function migrateUserData(fromDocId, toDocId) {
+    if (!db || fromDocId === toDocId) return;
+    
+    try {
+        const [fromDoc, toDoc] = await Promise.all([
+            getDoc(doc(db, 'users', fromDocId)),
+            getDoc(doc(db, 'users', toDocId))
+        ]);
+        
+        if (!fromDoc.exists()) return;
+        
+        const fromData = fromDoc.data();
+        const toData = toDoc.exists() ? toDoc.data() : {};
+        
+        const mergedBalance = (toData.sgtBalance || 0) + (fromData.sgtBalance || 0);
+        const mergedTxs = [
+            ...(toData.sgtTransactions || []),
+            ...(fromData.sgtTransactions || [])
+        ].slice(0, 50);
+        
+        await setDoc(doc(db, 'users', toDocId), {
+            ...toData,
+            sgtBalance: mergedBalance,
+            sgtTransactions: mergedTxs,
+            migratedFrom: fromDocId,
+            migrationDate: serverTimestamp()
+        }, { merge: true });
+        
+        await setDoc(doc(db, 'users', fromDocId), {
+            sgtBalance: 0,
+            migratedTo: toDocId,
+            migrationDate: serverTimestamp()
+        }, { merge: true });
+        
+        logDebug(`[SGT-v3] Migrated ${fromDocId} → ${toDocId}, balance: ${mergedBalance}`);
+        
+    } catch (e) {
+        logDebug(`[SGT-v3] Migration error: ${e.message}`);
+    }
+}
+
+// ============================================
+// DIAGNOSTIC TOOLS - v3
+// ============================================
+window.diagnoseSGTForUser = async function(username) {
+    if (!db) {
+        console.log('[DIAG] Database tidak siap');
+        return;
+    }
+    
+    console.log('=== SGT DIAGNOSTIC FOR @' + username + ' ===');
+    
+    const snap = await getDocs(
+        query(collection(db, 'users'), where('username', '==', username))
+    );
+    
+    console.log('Dokumen ditemukan:', snap.size);
+    
+    snap.forEach(doc => {
+        const data = doc.data();
+        console.log(`
+📄 Doc ID: ${doc.id}`);
+        console.log(`   uid field: ${data.uid || '(tidak ada)'}`);
+        console.log(`   username: ${data.username}`);
+        console.log(`   💰 sgtBalance: ${data.sgtBalance || 0}`);
+        console.log(`   📝 transactions: ${(data.sgtTransactions || []).length}`);
+        console.log(`   authType: ${data.authType || 'unknown'}`);
+        console.log(`   migratedTo: ${data.migratedTo || '(aktif)'}`);
+    });
+    
+    console.log('=== END DIAGNOSTIC ===');
+};
+
+window.fixAllUserDocuments = async function() {
+    if (!db) return;
+    showToast('Memperbaiki semua dokumen user...', 'info');
+    
+    try {
+        const snap = await getDocs(collection(db, 'users'));
+        let fixed = 0;
+        
+        snap.forEach(docSnap => {
+            const data = docSnap.data();
+            const docId = docSnap.id;
+            
+            if (!data.uid && data.username) {
+                setDoc(doc(db, 'users', docId), {
+                    uid: docId
+                }, { merge: true });
+                fixed++;
+            }
+        });
+        
+        showToast(`${fixed} dokumen diperbaiki`, 'success');
+        logDebug(`[SGT-v3] Fixed ${fixed} user documents`);
+        
+    } catch (e) {
+        showToast('Gagal: ' + e.message, 'error');
+    }
+};
 
 // FIX: Reload SGT otomatis saat koneksi internet pulih (dari offline → online)
 window.addEventListener('online', () => {
@@ -4148,8 +4278,8 @@ window.addEventListener('online', () => {
         sgtListenerActive = false;
         if (unsubscribeSGT) { unsubscribeSGT(); unsubscribeSGT = null; }
         setTimeout(() => {
-            loadSGTData().catch(e => logDebug('Reload SGT error: ' + e.message));
-            if (currentUser.uid) listenUserSGTBalance(currentUser.uid);
+            loadSGTDataFixed().catch(e => logDebug('[v3] Reload SGT error: ' + e.message));
+            if (currentUser.uid) listenUserSGTBalanceFixed(currentUser.uid);
         }, 1500);
     }
 });
@@ -4299,12 +4429,12 @@ async function init() {
     try {
         detectPiEnv();
 
-        // Pi SDK dan Firebase jalan paralel untuk lebih cepat
+        // Pi SDK dan Firebase paralel untuk lebih cepat
         const [, firebaseOk] = await Promise.allSettled([
-            initPiSDK(),
+            initPiSDKRobust(),
             initFirebase()
         ]);
-        // FIX: re-detect setelah Pi SDK selesai init, bukan sebelumnya
+        // Re-detect setelah Pi SDK selesai init
         detectPiEnv();
 
         // Tangani SSO setelah Firebase siap
@@ -4312,11 +4442,11 @@ async function init() {
 
         // Jika ada user session, refresh data dari Firestore di background
         if (currentUser && db) {
-            // Refresh SGT dari Firestore (background, tidak block UI)
-            loadSGTData().catch(e => logDebug("BGround SGT load: " + e.message));
-            // Start realtime listener for SGT balance updates
+            // Refresh SGT dari Firestore dengan strategi multi-fallback (v3)
+            loadSGTDataFixed().catch(e => logDebug("BGround SGT load: " + e.message));
+            // Start realtime listener untuk SGT balance updates
             if (currentUser.uid && currentUser.role !== 'admin') {
-                listenUserSGTBalance(currentUser.uid);
+                listenUserSGTBalanceFixed(currentUser.uid);
             }
             // Verifikasi user masih valid di Firestore
             verifyUserSession().catch(e => logDebug("User verify: " + e.message));
@@ -4383,34 +4513,61 @@ function detectPiEnv() {
     }
 }
 
+// ============================================
+// PI SDK ROBUST INITIALIZATION v3
+// ============================================
+let piInitAttempts = 0;
+const MAX_PI_INIT_ATTEMPTS = 5;
+let piInitPromise = null;
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function initPiSDK() {
-    return new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-            logDebug("Pi SDK init timeout (10s) - lanjut tanpa Pi SDK");
-            resolve(false);
-        }, 10000);
+    return initPiSDKRobust();
+}
 
-        if (!window.Pi) {
-            clearTimeout(timeout);
-            logDebug("Pi SDK tidak tersedia");
-            resolve(false);
-            return;
-        }
-
-        window.Pi.init({ version: "2.0", sandbox: USE_SANDBOX })
-            .then(() => {
-                clearTimeout(timeout);
+async function initPiSDKRobust() {
+    if (piInitPromise) return piInitPromise;
+    
+    piInitPromise = new Promise(async (resolve) => {
+        while (piInitAttempts < MAX_PI_INIT_ATTEMPTS) {
+            piInitAttempts++;
+            logDebug(`[AUTH-v3] Pi SDK init attempt ${piInitAttempts}/${MAX_PI_INIT_ATTEMPTS}`);
+            
+            try {
+                if (!window.Pi) {
+                    logDebug('[AUTH-v3] Pi object belum tersedia, menunggu...');
+                    await delay(2000);
+                    continue;
+                }
+                
+                await window.Pi.init({ 
+                    version: "2.0", 
+                    sandbox: USE_SANDBOX 
+                });
+                
                 isPiSDKReady = true;
-                isPiBrowser = true; // FIX: update setelah Pi.init() sukses
-                logDebug("Pi SDK initialized (sandbox: " + USE_SANDBOX + ")");
+                isPiBrowser = true;
+                logDebug('[AUTH-v3] Pi SDK initialized ✅');
                 resolve(true);
-            })
-            .catch((err) => {
-                clearTimeout(timeout);
-                logDebug("Pi SDK error: " + err.message);
-                resolve(false);
-            });
+                return;
+                
+            } catch (err) {
+                logDebug(`[AUTH-v3] Pi SDK init gagal: ${err.message}`);
+                // Exponential backoff: 2s, 4s, 8s, 10s, 10s
+                const waitTime = Math.min(2000 * Math.pow(2, piInitAttempts - 1), 10000);
+                logDebug(`[AUTH-v3] Retry dalam ${waitTime}ms...`);
+                await delay(waitTime);
+            }
+        }
+        
+        logDebug('[AUTH-v3] Pi SDK init gagal setelah max attempts');
+        resolve(false);
     });
+    
+    return piInitPromise;
 }
 
 async function initFirebase() {
@@ -4622,173 +4779,359 @@ async function withPiTimeout(promise, timeoutMs = 30000, operationName = 'Pi ope
 // ============================================
 
 window.authenticatePi = async function() {
-    logDebug("authenticatePi called, SDK ready: " + isPiSDKReady);
-
-    // Gunakan variabel isPiBrowser yang sudah ada (baris ~3260)
-    if (!isPiBrowser) {
-        logDebug("Pi Browser not detected. window.Pi: " + typeof window.Pi);
-        showToast('Login Pi hanya bisa dilakukan di dalam Pi Browser. Silakan buka app ini melalui Pi Browser.', 'error');
+    logDebug("[AUTH-v3] authenticatePi dipanggil");
+    
+    // Step 1: Inisialisasi Pi SDK dengan retry
+    const sdkReady = await initPiSDKRobust();
+    
+    if (!sdkReady) {
+        logDebug('[AUTH-v3] Pi SDK tidak tersedia, menampilkan fallback');
+        showToast('Pi Browser tidak terdeteksi. Gunakan login manual.', 'warning');
+        showManualLoginFallback();
         return;
     }
-
-    // Bug 3 fix: pastikan Pi.init() sudah selesai sebelum authenticate
-    if (!isPiSDKReady) {
-        showToast('Menginisialisasi Pi SDK...', 'info');
-        try {
-            await window.Pi.init({ version: "2.0", sandbox: USE_SANDBOX });
-            isPiSDKReady = true;
-            logDebug("Pi SDK re-initialized sebelum auth");
-        } catch (initErr) {
-            logDebug("Pi SDK re-init gagal: " + initErr.message);
-            showToast('Pi SDK belum siap. Coba lagi dalam beberapa detik.', 'error');
-            return;
-        }
+    
+    // Step 2: Validasi environment
+    if (!isPiBrowser) {
+        showToast('Login Pi hanya tersedia di Pi Browser', 'warning');
+        showManualLoginFallback();
+        return;
     }
-
+    
+    // Step 3: Tampilkan loading state pada tombol
+    const loginBtn = document.querySelector('.login-option.pi');
+    const originalBtnHTML = loginBtn ? loginBtn.innerHTML : null;
+    
+    if (loginBtn) {
+        loginBtn.innerHTML = `
+            <div style="width:60px;height:60px;margin:0 auto 16px;">
+                <div class="loading-spinner" style="width:40px;height:40px;margin:10px auto;border-color:#8B5CF620;border-top-color:#8B5CF6;"></div>
+            </div>
+            <h4 style="color:#8B5CF6;font-weight:800;">Menghubungkan...</h4>
+            <p style="font-size:12px;color:#6B7280;">Tunggu sebentar ya</p>
+        `;
+        loginBtn.style.pointerEvents = 'none';
+    }
+    
     try {
         showToast('Menghubungkan ke Pi Network...', 'info');
+        
         const scopes = ['username', 'payments'];
-
+        
         const onIncompletePaymentFound = async (payment) => {
-            logDebug("Incomplete payment: " + payment?.identifier);
-            try { await handleIncompletePayment(payment); } catch (err) {
-                logDebug("Handle incomplete error: " + err.message);
+            logDebug("[AUTH-v3] Incomplete payment: " + payment?.identifier);
+            try { 
+                await handleIncompletePayment(payment); 
+            } catch (err) {
+                logDebug("[AUTH-v3] Handle incomplete error: " + err.message);
             }
         };
-
+        
+        // PERBAIKAN: Timeout 30 detik (bukan 60) - user tidak sabar menunggu
         const authResult = await Promise.race([
             window.Pi.authenticate(scopes, onIncompletePaymentFound),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout 60s')), 60000))
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout: Pi auth terlalu lama')), 30000)
+            )
         ]);
-
-        if (!authResult?.user) throw new Error('Auth result tidak valid');
-
-        piAuth = authResult;
-        isPiAuthenticated = true;
-
-        currentUser = {
-            uid: authResult.user.uid || ('pi_user_' + (authResult.user.username || 'unknown')), // FIX #2b: UID stabil, bukan timestamp
-            username: authResult.user.username || 'pioneer',
-            role: 'buyer',
-            accessToken: authResult.accessToken,
-            walletAddress: authResult.user.wallet_address || null,
-            authType: 'pi'
-        };
-
-        localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
-
-        // PERBAIKAN: Pastikan Firebase auth aktif setelah Pi auth
-        // Gunakan anonymous auth sebagai "session holder" di Firebase
-        if (auth && !auth.currentUser) {
-            try {
-                await signInAnonymously(auth);
-                logDebug("Firebase anonymous session dibuat untuk Pi user");
-            } catch (fbErr) {
-                logDebug("Firebase anon auth gagal (non-kritis): " + fbErr.message);
-            }
+        
+        if (!authResult?.user) {
+            throw new Error('Auth result tidak valid - user object hilang');
         }
-
-        // Simpan user ke Firestore - HARUS await agar data tersimpan sebelum load
-        if (db) {
-            try {
-                await setDoc(doc(db, 'users', currentUser.uid), {
-                    username: currentUser.username,
-                    uid: currentUser.uid,
-                    authType: 'pi',
-                    lastLogin: serverTimestamp()
-                }, { merge: true });
-                logDebug("User profile saved to Firestore");
-
-                // FIX: Cek apakah ada dokumen lama by username dengan saldo SGT
-                // Jika ada dan document ID-nya berbeda dari UID, migrate saldo ke dokumen yang benar
-                try {
-                    const oldSnap = await getDocs(query(
-                        collection(db, 'users'),
-                        where('username', '==', currentUser.username),
-                        limit(5)
-                    ));
-                    for (const oldDoc of oldSnap.docs) {
-                        if (oldDoc.id !== currentUser.uid) {
-                            const oldData = oldDoc.data();
-                            const oldBal = oldData.sgtBalance || 0;
-                            if (oldBal > 0) {
-                                // Ada saldo di dokumen lama — merge ke dokumen yang benar
-                                const correctDoc = await getDoc(doc(db, 'users', currentUser.uid));
-                                const correctBal = correctDoc.exists() ? (correctDoc.data().sgtBalance || 0) : 0;
-                                const mergedBal = correctBal + oldBal;
-                                const mergedTxs = [
-                                    ...(correctDoc.exists() ? (correctDoc.data().sgtTransactions || []) : []),
-                                    ...(oldData.sgtTransactions || [])
-                                ].slice(0, 50);
-                                await setDoc(doc(db, 'users', currentUser.uid), {
-                                    sgtBalance: mergedBal,
-                                    sgtTransactions: mergedTxs,
-                                    sgtUpdatedAt: serverTimestamp()
-                                }, { merge: true });
-                                // Nolkan dokumen lama agar tidak double-count
-                                await setDoc(doc(db, 'users', oldDoc.id), {
-                                    sgtBalance: 0,
-                                    uid: currentUser.uid,
-                                    migratedTo: currentUser.uid,
-                                    sgtUpdatedAt: serverTimestamp()
-                                }, { merge: true });
-                                logDebug('SGT migration: ' + oldBal + ' SGT dari doc ' + oldDoc.id + ' → ' + currentUser.uid);
-                            }
-                        }
-                    }
-                } catch (migErr) {
-                    logDebug('SGT migration error (non-kritis): ' + migErr.message);
-                }
-            } catch (e) {
-                logDebug("Save user profile error: " + e.message);
-            }
-        }
-
-        await loadSGTData();
-        // Start realtime listener for SGT balance updates
-        if (currentUser.uid) {
-            listenUserSGTBalance(currentUser.uid);
-        }
-        showSGTElements(true);
-        updateUI();
-        // Refresh sosial module after login
-        if (typeof updateSosialUI === 'function') setTimeout(updateSosialUI, 500);
-        if (typeof updateAdminSosialBadge === 'function' && userRole==='admin') setTimeout(updateAdminSosialBadge, 600);
-
-        closeModal('piAuthModal');
-        closeModal('loginOptionsModal');
-        showToast(`Selamat datang, @${currentUser.username}!`, 'success');
-        logDebug("Auth sukses: @" + currentUser.username);
-
-        loadDataFromFirebase();
-        // FIX #1: Re-filter myOrders setelah login berhasil agar riwayat pesanan muncul
-        if (orders.length > 0) {
-            myOrders = orders.filter(o =>
-                o.customer === currentUser.username || o.customerUid === currentUser.uid
-            );
-            renderOrders();
-        }
-        // Init fase 3 data after login
-        setTimeout(() => {
-            if (typeof initFase3 === 'function') initFase3();
-        }, 800);
-        switchView('home');
-
+        
+        // Step 4: Proses hasil auth
+        await processPiAuthSuccess(authResult);
+        
     } catch (error) {
-        logDebug("Auth error: " + error.message);
-        // FIX #2a: Selalu reset isPiSDKReady agar user bisa retry login untuk semua jenis error
-        isPiSDKReady = false;
-        if (error.message.includes('consent')) {
-            showToast('Login dibatalkan', 'warning');
-        } else if (error.message.includes('Timeout') || error.message.includes('timeout') || error.message.includes('timed out')) {
-            showToast('Koneksi timeout. Ketuk tombol login sekali lagi.', 'error');
-        } else if (error.message.includes('Messaging promise')) {
-            showToast('Pi SDK error. Ketuk tombol login sekali lagi.', 'error');
-        } else {
-            showToast('Gagal login: ' + error.message, 'error');
-        }
+        logDebug("[AUTH-v3] ❌ Auth error: " + error.message);
+        handlePiAuthError(error, loginBtn, originalBtnHTML);
     }
 };
+
+async function processPiAuthSuccess(authResult) {
+    piAuth = authResult;
+    isPiAuthenticated = true;
+    
+    // KRITIS: Gunakan UID dari Pi yang konsisten!
+    const piUid = authResult.user.uid || ('pi_' + (authResult.user.username || 'unknown'));
+    
+    currentUser = {
+        uid: piUid,
+        username: authResult.user.username || 'pioneer',
+        role: 'buyer',
+        accessToken: authResult.accessToken,
+        walletAddress: authResult.user.wallet_address || null,
+        authType: 'pi'
+    };
+    
+    localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
+    logDebug(`[AUTH-v3] User authenticated: @${currentUser.username} | UID: ${piUid}`);
+    
+    // Step 5: Firebase Auth - Anonymous sign in untuk Firestore write permission
+    let firebaseUid = null;
+    try {
+        if (auth) {
+            if (!auth.currentUser) {
+                const anonResult = await signInAnonymously(auth);
+                firebaseUid = anonResult.user.uid;
+                logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
+            } else {
+                firebaseUid = auth.currentUser.uid;
+            }
+        }
+    } catch (fbErr) {
+        logDebug("[AUTH-v3] Firebase anon warning (non-kritis): " + fbErr.message);
+    }
+    
+    // Step 6: Pastikan dokumen user ada di Firestore dengan UID yang benar
+    await ensureUserDocumentExists(piUid, currentUser.username, firebaseUid);
+    
+    // Step 7: Load SGT data dengan strategi multi-fallback
+    await loadSGTDataFixed();
+    
+    // Step 8: Start realtime listener untuk SGT
+    if (currentUser.uid) {
+        listenUserSGTBalanceFixed(currentUser.uid);
+    }
+    
+    showSGTElements(true);
+    updateUI();
+    
+    // Refresh sosial module after login
+    if (typeof updateSosialUI === 'function') setTimeout(updateSosialUI, 500);
+    if (typeof updateAdminSosialBadge === 'function' && userRole === 'admin') setTimeout(updateAdminSosialBadge, 600);
+    
+    closeModal('piAuthModal');
+    closeModal('loginOptionsModal');
+    showToast(`Selamat datang, @${currentUser.username}! 🎉`, 'success');
+    logDebug("[AUTH-v3] Auth sukses: @" + currentUser.username);
+    
+    loadDataFromFirebase();
+    
+    // Re-filter myOrders setelah login berhasil
+    if (orders.length > 0) {
+        myOrders = orders.filter(o =>
+            o.customer === currentUser.username || o.customerUid === currentUser.uid
+        );
+        renderOrders();
+    }
+    
+    // Init fase 3 modules
+    setTimeout(() => {
+        if (typeof initFase3 === 'function') initFase3();
+        if (typeof updateSosialUI === 'function') updateSosialUI();
+    }, 500);
+    
+    switchView('home');
+}
+
+function handlePiAuthError(error, loginBtn, originalHTML) {
+    // Restore tombol
+    if (loginBtn) {
+        if (originalHTML) loginBtn.innerHTML = originalHTML;
+        loginBtn.style.pointerEvents = 'auto';
+    }
+    
+    const msg = (error.message || '').toLowerCase();
+    
+    // Reset state untuk memungkinkan retry
+    isPiSDKReady = false;
+    piInitPromise = null;
+    piInitAttempts = 0;
+    
+    if (msg.includes('consent') || msg.includes('cancel') || msg.includes('dibatalkan')) {
+        showToast('Login dibatalkan', 'warning');
+    } else if (msg.includes('timeout') || msg.includes('terlalu lama')) {
+        showToast('Koneksi timeout. Coba lagi.', 'error');
+        setTimeout(() => {
+            if (confirm('Login timeout. Coba lagi sekarang?')) {
+                authenticatePi();
+            }
+        }, 800);
+    } else if (msg.includes('messaging') || msg.includes('promise')) {
+        showToast('Pi SDK error. Refresh halaman dan coba lagi.', 'error');
+    } else {
+        showToast('Gagal login: ' + error.message, 'error');
+    }
+}
+
+// ============================================
+// SECTION C: MANUAL LOGIN FALLBACK - v3
+// ============================================
+function showManualLoginFallback() {
+    const modal = document.getElementById('loginOptionsModal');
+    if (!modal) return;
+    
+    // Hapus fallback lama jika ada
+    const existing = document.getElementById('manualLoginFallback');
+    if (existing) existing.remove();
+    
+    const fallbackDiv = document.createElement('div');
+    fallbackDiv.id = 'manualLoginFallback';
+    fallbackDiv.innerHTML = `
+        <div style="background:linear-gradient(135deg,#FEF3C7,#FFFBEB);border:2px solid #FCD34D;border-radius:16px;padding:16px;margin:16px 0;text-align:left;">
+            <p style="font-size:13px;color:#92400E;font-weight:800;margin-bottom:8px;">
+                <i class="fas fa-mobile-alt" style="margin-right:6px;"></i>Pi Browser tidak terdeteksi
+            </p>
+            <p style="font-size:12px;color:#92400E;margin-bottom:12px;line-height:1.5;">
+                Login Pi hanya bisa di Pi Browser. Sebagai alternatif, masukkan username Pi Anda:
+            </p>
+            <input type="text" id="manualPiUsername" class="form-input" placeholder="Username Pi Anda (contoh: agussupriyanto)" 
+                   style="margin-bottom:10px;text-align:center;font-weight:600;letter-spacing:0.5px;">
+            <button onclick="manualPiLogin()" 
+                    style="width:100%;background:linear-gradient(135deg,#8B5CF6,#7C3AED);color:white;border:none;padding:14px;border-radius:12px;font-weight:700;cursor:pointer;font-size:14px;font-family:inherit;">
+                <i class="fas fa-sign-in-alt" style="margin-right:8px;"></i>Login Manual dengan Username
+            </button>
+            <p style="font-size:10px;color:#B45309;margin-top:8px;text-align:center;">
+                <i class="fas fa-shield-alt" style="margin-right:4px;"></i>
+                Data SGT Anda akan tetap tersinkron jika username sama
+            </p>
+        </div>
+    `;
+    
+    const modalContent = modal.querySelector('.modal-content');
+    if (modalContent) modalContent.appendChild(fallbackDiv);
+}
+
+window.manualPiLogin = async function() {
+    const usernameInput = document.getElementById('manualPiUsername');
+    const username = usernameInput?.value.trim().toLowerCase();
+    
+    if (!username) {
+        showToast('Masukkan username Pi Anda', 'error');
+        if (usernameInput) usernameInput.style.borderColor = '#EF4444';
+        return;
+    }
+    
+    if (usernameInput) usernameInput.style.borderColor = '#E5E7EB';
+    
+    showToast('Mencari akun...', 'info');
+    
+    try {
+        const usersSnap = await getDocs(
+            query(collection(db, 'users'), where('username', '==', username), limit(1))
+        );
+        
+        let targetUid;
+        let existingData = {};
+        
+        if (!usersSnap.empty) {
+            const userDoc = usersSnap.docs[0];
+            existingData = userDoc.data();
+            targetUid = existingData.uid || userDoc.id;
+            logDebug(`[MANUAL] User ditemukan: @${username} | UID: ${targetUid}`);
+        } else {
+            targetUid = 'pi_manual_' + Date.now();
+            logDebug(`[MANUAL] User baru: @${username} | UID: ${targetUid}`);
+        }
+        
+        currentUser = {
+            uid: targetUid,
+            username: username,
+            role: existingData.role || 'buyer',
+            authType: 'pi_manual'
+        };
+        
+        await setDoc(doc(db, 'users', targetUid), {
+            username: username,
+            uid: targetUid,
+            authType: 'pi_manual',
+            createdAt: existingData.createdAt || serverTimestamp(),
+            lastLogin: serverTimestamp(),
+            sgtBalance: existingData.sgtBalance || 0,
+            sgtTransactions: existingData.sgtTransactions || []
+        }, { merge: true });
+        
+        localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
+        
+        await loadSGTDataFixed();
+        listenUserSGTBalanceFixed(targetUid);
+        
+        showSGTElements(true);
+        updateUI();
+        closeModal('loginOptionsModal');
+        showToast(`Selamat datang, @${username}! 👋`, 'success');
+        switchView('home');
+        loadDataFromFirebase();
+        
+    } catch (e) {
+        logDebug('[MANUAL] Error: ' + e.message);
+        showToast('Gagal login manual: ' + e.message, 'error');
+    }
+};
+
+// ============================================
+// SECTION D: ENSURE USER DOCUMENT EXISTS - v3
+// ============================================
+async function ensureUserDocumentExists(piUid, username, firebaseUid) {
+    if (!db) return;
+    
+    logDebug(`[SGT-v3] Ensure user doc: piUid=${piUid}, username=${username}`);
+    
+    try {
+        const userRef = doc(db, 'users', piUid);
+        const userSnap = await getDoc(userRef);
+        
+        if (!userSnap.exists()) {
+            logDebug(`[SGT-v3] Dokumen baru: ${piUid}`);
+            
+            // Cari dokumen lama dengan username sama
+            const oldSnap = await getDocs(
+                query(collection(db, 'users'), where('username', '==', username), limit(10))
+            );
+            
+            let oldBalance = 0;
+            let oldTransactions = [];
+            let oldDocsToMigrate = [];
+            
+            oldSnap.forEach(oldDoc => {
+                if (oldDoc.id !== piUid) {
+                    const oldData = oldDoc.data();
+                    if ((oldData.sgtBalance || 0) > 0) {
+                        oldBalance += oldData.sgtBalance;
+                        oldTransactions.push(...(oldData.sgtTransactions || []));
+                        oldDocsToMigrate.push(oldDoc.id);
+                        logDebug(`[SGT-v3] Temukan dokumen lama ${oldDoc.id}: ${oldData.sgtBalance} SGT`);
+                    }
+                }
+            });
+            
+            const newData = {
+                username: username,
+                uid: piUid,
+                firebaseUid: firebaseUid,
+                authType: 'pi',
+                createdAt: serverTimestamp(),
+                lastLogin: serverTimestamp(),
+                sgtBalance: oldBalance,
+                sgtTransactions: oldTransactions.slice(0, 50)
+            };
+            
+            await setDoc(userRef, newData);
+            logDebug(`[SGT-v3] Dokumen dibuat: ${piUid} | Balance: ${oldBalance}`);
+            
+            // Migrate: nolkan dokumen lama
+            for (const oldDocId of oldDocsToMigrate) {
+                await setDoc(doc(db, 'users', oldDocId), {
+                    sgtBalance: 0,
+                    migratedTo: piUid,
+                    migrationDate: serverTimestamp()
+                }, { merge: true });
+                logDebug(`[SGT-v3] Migrated: ${oldDocId} → ${piUid}`);
+            }
+            
+        } else {
+            await setDoc(userRef, {
+                lastLogin: serverTimestamp(),
+                firebaseUid: firebaseUid || null
+            }, { merge: true });
+            logDebug(`[SGT-v3] Dokumen exists, updated: ${piUid}`);
+        }
+        
+    } catch (e) {
+        logDebug(`[SGT-v3] Error ensureUserDoc: ${e.message}`);
+    }
+}
 
 window.openAdminLoginModal = function() {
     closeModal('loginOptionsModal');
@@ -7199,7 +7542,7 @@ async function updateAdminSosialBadge() {
 
 // On login, also refresh sosial data
 window.loadSGTDataWithSosial = async function() {
-    if (typeof loadSGTData === 'function') await loadSGTData();
+    if (typeof loadSGTDataFixed === 'function') await loadSGTDataFixed();
     updateSosialUI();
     if (userRole === 'admin') updateAdminSosialBadge();
 };
@@ -7996,7 +8339,6 @@ window.openModal = function(id) {
 
 
     </script>
-    <!-- Chart.js CDN - loaded at end for better performance -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+   
 </body>
 </html>
