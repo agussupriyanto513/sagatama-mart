@@ -4507,7 +4507,7 @@ function loadDataFromFirebase() {
     }
 
     try {
-        const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+        const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(100)); // FIX #3: limit agar tidak overload Firestore channel
         unsubscribers.orders = onSnapshot(ordersQuery, (snapshot) => {
             orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             myOrders = currentUser ? orders.filter(o => o.customer === currentUser.username || o.customerUid === currentUser.uid) : [];
@@ -4525,7 +4525,7 @@ function loadDataFromFirebase() {
     const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
     if (isAdmin) {
         try {
-            unsubscribers.users = onSnapshot(collection(db, 'users'), (snapshot) => {
+            unsubscribers.users = onSnapshot(query(collection(db, 'users'), limit(200)), (snapshot) => { // FIX #3: limit users query
                 // Hitung stats SGT secara realtime
                 let totalSGT = 0, totalHolders = 0, totalDistributed = 0;
                 const logRows = [];
@@ -4627,7 +4627,7 @@ window.authenticatePi = async function() {
         isPiAuthenticated = true;
 
         currentUser = {
-            uid: authResult.user.uid || ('pi_' + Date.now()),
+            uid: authResult.user.uid || ('pi_user_' + (authResult.user.username || 'unknown')), // FIX #2b: UID stabil, bukan timestamp
             username: authResult.user.username || 'pioneer',
             role: 'buyer',
             accessToken: authResult.accessToken,
@@ -4680,6 +4680,13 @@ window.authenticatePi = async function() {
         logDebug("Auth sukses: @" + currentUser.username);
 
         loadDataFromFirebase();
+        // FIX #1: Re-filter myOrders setelah login berhasil agar riwayat pesanan muncul
+        if (orders.length > 0) {
+            myOrders = orders.filter(o =>
+                o.customer === currentUser.username || o.customerUid === currentUser.uid
+            );
+            renderOrders();
+        }
         // Init fase 3 data after login
         setTimeout(() => {
             if (typeof initFase3 === 'function') initFase3();
@@ -4688,10 +4695,8 @@ window.authenticatePi = async function() {
 
     } catch (error) {
         logDebug("Auth error: " + error.message);
-        // Reset isPiSDKReady jika timeout agar user bisa retry login
-        if (error.message.includes('Timeout') || error.message.includes('timeout') || error.message.includes('timed out') || error.message.includes('Messaging promise')) {
-            isPiSDKReady = false;
-        }
+        // FIX #2a: Selalu reset isPiSDKReady agar user bisa retry login untuk semua jenis error
+        isPiSDKReady = false;
         if (error.message.includes('consent')) {
             showToast('Login dibatalkan', 'warning');
         } else if (error.message.includes('Timeout') || error.message.includes('timeout') || error.message.includes('timed out')) {
@@ -7757,6 +7762,15 @@ window.initFase3 = async function() {
 const _origLoadDataFromFirebase_fase3 = window.loadDataFromFirebase;
 window.loadDataFromFirebase = function() {
     if (typeof _origLoadDataFromFirebase_fase3 === 'function') _origLoadDataFromFirebase_fase3();
+    // FIX #4: Setelah data load, pastikan myOrders ter-filter ulang jika currentUser sudah ada
+    setTimeout(() => {
+        if (currentUser && orders.length > 0) {
+            myOrders = orders.filter(o =>
+                o.customer === currentUser.username || o.customerUid === currentUser.uid
+            );
+            if (typeof renderOrders === 'function') renderOrders();
+        }
+    }, 500);
 };
 
 // ── SCHEDULE CHECK: close expired proposals ─────────────────
