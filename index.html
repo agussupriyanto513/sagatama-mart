@@ -6,8 +6,6 @@
     <title>Sagatama Mart | Pi Native E-Commerce</title>
     <meta name="viewer-pi-app-id" content="https://sagatama-mart.vercel.app" />
 	<link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <!-- Chart.js for Analytics -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <!-- GLOBAL FUNCTION STUBS — must run first, before any onclick is parsed -->
     <script>
@@ -1566,209 +1564,241 @@
 
         <!-- ADMIN DASHBOARD VIEW -->
         <div id="admin-dashboard-view" class="view">
-            <h2 style="font-size:22px; font-weight:800; margin-bottom:16px; color:#1F2937;">
-                <i class="fas fa-chart-line" style="color:#8B5CF6; margin-right:8px;"></i>Dashboard Admin
-            </h2>
+            <!-- Header dengan gradient -->
+            <div style="background:linear-gradient(135deg,#1E1B4B 0%,#312E81 50%,#4338CA 100%);margin:-16px -16px 20px -16px;padding:24px 20px 28px;border-radius:0 0 24px 24px;position:relative;overflow:hidden;">
+                <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(255,255,255,0.05);border-radius:50%;"></div>
+                <div style="position:absolute;bottom:-20px;left:-20px;width:80px;height:80px;background:rgba(255,255,255,0.03);border-radius:50%;"></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;position:relative;">
+                    <div>
+                        <p style="color:rgba(255,255,255,0.7);font-size:12px;margin-bottom:4px;">Selamat datang kembali</p>
+                        <h2 style="font-size:22px;font-weight:800;color:white;margin:0;">Dashboard Admin</h2>
+                    </div>
+                    <div style="width:48px;height:48px;background:rgba(255,255,255,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(10px);">
+                        <i class="fas fa-crown" style="color:#FCD34D;font-size:20px;"></i>
+                    </div>
+                </div>
+            </div>
             
-            <!-- Stats Grid -->
-            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; margin-bottom:20px;">
-                <div class="stat-card">
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-                        <div style="width:40px; height:40px; background:#F5F3FF; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#8B5CF6;">
-                            <i class="fas fa-box"></i>
+            <!-- Overview Stats - Horizontal Scroll -->
+            <div style="margin-bottom:20px;">
+                <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;">
+                    <div style="min-width:140px;background:white;border-radius:16px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                            <div style="width:42px;height:42px;background:linear-gradient(135deg,#8B5CF6,#7C3AED);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;">
+                                <i class="fas fa-box"></i>
+                            </div>
                         </div>
+                        <p id="statTotalProducts" style="font-size:24px;font-weight:800;color:#1F2937;margin:0;">0</p>
+                        <p style="font-size:11px;color:#6B7280;margin-top:2px;">Total Produk</p>
                     </div>
-                    <p class="stat-value" id="statTotalProducts">0</p>
-                    <p class="stat-label">Total Produk</p>
-                </div>
-                <div class="stat-card">
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-                        <div style="width:40px; height:40px; background:#FEF3C7; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#D97706;">
-                            <i class="fas fa-clock"></i>
+                    <div style="min-width:140px;background:white;border-radius:16px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                            <div style="width:42px;height:42px;background:linear-gradient(135deg,#F59E0B,#D97706);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;">
+                                <i class="fas fa-clock"></i>
+                            </div>
                         </div>
+                        <p id="statPendingOrders" style="font-size:24px;font-weight:800;color:#1F2937;margin:0;">0</p>
+                        <p style="font-size:11px;color:#6B7280;margin-top:2px;">Menunggu</p>
                     </div>
-                    <p class="stat-value" id="statPendingOrders">0</p>
-                    <p class="stat-label">Menunggu</p>
-                </div>
-                <div class="stat-card">
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-                        <div style="width:40px; height:40px; background:#ECFDF5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#059669;">
-                            <i class="fas fa-check-circle"></i>
+                    <div style="min-width:140px;background:white;border-radius:16px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                            <div style="width:42px;height:42px;background:linear-gradient(135deg,#10B981,#059669);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
                         </div>
+                        <p id="statCompletedOrders" style="font-size:24px;font-weight:800;color:#1F2937;margin:0;">0</p>
+                        <p style="font-size:11px;color:#6B7280;margin-top:2px;">Selesai</p>
                     </div>
-                    <p class="stat-value" id="statCompletedOrders">0</p>
-                    <p class="stat-label">Selesai</p>
-                </div>
-                <div class="stat-card">
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-                        <div style="width:40px; height:40px; background:#EFF6FF; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#3B82F6;">
-                            <i class="fas fa-coins"></i>
+                    <div style="min-width:140px;background:white;border-radius:16px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                            <div style="width:42px;height:42px;background:linear-gradient(135deg,#3B82F6,#2563EB);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;">
+                                <i class="fab fa-pi"></i>
+                            </div>
                         </div>
+                        <p id="statTotalRevenue" style="font-size:24px;font-weight:800;color:#1F2937;margin:0;">0</p>
+                        <p style="font-size:11px;color:#6B7280;margin-top:2px;">Pi Terjual</p>
                     </div>
-                    <p class="stat-value" id="statTotalRevenue">0</p>
-                    <p class="stat-label">Pi Terjual</p>
-                </div>
-                <div class="stat-card" style="border-left:3px solid #F59E0B;">
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-                        <div style="width:40px; height:40px; background:#FEF3C7; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#D97706; font-size:18px;">₴</div>
-                    </div>
-                    <p class="stat-value" id="statTotalSGTIssued" style="color:#D97706;">0</p>
-                    <p class="stat-label">SGT Diterbitkan</p>
-                </div>
-				<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-                <div style="background:linear-gradient(135deg,#8B5CF6,#7C3AED);padding:16px;border-radius:16px;color:white;box-shadow:0 4px 12px rgba(139,92,246,0.3);">
-                    <p style="font-size:11px;opacity:0.85;margin-bottom:6px;font-weight:600;">₴ Total SGT Beredar</p>
-                    <h3 id="admin-total-sgt" style="font-size:20px;font-weight:900;">0 SGT</h3>
-                    <p style="font-size:10px;opacity:0.7;margin-top:4px;">Semua SGT aktif</p>
-                </div>
-                <div style="background:linear-gradient(135deg,#EC4899,#BE185D);padding:16px;border-radius:16px;color:white;box-shadow:0 4px 12px rgba(236,72,153,0.3);">
-                    <p style="font-size:11px;opacity:0.85;margin-bottom:6px;font-weight:600;"><i class="fas fa-users" style="margin-right:4px;"></i>Total Holders</p>
-                    <h3 id="admin-total-holders" style="font-size:20px;font-weight:900;">0 User</h3>
-                    <p style="font-size:10px;opacity:0.7;margin-top:4px;">Pemegang SGT aktif</p>
-                </div>
-                <div style="background:linear-gradient(135deg,#F59E0B,#D97706);padding:16px;border-radius:16px;color:white;box-shadow:0 4px 12px rgba(245,158,11,0.3);">
-                    <p style="font-size:11px;opacity:0.85;margin-bottom:6px;font-weight:600;"><i class="fas fa-paper-plane" style="margin-right:4px;"></i>SGT Didistribusi</p>
-                    <h3 id="admin-total-distributed" style="font-size:20px;font-weight:900;">0 SGT</h3>
-                    <p style="font-size:10px;opacity:0.7;margin-top:4px;">Total terdistribusi manual</p>
-                </div>
-                <div style="background:linear-gradient(135deg,#EF4444,#DC2626);padding:16px;border-radius:16px;color:white;box-shadow:0 4px 12px rgba(239,68,68,0.3);">
-                    <p style="font-size:11px;opacity:0.85;margin-bottom:6px;font-weight:600;"><i class="fas fa-fire" style="margin-right:4px;"></i>SGT Di-Burn</p>
-                    <h3 id="admin-total-burned" style="font-size:20px;font-weight:900;">0 SGT</h3>
-                    <p style="font-size:10px;opacity:0.7;margin-top:4px;">Total dibakar</p>
                 </div>
             </div>
 
-            <!-- Supply Health Panel -->
-            <div style="background:linear-gradient(135deg,#1A0533 0%,#3D1078 60%,#7C3AED 100%);border-radius:20px;padding:20px;margin-bottom:16px;color:white;">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-                    <div style="width:40px;height:40px;background:rgba(255,255,255,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;">📊</div>
-                    <div>
-                        <p style="font-weight:800;font-size:14px;margin:0;">Supply Health Monitor</p>
-                        <p style="font-size:11px;opacity:0.75;margin:0;">Real-time tokenomics SGT</p>
+            <!-- SGT Overview Panel -->
+            <div style="background:linear-gradient(135deg,#0F172A 0%,#1E293B 100%);border-radius:20px;padding:20px;margin-bottom:16px;color:white;box-shadow:0 8px 32px rgba(0,0,0,0.15);">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div style="width:44px;height:44px;background:linear-gradient(135deg,#F59E0B,#EAB308);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#1F2937;">S</div>
+                        <div>
+                            <p style="font-weight:800;font-size:15px;margin:0;">SGT Tokenomics</p>
+                            <p style="font-size:11px;opacity:0.6;margin:2px 0 0;">Real-time supply monitor</p>
+                        </div>
                     </div>
-                    <span id="supplyPct" style="margin-left:auto;background:rgba(255,255,255,0.15);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;">0%</span>
+                    <button onclick="openModal('sgtAdminModal')" style="background:rgba(245,158,11,0.2);color:#FCD34D;border:1px solid rgba(245,158,11,0.3);padding:8px 14px;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                        <i class="fas fa-paper-plane"></i> Distribusi
+                    </button>
                 </div>
-                <!-- Hard cap progress bar -->
-                <div style="margin-bottom:14px;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-                        <span style="font-size:11px;opacity:0.75;">Circulating / Hard Cap</span>
-                        <span style="font-size:11px;color:#FCD34D;" id="supplyCirculating">0</span>
+                
+                <!-- SGT Stats Grid -->
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">
+                    <div style="background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.2);border-radius:14px;padding:14px;text-align:center;">
+                        <p id="admin-total-sgt" style="font-size:20px;font-weight:900;color:#A78BFA;margin:0;">0</p>
+                        <p style="font-size:10px;color:rgba(255,255,255,0.6);margin:4px 0 0;">SGT Beredar</p>
                     </div>
-                    <div style="height:8px;background:rgba(255,255,255,0.15);border-radius:4px;overflow:hidden;">
-                        <div id="supplyBar" style="height:100%;width:0%;background:linear-gradient(90deg,#6EE7B7,#FCD34D);border-radius:4px;transition:width 0.5s;"></div>
+                    <div style="background:rgba(236,72,153,0.15);border:1px solid rgba(236,72,153,0.2);border-radius:14px;padding:14px;text-align:center;">
+                        <p id="admin-total-holders" style="font-size:20px;font-weight:900;color:#F472B6;margin:0;">0</p>
+                        <p style="font-size:10px;color:rgba(255,255,255,0.6);margin:4px 0 0;">Total Holders</p>
                     </div>
-                    <div style="display:flex;justify-content:space-between;margin-top:4px;">
-                        <span style="font-size:10px;opacity:0.6;">0</span>
-                        <span style="font-size:10px;opacity:0.6;" id="supplyHardCap">100,000,000</span>
+                    <div style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.2);border-radius:14px;padding:14px;text-align:center;">
+                        <p id="admin-total-distributed" style="font-size:20px;font-weight:900;color:#FBBF24;margin:0;">0</p>
+                        <p style="font-size:10px;color:rgba(255,255,255,0.6);margin:4px 0 0;">Didistribusi</p>
+                    </div>
+                    <div style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.2);border-radius:14px;padding:14px;text-align:center;">
+                        <p id="admin-total-burned" style="font-size:20px;font-weight:900;color:#FCA5A5;margin:0;">0</p>
+                        <p style="font-size:10px;color:rgba(255,255,255,0.6);margin:4px 0 0;">Total Burned</p>
                     </div>
                 </div>
-                <!-- Stats row -->
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-                    <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px;text-align:center;">
-                        <p id="supplyBurned" style="font-size:15px;font-weight:800;color:#FCA5A5;margin:0;">0</p>
-                        <p style="font-size:9px;opacity:0.7;margin:2px 0 0;">Total Burned</p>
+                
+                <!-- Supply Progress -->
+                <div style="background:rgba(255,255,255,0.05);border-radius:12px;padding:14px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <span style="font-size:12px;color:rgba(255,255,255,0.7);">Supply Progress</span>
+                        <span id="supplyPct" style="background:linear-gradient(135deg,#10B981,#059669);padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;">0%</span>
                     </div>
-                    <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px;text-align:center;">
-                        <p id="supplyFeePool" style="font-size:15px;font-weight:800;color:#FCD34D;margin:0;">0</p>
-                        <p style="font-size:9px;opacity:0.7;margin:2px 0 0;">Fee Pool (APY)</p>
+                    <div style="height:10px;background:rgba(255,255,255,0.1);border-radius:5px;overflow:hidden;margin-bottom:8px;">
+                        <div id="supplyBar" style="height:100%;width:0%;background:linear-gradient(90deg,#10B981,#34D399,#6EE7B7);border-radius:5px;transition:width 0.5s;"></div>
                     </div>
-                    <div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:10px;text-align:center;">
-                        <p style="font-size:15px;font-weight:800;color:#6EE7B7;margin:0;">2%</p>
-                        <p style="font-size:9px;opacity:0.7;margin:2px 0 0;">Auto-burn rate</p>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span style="font-size:10px;color:rgba(255,255,255,0.5);">Circulating: <span id="supplyCirculating" style="color:#6EE7B7;">0</span></span>
+                        <span style="font-size:10px;color:rgba(255,255,255,0.5);">Hard Cap: <span id="supplyHardCap" style="color:#FCD34D;">100M</span></span>
+                    </div>
+                </div>
+                
+                <!-- Mini Stats -->
+                <div style="display:flex;justify-content:space-around;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.1);">
+                    <div style="text-align:center;">
+                        <p id="supplyBurned" style="font-size:14px;font-weight:800;color:#FCA5A5;margin:0;">0</p>
+                        <p style="font-size:9px;color:rgba(255,255,255,0.5);margin:2px 0 0;">Burned</p>
+                    </div>
+                    <div style="width:1px;background:rgba(255,255,255,0.1);"></div>
+                    <div style="text-align:center;">
+                        <p id="supplyFeePool" style="font-size:14px;font-weight:800;color:#FCD34D;margin:0;">0</p>
+                        <p style="font-size:9px;color:rgba(255,255,255,0.5);margin:2px 0 0;">Fee Pool</p>
+                    </div>
+                    <div style="width:1px;background:rgba(255,255,255,0.1);"></div>
+                    <div style="text-align:center;">
+                        <p style="font-size:14px;font-weight:800;color:#6EE7B7;margin:0;">2%</p>
+                        <p style="font-size:9px;color:rgba(255,255,255,0.5);margin:2px 0 0;">Burn Rate</p>
+                    </div>
+                    <div style="width:1px;background:rgba(255,255,255,0.1);"></div>
+                    <div style="text-align:center;">
+                        <p id="statTotalSGTIssued" style="font-size:14px;font-weight:800;color:#A78BFA;margin:0;">0</p>
+                        <p style="font-size:9px;color:rgba(255,255,255,0.5);margin:2px 0 0;">Issued</p>
                     </div>
                 </div>
             </div>
 
             <!-- Riwayat Distribusi SGT -->
-            <div class="card" style="margin-bottom:0;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-                    <h4 style="font-weight:800;color:#1F2937;font-size:14px;"><i class="fas fa-history" style="color:#F59E0B;margin-right:8px;"></i>Riwayat Distribusi SGT</h4>
-                    <button onclick="openModal('sgtAdminModal')" style="background:#FEF3C7;color:#D97706;border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Kelola</button>
+            <div style="background:white;border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:36px;height:36px;background:linear-gradient(135deg,#F59E0B,#D97706);border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-size:14px;">
+                            <i class="fas fa-history"></i>
+                        </div>
+                        <div>
+                            <p style="font-weight:700;color:#1F2937;font-size:14px;margin:0;">Riwayat Distribusi</p>
+                            <p style="font-size:10px;color:#6B7280;margin:2px 0 0;">10 transaksi terakhir</p>
+                        </div>
+                    </div>
+                    <button onclick="switchView('admin-analytics')" style="background:#F3F4F6;color:#6B7280;border:none;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;">
+                        Lihat Semua <i class="fas fa-chevron-right" style="margin-left:4px;font-size:10px;"></i>
+                    </button>
                 </div>
-                <div style="overflow-x:auto;">
+                <div style="max-height:200px;overflow-y:auto;">
                     <table style="width:100%;font-size:12px;border-collapse:collapse;">
                         <thead>
                             <tr style="border-bottom:2px solid #F3F4F6;">
-                                <th style="padding:8px 4px;text-align:left;color:#6B7280;font-weight:700;">Waktu</th>
-                                <th style="padding:8px 4px;text-align:left;color:#6B7280;font-weight:700;">Username</th>
-                                <th style="padding:8px 4px;text-align:right;color:#6B7280;font-weight:700;">Jumlah</th>
+                                <th style="padding:10px 8px;text-align:left;color:#9CA3AF;font-weight:600;font-size:10px;text-transform:uppercase;">Waktu</th>
+                                <th style="padding:10px 8px;text-align:left;color:#9CA3AF;font-weight:600;font-size:10px;text-transform:uppercase;">User</th>
+                                <th style="padding:10px 8px;text-align:right;color:#9CA3AF;font-weight:600;font-size:10px;text-transform:uppercase;">Jumlah</th>
                             </tr>
                         </thead>
                         <tbody id="sgt-logs-body">
-                            <tr><td colspan="3" style="text-align:center;padding:16px;color:#9CA3AF;font-style:italic;">Belum ada riwayat distribusi</td></tr>
+                            <tr><td colspan="3" style="text-align:center;padding:24px;color:#9CA3AF;font-style:italic;font-size:12px;">Belum ada riwayat distribusi</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
+
+            <!-- Quick Actions Menu -->
+            <div style="margin-bottom:16px;">
+                <p style="font-weight:700;color:#1F2937;font-size:14px;margin-bottom:12px;">Menu Cepat</p>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+                    <div onclick="switchView('admin-products')" style="cursor:pointer;background:white;border-radius:16px;padding:16px 12px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;transition:transform 0.2s;">
+                        <div style="width:48px;height:48px;background:linear-gradient(135deg,#8B5CF6,#7C3AED);border-radius:14px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;margin:0 auto 10px;">
+                            <i class="fas fa-boxes"></i>
+                        </div>
+                        <p style="font-weight:700;color:#1F2937;font-size:12px;margin:0;">Produk</p>
+                    </div>
+                    <div onclick="switchView('admin-orders')" style="cursor:pointer;background:white;border-radius:16px;padding:16px 12px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;position:relative;">
+                        <span id="adminOrderBadgeQuick" style="position:absolute;top:8px;right:8px;background:#EF4444;color:white;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;display:none;">0</span>
+                        <div style="width:48px;height:48px;background:linear-gradient(135deg,#F59E0B,#D97706);border-radius:14px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;margin:0 auto 10px;">
+                            <i class="fas fa-clipboard-check"></i>
+                        </div>
+                        <p style="font-weight:700;color:#1F2937;font-size:12px;margin:0;">Pesanan</p>
+                    </div>
+                    <div onclick="switchView('admin-analytics')" style="cursor:pointer;background:white;border-radius:16px;padding:16px 12px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
+                        <div style="width:48px;height:48px;background:linear-gradient(135deg,#10B981,#059669);border-radius:14px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;margin:0 auto 10px;">
+                            <i class="fas fa-chart-pie"></i>
+                        </div>
+                        <p style="font-weight:700;color:#1F2937;font-size:12px;margin:0;">Analitik</p>
+                    </div>
+                </div>
             </div>
 
-            <!-- Quick Actions -->
+            <!-- Admin Tools Section -->
             <div class="admin-section">
-                <h3 style="font-weight:700; margin-bottom:12px; color:#1F2937;">Menu Admin</h3>
-                <div style="display:flex; flex-direction:column; gap:10px;">
-                    <div onclick="switchView('admin-products')" class="card" style="cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:12px;">
-                        <div style="width:48px; height:48px; background:#F5F3FF; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#8B5CF6; font-size:20px;">
+                <p style="font-weight:700;color:#1F2937;font-size:14px;margin-bottom:12px;">Pengaturan Lanjutan</p>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    <div onclick="switchView('admin-products')" style="cursor:pointer;background:white;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;">
+                        <div style="width:44px;height:44px;background:#F5F3FF;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#8B5CF6;font-size:18px;">
                             <i class="fas fa-boxes"></i>
                         </div>
                         <div style="flex:1;">
-                            <p style="font-weight:700; color:#1F2937;">Kelola Produk</p>
-                            <p style="font-size:12px; color:#6B7280;">Tambah, edit, hapus produk</p>
+                            <p style="font-weight:600;color:#1F2937;font-size:13px;margin:0;">Kelola Produk</p>
+                            <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Tambah, edit, hapus produk</p>
                         </div>
-                        <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
+                        <i class="fas fa-chevron-right" style="color:#D1D5DB;font-size:12px;"></i>
                     </div>
                     
-                    <div onclick="switchView('admin-orders')" class="card" style="cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:12px;">
-                        <div style="width:48px; height:48px; background:#FEF3C7; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#D97706; font-size:20px;">
+                    <div onclick="switchView('admin-orders')" style="cursor:pointer;background:white;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;position:relative;">
+                        <span id="adminOrderBadge" style="position:absolute;top:8px;right:8px;background:#EF4444;color:white;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;display:none;">0</span>
+                        <div style="width:44px;height:44px;background:#FEF3C7;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#D97706;font-size:18px;">
                             <i class="fas fa-clipboard-check"></i>
                         </div>
                         <div style="flex:1;">
-                            <p style="font-weight:700; color:#1F2937;">Kelola Pesanan</p>
-                            <p style="font-size:12px; color:#6B7280;">Verifikasi & proses pesanan</p>
+                            <p style="font-weight:600;color:#1F2937;font-size:13px;margin:0;">Kelola Pesanan</p>
+                            <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Verifikasi & proses pesanan</p>
                         </div>
-                        <span id="adminOrderBadge" style="background:#EF4444; color:white; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; display:none;">0</span>
-                        <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
+                        <i class="fas fa-chevron-right" style="color:#D1D5DB;font-size:12px;"></i>
                     </div>
 
-                    <div onclick="switchView('admin-analytics')" class="card" style="cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:12px;">
-                        <div style="width:48px; height:48px; background:#ECFDF5; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#059669; font-size:20px;">
-                            <i class="fas fa-chart-pie"></i>
+                    <div onclick="openExchangeRateModal()" style="cursor:pointer;background:white;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;">
+                        <div style="width:44px;height:44px;background:#EFF6FF;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#3B82F6;font-size:18px;">
+                            <i class="fas fa-calculator"></i>
                         </div>
                         <div style="flex:1;">
-                            <p style="font-weight:700; color:#1F2937;">Analitik</p>
-                            <p style="font-size:12px; color:#6B7280;">Statistik penjualan</p>
+                            <p style="font-weight:600;color:#1F2937;font-size:13px;margin:0;">Kalkulator Pi</p>
+                            <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Konversi Pi ke IDR</p>
                         </div>
-                        <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
+                        <i class="fas fa-chevron-right" style="color:#D1D5DB;font-size:12px;"></i>
                     </div>
-					
-					            <!-- Admin Tools -->
-            <div class="admin-section">
-                <h3 style="font-weight:700; margin-bottom:12px; color:#1F2937;">Tools Admin</h3>
-                <div onclick="openExchangeRateModal()" class="card" style="cursor:pointer; margin-bottom:8px; display:flex; align-items:center; gap:12px;">
-                    <div style="width:48px; height:48px; background:#F5F3FF; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#8B5CF6; font-size:20px;">
-                        <i class="fas fa-calculator"></i>
-                    </div>
-                    <div style="flex:1;">
-                        <p style="font-weight:700; color:#1F2937;">Kalkulator Pi</p>
-                        <p style="font-size:12px; color:#6B7280;">Hitung konversi Pi ke IDR (referensi)</p>
-                    </div>
-                    <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
-                </div>
-                <div onclick="openModal('sgtAdminModal')" class="card" style="cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:12px; border-left:3px solid #F59E0B;">
-                    <div style="width:48px; height:48px; background:#FEF3C7; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#D97706; font-size:22px; font-weight:900;">₴</div>
-                    <div style="flex:1;">
-                        <p style="font-weight:700; color:#1F2937;">Kelola SGT Token</p>
-                        <p style="font-size:12px; color:#6B7280;">Rate, distribusi & burn token</p>
-                    </div>
-                    <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
-                </div>
-                <div onclick="switchView('admin-sgt-sosial')" class="card" style="cursor:pointer; margin-bottom:0; display:flex; align-items:center; gap:12px; border-left:3px solid #8B5CF6; margin-top:8px;">
-                    <div style="width:48px; height:48px; background:#EDE9FE; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#8B5CF6; font-size:20px;">
-                        <i class="fas fa-hand-holding-heart"></i>
-                    </div>
-                    <div style="flex:1;">
-                        <p style="font-weight:700; color:#1F2937;">SGT Sosial</p>
-                        <p style="font-size:12px; color:#6B7280;">Beasiswa, bansos & staking</p>
-                    </div>
+
+                    <div onclick="switchView('admin-sgt-sosial')" style="cursor:pointer;background:white;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;">
+                        <div style="width:44px;height:44px;background:#EDE9FE;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#8B5CF6;font-size:18px;">
+                            <i class="fas fa-hand-holding-heart"></i>
+                        </div>
+                        <div style="flex:1;">
+                            <p style="font-weight:600;color:#1F2937;font-size:13px;margin:0;">SGT Sosial</p>
+                            <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Beasiswa, bansos & staking</p>
+                        </div>
                     <span id="adminSosialBadge" style="display:none;background:#EF4444;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">0</span>
                     <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
                 </div>
@@ -2466,51 +2496,86 @@
 
         <!-- ADMIN ANALYTICS VIEW -->
         <div id="admin-analytics-view" class="view">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                <h2 style="font-size:22px; font-weight:800; color:#1F2937;">Analitik</h2>
-                <button onclick="switchView('admin-dashboard')" style="background:#F3F4F6; border:none; width:40px; height:40px; border-radius:10px; color:#6B7280; cursor:pointer;">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
+            <!-- Header -->
+            <div style="background:linear-gradient(135deg,#059669 0%,#10B981 50%,#34D399 100%);margin:-16px -16px 20px -16px;padding:20px;border-radius:0 0 24px 24px;position:relative;overflow:hidden;">
+                <div style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;background:rgba(255,255,255,0.05);border-radius:50%;"></div>
+                <div style="display:flex;align-items:center;gap:12px;position:relative;">
+                    <button onclick="switchView('admin-dashboard')" style="background:rgba(255,255,255,0.2);border:none;width:40px;height:40px;border-radius:12px;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <div>
+                        <p style="color:rgba(255,255,255,0.8);font-size:11px;margin:0;">Admin Panel</p>
+                        <h2 style="font-size:20px;font-weight:800;color:white;margin:0;">Analitik Penjualan</h2>
+                    </div>
+                    <div style="margin-left:auto;width:44px;height:44px;background:rgba(255,255,255,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;">
+                        <i class="fas fa-chart-pie" style="color:white;font-size:18px;"></i>
+                    </div>
+                </div>
             </div>
 
-            <div class="card" style="margin-bottom:16px;">
-                <h3 style="font-weight:700; margin-bottom:16px; color:#1F2937;">Performa Penjualan</h3>
-                <div style="height:220px; background:#F9FAFB; border-radius:12px; padding:12px; position:relative;">
+            <!-- Sales Chart Card -->
+            <div style="background:white;border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:36px;height:36px;background:linear-gradient(135deg,#8B5CF6,#7C3AED);border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-size:14px;">
+                            <i class="fas fa-chart-area"></i>
+                        </div>
+                        <div>
+                            <p style="font-weight:700;color:#1F2937;font-size:14px;margin:0;">Performa 7 Hari</p>
+                            <p style="font-size:10px;color:#6B7280;margin:2px 0 0;">Order & Revenue</p>
+                        </div>
+                    </div>
+                    <span id="chartPeriod" style="background:#F3F4F6;color:#6B7280;padding:4px 10px;border-radius:6px;font-size:10px;font-weight:600;">7 Hari Terakhir</span>
+                </div>
+                <div style="height:200px;background:#FAFAFA;border-radius:12px;padding:12px;position:relative;">
                     <canvas id="salesChart"></canvas>
-                    <div id="salesChartLoading" style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:#9CA3AF;">
-                        <i class="fas fa-spinner fa-spin" style="font-size:24px;margin-right:8px;"></i>
-                        <span>Memuat grafik...</span>
+                    <div id="salesChartLoading" style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#9CA3AF;background:#FAFAFA;border-radius:12px;">
+                        <i class="fas fa-spinner fa-spin" style="font-size:28px;margin-bottom:10px;color:#8B5CF6;"></i>
+                        <span style="font-size:12px;">Memuat grafik...</span>
                     </div>
                 </div>
             </div>
 
             <!-- SGT Supply Stats Card for Admin -->
-            <div class="card" style="margin-bottom:16px; background:linear-gradient(135deg,#1A0533 0%,#3D1078 60%,#7C3AED 100%); color:white;">
-                <h3 style="font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-                    <i class="fas fa-coins" style="color:#FCD34D;"></i> SGT Supply Overview
-                </h3>
-                <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:12px;">
-                    <div style="background:rgba(255,255,255,0.1); border-radius:10px; padding:12px; text-align:center;">
-                        <p id="analyticsCirculating" style="font-size:18px; font-weight:800; color:#6EE7B7; margin:0;">0</p>
-                        <p style="font-size:10px; opacity:0.8; margin:4px 0 0;">Circulating Supply</p>
+            <div style="background:linear-gradient(135deg,#0F172A 0%,#1E293B 100%);border-radius:16px;padding:16px;margin-bottom:16px;color:white;box-shadow:0 4px 20px rgba(0,0,0,0.15);">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                    <div style="width:36px;height:36px;background:linear-gradient(135deg,#F59E0B,#EAB308);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#1F2937;">S</div>
+                    <div>
+                        <p style="font-weight:700;font-size:14px;margin:0;">SGT Supply Overview</p>
+                        <p style="font-size:10px;opacity:0.6;margin:2px 0 0;">Statistik token real-time</p>
                     </div>
-                    <div style="background:rgba(255,255,255,0.1); border-radius:10px; padding:12px; text-align:center;">
-                        <p id="analyticsHardCap" style="font-size:18px; font-weight:800; color:#FCD34D; margin:0;">100M</p>
-                        <p style="font-size:10px; opacity:0.8; margin:4px 0 0;">Hard Cap</p>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">
+                    <div style="background:rgba(110,231,183,0.15);border:1px solid rgba(110,231,183,0.2);border-radius:12px;padding:12px;text-align:center;">
+                        <p id="analyticsCirculating" style="font-size:18px;font-weight:800;color:#6EE7B7;margin:0;">0</p>
+                        <p style="font-size:10px;opacity:0.6;margin:4px 0 0;">Circulating</p>
                     </div>
-                    <div style="background:rgba(255,255,255,0.1); border-radius:10px; padding:12px; text-align:center;">
-                        <p id="analyticsBurned" style="font-size:18px; font-weight:800; color:#FCA5A5; margin:0;">0</p>
-                        <p style="font-size:10px; opacity:0.8; margin:4px 0 0;">Total Burned</p>
+                    <div style="background:rgba(252,211,77,0.15);border:1px solid rgba(252,211,77,0.2);border-radius:12px;padding:12px;text-align:center;">
+                        <p id="analyticsHardCap" style="font-size:18px;font-weight:800;color:#FCD34D;margin:0;">100M</p>
+                        <p style="font-size:10px;opacity:0.6;margin:4px 0 0;">Hard Cap</p>
                     </div>
-                    <div style="background:rgba(255,255,255,0.1); border-radius:10px; padding:12px; text-align:center;">
-                        <p id="analyticsSupplyPct" style="font-size:18px; font-weight:800; color:#93C5FD; margin:0;">0%</p>
-                        <p style="font-size:10px; opacity:0.8; margin:4px 0 0;">Supply Used</p>
+                    <div style="background:rgba(252,165,165,0.15);border:1px solid rgba(252,165,165,0.2);border-radius:12px;padding:12px;text-align:center;">
+                        <p id="analyticsBurned" style="font-size:18px;font-weight:800;color:#FCA5A5;margin:0;">0</p>
+                        <p style="font-size:10px;opacity:0.6;margin:4px 0 0;">Burned</p>
+                    </div>
+                    <div style="background:rgba(147,197,253,0.15);border:1px solid rgba(147,197,253,0.2);border-radius:12px;padding:12px;text-align:center;">
+                        <p id="analyticsSupplyPct" style="font-size:18px;font-weight:800;color:#93C5FD;margin:0;">0%</p>
+                        <p style="font-size:10px;opacity:0.6;margin:4px 0 0;">Used</p>
                     </div>
                 </div>
             </div>
 
-            <div class="card">
-                <h3 style="font-weight:700; margin-bottom:16px; color:#1F2937;">Produk Terlaris</h3>
+            <!-- Top Products Card -->
+            <div style="background:white;border-radius:16px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #F3F4F6;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                    <div style="width:36px;height:36px;background:linear-gradient(135deg,#F59E0B,#D97706);border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-size:14px;">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <div>
+                        <p style="font-weight:700;color:#1F2937;font-size:14px;margin:0;">Produk Terlaris</p>
+                        <p style="font-size:10px;color:#6B7280;margin:2px 0 0;">Top 5 penjualan</p>
+                    </div>
+                </div>
                 <div id="topProductsList"></div>
             </div>
         </div>
@@ -3595,8 +3660,11 @@ window.saveSGTSettings = function() {
 window._real_ = window._real_ || {};
 
 window._real_.distributeSGTManual = async function() {
+    console.log('[v0] distributeSGTManual called');
     const targetUser = document.getElementById('sgtDistUser')?.value.trim();
     const amount = parseInt(document.getElementById('sgtDistAmount')?.value);
+
+    console.log('[v0] Target user:', targetUser, 'Amount:', amount);
 
     if (!targetUser) { showToast('Masukkan username penerima', 'error'); return; }
     if (!amount || amount <= 0) { showToast('Jumlah SGT tidak valid', 'error'); return; }
@@ -3605,6 +3673,7 @@ window._real_.distributeSGTManual = async function() {
 
     try {
         if (!db) throw new Error('Database tidak siap');
+        console.log('[v0] Database ready, searching for user...');
 
         const usersSnap = await getDocs(
             query(collection(db, 'users'), where('username', '==', targetUser))
@@ -3617,6 +3686,7 @@ window._real_.distributeSGTManual = async function() {
 
         const userDocRef = doc(db, 'users', usersSnap.docs[0].id);
         const userData = usersSnap.docs[0].data();
+        console.log('[v0] Found user:', usersSnap.docs[0].id, 'Current balance:', userData.sgtBalance);
 
         const currentBal = userData.sgtBalance || 0;
         const currentTxs = Array.isArray(userData.sgtTransactions) ? userData.sgtTransactions : [];
@@ -3630,17 +3700,21 @@ window._real_.distributeSGTManual = async function() {
         };
 
         // Update circulating supply SEBELUM credit ke user
+        console.log('[v0] Calling mintSGT with amount:', amount);
         const mintResult = await mintSGT(amount, usersSnap.docs[0].id);
+        console.log('[v0] mintSGT result:', mintResult);
         if (!mintResult) {
             showToast('Gagal: Hard cap tercapai atau error minting', 'error');
             return;
         }
 
+        console.log('[v0] Updating user balance to:', currentBal + amount);
         await setDoc(userDocRef, {
             sgtBalance: currentBal + amount,
             sgtTransactions: [newTx, ...currentTxs].slice(0, 50),
             sgtUpdatedAt: serverTimestamp()
         }, { merge: true });
+        console.log('[v0] User balance updated successfully');
 
         await addDoc(collection(db, 'sgt_logs'), {
             adminId: currentUser?.uid || 'admin_manual',
@@ -5569,10 +5643,17 @@ async function updateAnalyticsSupplyStats() {
 
 // Render sales chart using Chart.js
 function renderSalesChart() {
+    console.log('[v0] renderSalesChart called');
     const canvas = document.getElementById('salesChart');
     const loadingEl = document.getElementById('salesChartLoading');
     
-    if (!canvas) return;
+    if (!canvas) {
+        console.log('[v0] salesChart canvas not found');
+        return;
+    }
+    
+    console.log('[v0] Chart.js available:', typeof Chart !== 'undefined');
+    console.log('[v0] Orders count:', orders.length);
     
     // Hide loading
     if (loadingEl) loadingEl.style.display = 'none';
@@ -7331,5 +7412,7 @@ window.openModal = function(id) {
 
 
     </script>
+    <!-- Chart.js CDN - loaded at end for better performance -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </body>
 </html>
