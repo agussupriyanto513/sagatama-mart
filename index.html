@@ -1799,10 +1799,9 @@
                             <p style="font-weight:600;color:#1F2937;font-size:13px;margin:0;">SGT Sosial</p>
                             <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Beasiswa, bansos & staking</p>
                         </div>
-                    <span id="adminSosialBadge" style="display:none;background:#EF4444;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">0</span>
-                    <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
-                </div>
-            </div>
+                        <span id="adminSosialBadge" style="display:none;background:#EF4444;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">0</span>
+                        <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
+                    </div>
                 </div>
             </div>
 
@@ -3922,10 +3921,30 @@ function listenUserSGTBalance(userId) {
             const data = docSnap.data();
             const balance = data.sgtBalance || 0;
             sgtBalance = balance;
+            sgtTransactions = data.sgtTransactions || [];
+            
+            // Update all UI elements
             const walletEl = document.getElementById('walletSgtBalance');
             const headerEl = document.getElementById('sgtHeaderBalance');
-            if (walletEl) walletEl.innerText = balance;
-            if (headerEl) headerEl.innerText = balance + ' SGT';
+            const promoEl = document.getElementById('sgtPromoBalance');
+            const sosialEl = document.getElementById('sgtSosialBadge');
+            
+            if (walletEl) walletEl.innerText = balance.toLocaleString();
+            if (headerEl) headerEl.innerText = balance.toLocaleString() + ' SGT';
+            if (promoEl) promoEl.innerText = balance.toLocaleString();
+            if (sosialEl) sosialEl.innerText = balance.toLocaleString() + ' SGT';
+            
+            // Update SGT stats
+            const earned = sgtTransactions.filter(t => t.type === 'earn').reduce((s, t) => s + (t.amount || 0), 0);
+            const spent = sgtTransactions.filter(t => t.type !== 'earn').reduce((s, t) => s + (t.amount || 0), 0);
+            const seEl = document.getElementById('statSgtEarned');
+            const ssEl = document.getElementById('statSgtSpent');
+            const stEl = document.getElementById('statSgtTx');
+            if (seEl) seEl.textContent = earned.toLocaleString();
+            if (ssEl) ssEl.textContent = spent.toLocaleString();
+            if (stEl) stEl.textContent = sgtTransactions.length;
+            
+            logDebug('SGT realtime update: ' + balance + ' SGT');
         },
         (error) => {
             logDebug('Listener SGT error: ' + error.message);
@@ -4086,6 +4105,10 @@ async function init() {
         if (currentUser && db) {
             // Refresh SGT dari Firestore (background, tidak block UI)
             loadSGTData().catch(e => logDebug("BGround SGT load: " + e.message));
+            // Start realtime listener for SGT balance updates
+            if (currentUser.uid && currentUser.role !== 'admin') {
+                listenUserSGTBalance(currentUser.uid);
+            }
             // Verifikasi user masih valid di Firestore
             verifyUserSession().catch(e => logDebug("User verify: " + e.message));
         }
@@ -4432,6 +4455,10 @@ window.authenticatePi = async function() {
         }
 
         await loadSGTData();
+        // Start realtime listener for SGT balance updates
+        if (currentUser.uid) {
+            listenUserSGTBalance(currentUser.uid);
+        }
         showSGTElements(true);
         updateUI();
         // Refresh sosial module after login
@@ -5694,7 +5721,7 @@ function renderSalesChart() {
         const dateKey = orderDate.toISOString().split('T')[0];
         if (salesByDate.hasOwnProperty(dateKey)) {
             salesByDate[dateKey]++;
-            revenueByDate[dateKey] += parseFloat(order.totalPi) || 0;
+            revenueByDate[dateKey] += parseFloat(order.amount) || parseFloat(order.totalPi) || 0;
         }
     });
     
