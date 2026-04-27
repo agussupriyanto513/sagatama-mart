@@ -5711,17 +5711,32 @@ function renderSalesChart() {
     orders.forEach(order => {
         if (!order.createdAt) return;
         let orderDate;
-        if (order.createdAt.toDate) {
-            orderDate = order.createdAt.toDate();
-        } else if (order.createdAt.seconds) {
-            orderDate = new Date(order.createdAt.seconds * 1000);
-        } else {
-            orderDate = new Date(order.createdAt);
-        }
-        const dateKey = orderDate.toISOString().split('T')[0];
-        if (salesByDate.hasOwnProperty(dateKey)) {
-            salesByDate[dateKey]++;
-            revenueByDate[dateKey] += parseFloat(order.amount) || parseFloat(order.totalPi) || 0;
+        try {
+            if (order.createdAt.toDate && typeof order.createdAt.toDate === 'function') {
+                orderDate = order.createdAt.toDate();
+            } else if (order.createdAt.seconds) {
+                orderDate = new Date(order.createdAt.seconds * 1000);
+            } else if (typeof order.createdAt === 'string') {
+                orderDate = new Date(order.createdAt);
+            } else if (typeof order.createdAt === 'number') {
+                orderDate = new Date(order.createdAt);
+            } else {
+                return; // Skip invalid date format
+            }
+            
+            // Validate the date is valid
+            if (isNaN(orderDate.getTime())) {
+                return; // Skip invalid dates
+            }
+            
+            const dateKey = orderDate.toISOString().split('T')[0];
+            if (salesByDate.hasOwnProperty(dateKey)) {
+                salesByDate[dateKey]++;
+                revenueByDate[dateKey] += parseFloat(order.amount) || parseFloat(order.totalPi) || 0;
+            }
+        } catch (e) {
+            // Skip orders with invalid date format
+            console.warn('Invalid order date:', order.createdAt);
         }
     });
     
