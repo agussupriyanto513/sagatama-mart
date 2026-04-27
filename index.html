@@ -3257,6 +3257,7 @@ let myOrders = [];
 let cart = JSON.parse(localStorage.getItem('sagatama_cart') || '[]');
 let currentUser = null;
 let userRole = 'guest';
+let isPiBrowser = false;
 let isPiSDKReady = false;
 let isPiAuthenticated = false;
 let piAuth = null;
@@ -4589,16 +4590,11 @@ async function withPiTimeout(promise, timeoutMs = 30000, operationName = 'Pi ope
 // AUTHENTICATION
 // ============================================
 
-function isPiBrowser() {
-    return typeof window.Pi !== 'undefined'
-        && typeof window.Pi.authenticate === 'function'
-        && typeof window.Pi.init === 'function';
-}
-
 window.authenticatePi = async function() {
     logDebug("authenticatePi called, SDK ready: " + isPiSDKReady);
 
-    if (!isPiBrowser()) {
+    // Gunakan variabel isPiBrowser yang sudah ada (baris ~3260)
+    if (!isPiBrowser) {
         logDebug("Pi Browser not detected. window.Pi: " + typeof window.Pi);
         showToast('Login Pi hanya bisa dilakukan di dalam Pi Browser. Silakan buka app ini melalui Pi Browser.', 'error');
         return;
@@ -7901,7 +7897,7 @@ window.openModal = function(id) {
     // Tampilkan banner peringatan jika bukan Pi Browser saat login modal dibuka
     if (id === 'loginOptionsModal') {
         const warning = document.getElementById('notPiBrowserWarning');
-        if (warning) warning.style.display = isPiBrowser() ? 'none' : 'block';
+        if (warning) warning.style.display = isPiBrowser ? 'none' : 'block';
     }
     if (id === 'sgtAdminModal') {
         loadSupplyStats().then(() => {
