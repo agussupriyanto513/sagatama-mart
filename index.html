@@ -5482,18 +5482,17 @@ window.loginAdmin = async function() {
         closeModal('adminLoginModal');
         showToast('Login Admin berhasil! 👑', 'success');
         setTimeout(() => switchView('admin-dashboard'), 500);
-        // Paksa update dashboard setelah data masuk — TANPA reload listener
-        // (listener sudah aktif dari loadDataFromFirebase() di atas)
+        // Reload ulang semua data setelah auth Firebase selesai (tunggu 1.5 detik)
+        setTimeout(() => {
+            loadDataFromFirebase();
+        }, 1500);
+        // Paksa update dashboard setelah data masuk
         setTimeout(() => {
             updateAdminStats();
             renderAdminRecentOrders();
-            if (products.length > 0 && typeof renderAdminProducts === 'function') renderAdminProducts();
-        }, 2000);
-        setTimeout(() => {
-            updateAdminStats();
-            renderAdminRecentOrders();
+            if (typeof renderAdminProducts === 'function') renderAdminProducts();
             updateSGTAdminStats();
-        }, 4000);
+        }, 3500);
 
     } catch (err) {
         logDebug('[Admin] Login error: ' + err.message);
@@ -6026,16 +6025,13 @@ window.switchView = function(view) {
             case 'admin-dashboard': renderAdminDashboard(); loadSupplyStats().catch(()=>{}); break;
             case 'admin-products':
                 currentAdminProductFilter = 'all';
-                // Coba ambil dari cache dulu kalau products kosong
-                if (products.length === 0) {
-                    try {
-                        const _c = localStorage.getItem('sagatama_products_cache');
-                        if (_c) { const _p = JSON.parse(_c); if (_p && _p.length > 0) products = _p; }
-                    } catch(e) {}
-                }
                 renderAdminProducts();
-                // Tetap retry untuk pastikan data terbaru dari Firebase
-                setTimeout(() => renderAdminProducts(), 1500);
+                if (products.length === 0) {
+                    // Kalau belum ada data, pastikan listener aktif & retry
+                    if (Object.keys(unsubscribers).length === 0) loadDataFromFirebase();
+                    setTimeout(() => renderAdminProducts(), 1500);
+                    setTimeout(() => renderAdminProducts(), 3000);
+                }
                 break;
             case 'admin-orders': currentAdminOrderFilter = 'all'; renderAdminOrders(); break;
             case 'admin-analytics': renderAdminAnalytics(); break;
@@ -6613,29 +6609,14 @@ function renderAdminProducts() {
 
     // Kalau products masih kosong tapi Firebase listener belum pernah balik data,
     // tampilkan loading skeleton dulu — bukan "Belum ada produk"
-    if (products.length === 0 && db) {
-        // Cek cache localStorage dulu
-        try {
-            const cached = localStorage.getItem('sagatama_products_cache');
-            if (cached) {
-                const parsed = JSON.parse(cached);
-                if (parsed && parsed.length > 0) {
-                    // Pakai cache sementara menunggu Firebase
-                    products = parsed;
-                }
-            }
-        } catch(e) {}
-        // Kalau masih kosong setelah cek cache
-        if (products.length === 0) {
-            container.innerHTML = `<div style="text-align:center;padding:60px 20px;">
-                <div class="loading-spinner" style="margin:0 auto 16px;"></div>
-                <p style="color:#6B7280;font-size:14px;">Memuat produk dari database...</p>
-            </div>`;
-            // Aktifkan listener hanya jika belum ada
-            if (Object.keys(unsubscribers).length === 0) loadDataFromFirebase();
-            setTimeout(() => renderAdminProducts(), 2000);
-            return;
-        }
+    if (products.length === 0 && db && Object.keys(unsubscribers).length === 0) {
+        container.innerHTML = `<div style="text-align:center;padding:60px 20px;">
+            <div class="loading-spinner" style="margin:0 auto 16px;"></div>
+            <p style="color:#6B7280;font-size:14px;">Memuat produk dari database...</p>
+        </div>`;
+        // Pastikan listener aktif
+        loadDataFromFirebase();
+        return;
     }
 
     let filtered = [...products];
