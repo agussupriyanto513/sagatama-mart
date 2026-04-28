@@ -5180,42 +5180,6 @@ window.openAdminLoginModal = function() {
     document.getElementById('adminLoginModal')?.classList.add('active');
 };
 
-// ═══════════════════════════════════════════════════════
-// ADMIN ACCESS CONTROL - Sembunyikan dari user umum
-// Admin bisa akses via: ?admin=1 di URL, atau ketuk logo 7x
-// ═══════════════════════════════════════════════════════
-(function setupAdminAccess() {
-    // Check URL param
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('admin') === '1') {
-        const el = document.getElementById('adminLoginOption');
-        const hint = document.getElementById('adminHintText');
-        if (el) el.style.display = 'block';
-        if (hint) hint.style.display = 'block';
-        // Bersihkan URL dari param ?admin=1 setelah 1 detik
-        setTimeout(() => window.history.replaceState({}, document.title, window.location.pathname), 1000);
-    }
-
-    // Logo tap 7x untuk unlock admin button (tersembunyi)
-    let adminTapCount = 0, adminTapTimer = null;
-    document.getElementById('logoBtn')?.addEventListener('click', function() {
-        adminTapCount++;
-        clearTimeout(adminTapTimer);
-        adminTapTimer = setTimeout(() => { adminTapCount = 0; }, 2000);
-        if (adminTapCount >= 7) {
-            adminTapCount = 0;
-            const el = document.getElementById('adminLoginOption');
-            const hint = document.getElementById('adminHintText');
-            if (el) {
-                const isVisible = el.style.display !== 'none';
-                el.style.display = isVisible ? 'none' : 'block';
-                if (hint) hint.style.display = isVisible ? 'none' : 'block';
-                if (!isVisible) showToast('Mode Admin aktif', 'warning');
-            }
-        }
-    });
-})();
-
 window.togglePasswordVisibility = function() {
     const input = document.getElementById('adminPassword');
     const icon = document.getElementById('passwordToggleIcon');
@@ -8504,13 +8468,31 @@ window.updateMintRate = async function() {
 const _origOpenModal = window.openModal;
 window.openModal = function(id) {
     if (typeof _origOpenModal === 'function') _origOpenModal(id);
-    // Tampilkan banner peringatan jika bukan Pi Browser saat login modal dibuka
     if (id === 'loginOptionsModal') {
-        const warning = document.getElementById('notPiBrowserWarning');
-        if (warning) warning.style.display = isPiBrowser ? 'none' : 'block';
+        const warning    = document.getElementById('notPiBrowserWarning');
+        const adminBtn   = document.getElementById('adminLoginOption');
+        const adminHint  = document.getElementById('adminHintText');
+        const piOption   = document.querySelector('.login-option.pi');
+
+        if (!isPiBrowser) {
+            // Di laptop / browser biasa: langsung tampilkan tombol Admin
+            if (warning)   warning.style.display  = 'block';
+            if (adminBtn)  adminBtn.style.display  = 'block';
+            if (adminHint) adminHint.style.display = 'none';
+            // Disable Pi login option karena tidak bisa dipakai
+            if (piOption) {
+                piOption.style.opacity       = '0.4';
+                piOption.style.cursor        = 'not-allowed';
+                piOption.style.pointerEvents = 'none';
+                const lbl = piOption.querySelector('p:last-child');
+                if (lbl) lbl.textContent = 'Hanya tersedia di Pi Browser';
+            }
+        } else {
+            // Di Pi Browser: sembunyikan warning, sembunyikan tombol admin (default hidden)
+            if (warning) warning.style.display = 'none';
+        }
     }
     if (id === 'adminLoginModal') {
-        // Reset error dan form setiap kali modal dibuka
         const errorDiv = document.getElementById('adminLoginError');
         const pwdField = document.getElementById('adminPassword');
         const loginBtn = document.querySelector('#adminLoginModal button[onclick="loginAdmin()"]');
@@ -8520,7 +8502,6 @@ window.openModal = function(id) {
     }
     if (id === 'sgtAdminModal') {
         loadSupplyStats().then(() => {
-            // Sync modal-specific elements
             const sync = (from, to) => {
                 const fsrc = document.getElementById(from);
                 const fdst = document.getElementById(to);
@@ -8545,5 +8526,86 @@ window.openModal = function(id) {
     </script>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- ADMIN ACCESS CONTROL - script biasa, bukan module -->
+    <script>
+    (function() {
+        function setupAdminAccess() {
+            var isPiBrowserEnv = navigator.userAgent.indexOf('PiBrowser') !== -1 ||
+                                 typeof window.Pi !== 'undefined';
+
+            var adminBtn  = document.getElementById('adminLoginOption');
+            var adminHint = document.getElementById('adminHintText');
+            var piWarning = document.getElementById('notPiBrowserWarning');
+            var piLoginOption = document.querySelector('.login-option.pi');
+
+            // ── Di LAPTOP / Browser biasa (bukan Pi Browser) ──
+            // Langsung tampilkan tombol Admin, sembunyikan peringatan Pi
+            if (!isPiBrowserEnv) {
+                if (adminBtn)  adminBtn.style.display  = 'block';
+                if (adminHint) adminHint.style.display = 'none';
+                // Greyed-out Pi login option agar tidak membingungkan
+                if (piLoginOption) {
+                    piLoginOption.style.opacity = '0.4';
+                    piLoginOption.style.cursor  = 'not-allowed';
+                    piLoginOption.style.pointerEvents = 'none';
+                    var label = piLoginOption.querySelector('p');
+                    if (label) label.textContent = 'Hanya tersedia di Pi Browser';
+                }
+                if (piWarning) piWarning.style.display = 'block';
+            }
+
+            // ── URL param ?admin=1 (tetap bisa di Pi Browser juga) ──
+            var params = new URLSearchParams(window.location.search);
+            if (params.get('admin') === '1') {
+                if (adminBtn)  adminBtn.style.display  = 'block';
+                if (adminHint) adminHint.style.display = 'block';
+                setTimeout(function() {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }, 1000);
+            }
+
+            // ── Ketuk logo 7x (fallback untuk Pi Browser) ──
+            var tapCount = 0, tapTimer = null;
+            var logoEl = document.getElementById('logoBtn');
+            if (logoEl) {
+                logoEl.addEventListener('click', function() {
+                    tapCount++;
+                    clearTimeout(tapTimer);
+                    tapTimer = setTimeout(function() { tapCount = 0; }, 3000);
+                    if (tapCount >= 7) {
+                        tapCount = 0;
+                        if (adminBtn) {
+                            var visible = adminBtn.style.display === 'block';
+                            adminBtn.style.display  = visible ? 'none' : 'block';
+                            if (adminHint) adminHint.style.display = visible ? 'none' : 'block';
+                            if (!visible && typeof showToast === 'function') {
+                                showToast('🔑 Mode Admin aktif', 'warning');
+                            }
+                        }
+                    }
+                }, true);
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupAdminAccess);
+        } else {
+            setupAdminAccess();
+        }
+
+        // Jalankan ulang saat modal login dibuka (karena modal bisa dibuka kapan saja)
+        var _origOpen = window.openModal;
+        window.addEventListener('load', function() {
+            var origOpen2 = window.openModal;
+            window.openModal = function(id) {
+                if (typeof origOpen2 === 'function') origOpen2(id);
+                if (id === 'loginOptionsModal') {
+                    setTimeout(setupAdminAccess, 100);
+                }
+            };
+        });
+    })();
+    </script>
 </body>
 </html>
