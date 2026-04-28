@@ -7749,8 +7749,9 @@ window.submitBeasiswa = async function() {
             catch (authErr) { logDebug('Anon auth skip (non-fatal): ' + authErr.message); }
         }
         await addDoc(collection(db, 'beasiswa_applications'), {
-            userId:    currentUser.uid,
-            username:  currentUser.username || currentUser.displayName || currentUser.email || 'user',
+            userId:      currentUser.uid,
+            firebaseUid: auth?.currentUser?.uid || null,
+            username:    currentUser.username || currentUser.displayName || currentUser.email || 'user',
             nama, tingkat, sekolah, alasan, sgtNeeded,
             status: 'pending', createdAt: serverTimestamp()
         });
@@ -7822,10 +7823,11 @@ window.submitBantuan = async function() {
             catch (authErr) { logDebug('Anon auth skip (non-fatal): ' + authErr.message); }
         }
         await addDoc(collection(db, 'bansos_applications'), {
-            userId:    currentUser.uid,
-            username:  currentUser.username || currentUser.displayName || currentUser.email || 'user',
+            userId:      currentUser.uid,
+            firebaseUid: auth?.currentUser?.uid || null,
+            username:    currentUser.username || currentUser.displayName || currentUser.email || 'user',
             nama, jenis, deskripsi,
-            telp:      telp || '-',
+            telp:        telp || '-',
             sgtNeeded,
             status: 'pending', createdAt: serverTimestamp()
         });
