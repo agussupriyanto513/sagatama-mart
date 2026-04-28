@@ -6492,9 +6492,8 @@ function renderAdminDashboard() {
     if (!(currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin')) { switchView('home'); return; }
     updateAdminStats();
     renderAdminRecentOrders();
-    // Retry setelah Firebase kirim data (antisipasi race condition saat pertama login)
+    // Retry ringan setelah Firebase siap (tanpa trigger SGT stats ulang — sudah throttled)
     setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); }, 2000);
-    setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); updateSGTAdminStats(); }, 4500);
 }
 
 function updateAdminStats() {
@@ -6508,18 +6507,26 @@ function updateAdminStats() {
     updateSGTAdminStats();
 }
 
+// ── Throttle: updateSGTAdminStats max 1x per 60 detik ──────────
+let _sgtAdminStatsLastRun = 0;
+let _sgtAdminStatsRunning = false;
+
 async function updateSGTAdminStats() {
-    console.log('[v0] updateSGTAdminStats: Starting...');
+    const now = Date.now();
+    const THROTTLE_MS = 60_000;
+    if (_sgtAdminStatsRunning) { logDebug('[SGT-Stats] Skipped: already running'); return; }
+    if (now - _sgtAdminStatsLastRun < THROTTLE_MS) {
+        logDebug('[SGT-Stats] Skipped: throttled (' + Math.round((THROTTLE_MS - (now - _sgtAdminStatsLastRun)) / 1000) + 's left)');
+        return;
+    }
+    _sgtAdminStatsRunning = true;
+    _sgtAdminStatsLastRun = now;
     try {
-        if (!db) {
-            console.log('[v0] updateSGTAdminStats: No db');
-            return;
-        }
-        
+        if (!db) { _sgtAdminStatsRunning = false; return; }
+
         // Ambil semua user dari Firestore untuk hitung SGT stats
         const usersSnap = await getDocs(collection(db, 'users'));
-        console.log('[v0] updateSGTAdminStats: Found', usersSnap.size, 'users');
-        
+
         let totalSGT = 0;
         let totalHolders = 0;
         let totalDistributed = 0;
@@ -6528,7 +6535,6 @@ async function updateSGTAdminStats() {
         usersSnap.forEach(docSnap => {
             const data = docSnap.data();
             const bal = data.sgtBalance || 0;
-            console.log('[v0] User:', data.username, 'Balance:', bal);
             if (bal > 0) {
                 totalSGT += bal;
                 totalHolders++;
@@ -6546,19 +6552,15 @@ async function updateSGTAdminStats() {
                 }
             });
         });
-        
-        console.log('[v0] updateSGTAdminStats: totalSGT=', totalSGT, 'holders=', totalHolders, 'distributed=', totalDistributed);
 
         // Juga ambil dari sgt_logs collection untuk data yang lebih lengkap
         try {
             const logsSnap = await getDocs(collection(db, 'sgt_logs'));
-            console.log('[v0] updateSGTAdminStats: Found', logsSnap.size, 'log entries');
             logsSnap.forEach(logDoc => {
                 const logData = logDoc.data();
                 if (logData.type === 'manual_distribution') {
-                    // Cek apakah sudah ada di userLogRows
-                    const exists = userLogRows.some(r => 
-                        r.username === logData.targetUser && 
+                    const exists = userLogRows.some(r =>
+                        r.username === logData.targetUser &&
                         r.amount === logData.amount
                     );
                     if (!exists) {
@@ -6571,7 +6573,7 @@ async function updateSGTAdminStats() {
                 }
             });
         } catch (logErr) {
-            console.log('[v0] updateSGTAdminStats: sgt_logs error', logErr.message);
+            logDebug('[SGT-Stats] sgt_logs error: ' + logErr.message);
         }
 
         // Baca total burned dari localStorage admin (sementara)
@@ -6612,10 +6614,11 @@ async function updateSGTAdminStats() {
         }
         // Also load from Firestore supply config
         await loadSupplyStats();
-        logDebug("SGT Admin stats updated: " + totalHolders + " holders, " + totalSGT + " SGT beredar");
+        logDebug('[SGT-Stats] Updated: ' + totalHolders + ' holders, ' + totalSGT + ' SGT beredar');
     } catch (e) {
-        console.log('[v0] updateSGTAdminStats: Error', e.message);
-        logDebug("SGT admin stats error: " + e.message);
+        logDebug('[SGT-Stats] Error: ' + e.message);
+    } finally {
+        _sgtAdminStatsRunning = false;
     }
 }
 
