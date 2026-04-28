@@ -5132,7 +5132,13 @@ async function processPiAuthSuccess(authResult) {
     } catch (fbErr) {
         logDebug("[AUTH-v3] Firebase anon warning (non-kritis): " + fbErr.message);
     }
-    
+
+    // KRITIS: Simpan firebaseUid ke currentUser agar query Firestore bisa pakai
+    if (firebaseUid) {
+        currentUser.firebaseUid = firebaseUid;
+        localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
+    }
+
     // Step 6: Pastikan dokumen user ada di Firestore dengan UID yang benar
     await ensureUserDocumentExists(piUid, currentUser.username, firebaseUid);
     
@@ -6492,7 +6498,7 @@ function renderAdminDashboard() {
     if (!(currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin')) { switchView('home'); return; }
     updateAdminStats();
     renderAdminRecentOrders();
-    // Retry ringan setelah Firebase siap (tanpa trigger SGT stats ulang — sudah throttled)
+    // Retry setelah Firebase kirim data (antisipasi race condition saat pertama login)
     setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); }, 2000);
 }
 
@@ -6516,17 +6522,20 @@ async function updateSGTAdminStats() {
     const THROTTLE_MS = 60_000;
     if (_sgtAdminStatsRunning) { logDebug('[SGT-Stats] Skipped: already running'); return; }
     if (now - _sgtAdminStatsLastRun < THROTTLE_MS) {
-        logDebug('[SGT-Stats] Skipped: throttled (' + Math.round((THROTTLE_MS - (now - _sgtAdminStatsLastRun)) / 1000) + 's left)');
+        logDebug('[SGT-Stats] Skipped: throttled (' + Math.round((THROTTLE_MS-(now-_sgtAdminStatsLastRun))/1000) + 's left)');
         return;
     }
     _sgtAdminStatsRunning = true;
     _sgtAdminStatsLastRun = now;
+    const _origTry = true; // marker
     try {
-        if (!db) { _sgtAdminStatsRunning = false; return; }
-
+        if (!db) {
+                return;
+        }
+        
         // Ambil semua user dari Firestore untuk hitung SGT stats
         const usersSnap = await getDocs(collection(db, 'users'));
-
+        
         let totalSGT = 0;
         let totalHolders = 0;
         let totalDistributed = 0;
@@ -6535,7 +6544,7 @@ async function updateSGTAdminStats() {
         usersSnap.forEach(docSnap => {
             const data = docSnap.data();
             const bal = data.sgtBalance || 0;
-            if (bal > 0) {
+                if (bal > 0) {
                 totalSGT += bal;
                 totalHolders++;
             }
@@ -6552,15 +6561,17 @@ async function updateSGTAdminStats() {
                 }
             });
         });
+        
 
         // Juga ambil dari sgt_logs collection untuk data yang lebih lengkap
         try {
             const logsSnap = await getDocs(collection(db, 'sgt_logs'));
-            logsSnap.forEach(logDoc => {
+                logsSnap.forEach(logDoc => {
                 const logData = logDoc.data();
                 if (logData.type === 'manual_distribution') {
-                    const exists = userLogRows.some(r =>
-                        r.username === logData.targetUser &&
+                    // Cek apakah sudah ada di userLogRows
+                    const exists = userLogRows.some(r => 
+                        r.username === logData.targetUser && 
                         r.amount === logData.amount
                     );
                     if (!exists) {
@@ -6573,8 +6584,7 @@ async function updateSGTAdminStats() {
                 }
             });
         } catch (logErr) {
-            logDebug('[SGT-Stats] sgt_logs error: ' + logErr.message);
-        }
+            }
 
         // Baca total burned dari localStorage admin (sementara)
         const totalBurned = sgtTotalBurned || 0; // from Firestore via loadSupplyStats
@@ -6614,7 +6624,7 @@ async function updateSGTAdminStats() {
         }
         // Also load from Firestore supply config
         await loadSupplyStats();
-        logDebug('[SGT-Stats] Updated: ' + totalHolders + ' holders, ' + totalSGT + ' SGT beredar');
+        logDebug("SGT Admin stats updated: " + totalHolders + " holders, " + totalSGT + " SGT beredar");
     } catch (e) {
         logDebug('[SGT-Stats] Error: ' + e.message);
     } finally {
@@ -6805,7 +6815,6 @@ function renderSalesChart() {
     const loadingEl = document.getElementById('salesChartLoading');
     
     if (!canvas) {
-        console.log('[v0] salesChart canvas not found');
         return;
     }
     
@@ -7643,6 +7652,7 @@ window.submitStaking = async function() {
 
         const stakingDoc = {
             userId: currentUser.uid,
+            firebaseUid: currentUser.firebaseUid || auth?.currentUser?.uid || null,
             username: currentUser.username || currentUser.displayName || currentUser.email || 'unknown',
             amount: amt, days: selectedStakingDays, apy: selectedStakingAPY,
             startDate: startDate.toISOString(), endDate: endDate.toISOString(),
@@ -7698,9 +7708,17 @@ async function loadActiveStaking() {
     if (!currentUser || !db) return;
     const c = document.getElementById('activeStakingList');
     if (!c) return;
+    // Gunakan firebaseUid jika ada (cocok dengan request.auth.uid di rules),
+    // fallback ke piUid untuk data lama
+    const queryUid = currentUser.firebaseUid || auth?.currentUser?.uid || currentUser.uid;
     try {
-        const q = query(collection(db, 'sgt_stakings'), where('userId','==',currentUser.uid), where('status','==','active'));
-        const snap = await getDocs(q);
+        const q = query(collection(db, 'sgt_stakings'), where('firebaseUid','==',queryUid), where('status','==','active'));
+        let snap = await getDocs(q);
+        // Fallback: coba query dengan userId (Pi UID) untuk data lama sebelum fix
+        if (snap.empty) {
+            const q2 = query(collection(db, 'sgt_stakings'), where('userId','==',currentUser.uid), where('status','==','active'));
+            snap = await getDocs(q2);
+        }
         if (snap.empty) {
             c.innerHTML = '<div class="empty-state" style="padding:24px 0;"><i class="fas fa-lock-open" style="font-size:36px;"></i><p>Belum ada staking aktif</p></div>';
             return;
@@ -7753,7 +7771,7 @@ window.submitBeasiswa = async function() {
         }
         await addDoc(collection(db, 'beasiswa_applications'), {
             userId:      currentUser.uid,
-            firebaseUid: auth?.currentUser?.uid || null,
+            firebaseUid: currentUser.firebaseUid || auth?.currentUser?.uid || null,
             username:    currentUser.username || currentUser.displayName || currentUser.email || 'user',
             nama, tingkat, sekolah, alasan, sgtNeeded,
             status: 'pending', createdAt: serverTimestamp()
@@ -7780,9 +7798,14 @@ async function loadBeasiswaStatus() {
     if (!currentUser||!db) return;
     const c = document.getElementById('beasiswaUserStatus');
     if (!c) return;
+    const queryUid = currentUser.firebaseUid || auth?.currentUser?.uid || currentUser.uid;
     try {
-        const q = query(collection(db,'beasiswa_applications'),where('userId','==',currentUser.uid));
-        const snap = await getDocs(q);
+        // Query pakai firebaseUid agar cocok dengan request.auth.uid di Firestore rules
+        let snap = await getDocs(query(collection(db,'beasiswa_applications'),where('firebaseUid','==',queryUid)));
+        // Fallback ke userId (Pi UID) untuk data lama
+        if (snap.empty) {
+            snap = await getDocs(query(collection(db,'beasiswa_applications'),where('userId','==',currentUser.uid)));
+        }
         if (snap.empty) {
             c.innerHTML = `<div style="background:#EFF6FF;border-radius:12px;padding:14px;text-align:center;"><p style="color:#6B7280;font-size:13px;">Kamu belum mengajukan beasiswa</p><button onclick="openModal('beasiswaModal')" style="margin-top:10px;background:#3B82F6;color:white;border:none;padding:10px 20px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">+ Ajukan Beasiswa</button></div>`;
             return;
@@ -7827,7 +7850,7 @@ window.submitBantuan = async function() {
         }
         await addDoc(collection(db, 'bansos_applications'), {
             userId:      currentUser.uid,
-            firebaseUid: auth?.currentUser?.uid || null,
+            firebaseUid: currentUser.firebaseUid || auth?.currentUser?.uid || null,
             username:    currentUser.username || currentUser.displayName || currentUser.email || 'user',
             nama, jenis, deskripsi,
             telp:        telp || '-',
@@ -7856,9 +7879,14 @@ async function loadBansosStatus() {
     if (!currentUser||!db) return;
     const c = document.getElementById('bansosUserStatus');
     if (!c) return;
+    const queryUid = currentUser.firebaseUid || auth?.currentUser?.uid || currentUser.uid;
     try {
-        const q = query(collection(db,'bansos_applications'),where('userId','==',currentUser.uid));
-        const snap = await getDocs(q);
+        // Query pakai firebaseUid agar cocok dengan request.auth.uid di Firestore rules
+        let snap = await getDocs(query(collection(db,'bansos_applications'),where('firebaseUid','==',queryUid)));
+        // Fallback ke userId (Pi UID) untuk data lama
+        if (snap.empty) {
+            snap = await getDocs(query(collection(db,'bansos_applications'),where('userId','==',currentUser.uid)));
+        }
         if (snap.empty) {
             c.innerHTML = `<div style="background:#FFFBEB;border-radius:12px;padding:14px;text-align:center;"><p style="color:#6B7280;font-size:13px;">Belum ada pengajuan aktif</p><button onclick="openModal('bansosModal')" style="margin-top:10px;background:#D97706;color:white;border:none;padding:10px 20px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;"><i class='fas fa-hand-holding-usd' style='margin-right:6px;'></i>Ajukan Bantuan</button></div>`;
             return;
