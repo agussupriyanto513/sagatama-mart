@@ -3238,7 +3238,7 @@
 // ============================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 // ============================================
@@ -3289,25 +3289,94 @@ window.addEventListener('unhandledrejection', function(e) {
 // ============================================================
 // FIRESTORE SETUP CHECKLIST (untuk developer/admin):
 // 1. Buka https://console.firebase.google.com → project portal-sagatama
-// 2. Firestore Database → Create Database (jika belum ada) → pilih region asia-southeast1
+// 2. Firestore Database → Create Database → region asia-southeast1
 // 3. Authentication → Sign-in method → Anonymous → ENABLE
-// 4. Firestore → Rules → paste rules berikut, lalu Publish:
+// 4. Authentication → Sign-in method → Email/Password → ENABLE
+//    Pastikan akun admin@sagatama.pi sudah terdaftar di Authentication
+// 5. Firestore → Rules → paste rules berikut, lalu Publish:
 //
 // rules_version = '2';
 // service cloud.firestore {
 //   match /databases/{database}/documents {
-//     // Produk: semua bisa baca, hanya admin yang bisa tulis
-//     match /products/{id} { allow read: if true; allow write: if request.auth != null; }
-//     // Order: user yang login bisa baca/tulis ordernya sendiri
-//     match /orders/{id} { allow read, write: if request.auth != null; }
-//     // User: user bisa baca/tulis data sendiri
-//     match /users/{uid} { allow read, write: if request.auth != null; }
-//     // Beasiswa & bansos: user login bisa submit, semua bisa baca
-//     match /beasiswa_applications/{id} { allow read, write: if request.auth != null; }
-//     match /bansos_applications/{id} { allow read, write: if request.auth != null; }
-//     // SGT configs: bisa baca semua, tulis hanya auth
-//     match /sgt_config/{id} { allow read: if true; allow write: if request.auth != null; }
-//     match /{document=**} { allow read, write: if request.auth != null; }
+//
+//     // Admin dikenali dari UID tetap admin@sagatama.pi
+//     function isAdmin() {
+//       return request.auth != null && (
+//         request.auth.uid == "N0G5CdKL1sWUq6rdxE3yOByXw8n1" ||
+//         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+//       );
+//     }
+//
+//     // Produk: semua bisa baca, siapa saja yang login bisa tulis
+//     match /products/{productId} {
+//       allow read: if true;
+//       allow write: if request.auth != null;
+//     }
+//
+//     // Orders: admin bisa baca semua, user hanya pesanannya sendiri
+//     match /orders/{orderId} {
+//       allow read: if request.auth != null &&
+//                   (isAdmin() || resource.data.customerUid == request.auth.uid);
+//       allow write: if request.auth != null;
+//     }
+//
+//     // Users: user bisa baca/edit data sendiri, admin bisa semua
+//     match /users/{userId} {
+//       allow read: if request.auth != null;
+//       allow write: if request.auth != null &&
+//                    (request.auth.uid == userId || isAdmin());
+//     }
+//
+//     // Admins collection: hanya admin yang bisa baca/tulis
+//     match /admins/{uid} {
+//       allow read, write: if request.auth != null && isAdmin();
+//     }
+//
+//     // Pending payments
+//     match /pending_payments/{paymentId} {
+//       allow read, write: if request.auth != null;
+//     }
+//
+//     // SGT Logs: semua yang login bisa write (termasuk saat approve)
+//     match /sgt_logs/{logId} {
+//       allow read: if request.auth != null && isAdmin();
+//       allow write: if request.auth != null;
+//     }
+//
+//     // SGT Config: semua bisa baca, admin yang bisa tulis
+//     match /sgt_config/{docId} {
+//       allow read: if true;
+//       allow write: if request.auth != null && isAdmin();
+//     }
+//
+//     // Beasiswa
+//     match /beasiswa_applications/{docId} {
+//       allow read: if request.auth != null &&
+//                   (isAdmin() || resource.data.userId == request.auth.uid);
+//       allow create: if request.auth != null;
+//       allow update: if request.auth != null && isAdmin();
+//     }
+//
+//     // Bansos
+//     match /bansos_applications/{docId} {
+//       allow read: if request.auth != null &&
+//                   (isAdmin() || resource.data.userId == request.auth.uid);
+//       allow create: if request.auth != null;
+//       allow update: if request.auth != null && isAdmin();
+//     }
+//
+//     // SGT Stakings
+//     match /sgt_stakings/{docId} {
+//       allow read: if request.auth != null &&
+//                   (isAdmin() || resource.data.userId == request.auth.uid);
+//       allow write: if request.auth != null;
+//     }
+//
+//     // Fallback untuk koleksi lain
+//     match /{document=**} {
+//       allow read: if request.auth != null;
+//       allow write: if request.auth != null;
+//     }
 //   }
 // }
 // ============================================================
@@ -3387,6 +3456,10 @@ let adminExchangeRate = 15000;
 
 const USE_SANDBOX = false;
 const ADMIN_CREDENTIALS = { username: 'sagatama_admin', password: 'Sagatama513' };
+// UID tetap admin@sagatama.pi — digunakan untuk isAdmin() check di Firestore
+const ADMIN_FIREBASE_UID = 'N0G5CdKL1sWUq6rdxE3yOByXw8n1';
+const ADMIN_EMAIL = 'admin@sagatama.pi';
+const ADMIN_EMAIL_PASSWORD = 'Sagatama513';
 
 // ============================================
 // IMAGE HELPER - Fallback inline SVG, tidak pernah 404
@@ -4512,10 +4585,33 @@ async function init() {
 
         // Jika ada user session, refresh data dari Firestore di background
         if (currentUser && db) {
+            const _isAdminRestore = currentUser.role === 'admin' || currentUser.username === 'sagatama_admin';
+
+            // Pastikan Firebase Auth pakai UID yang benar sesuai role
+            if (_isAdminRestore && auth) {
+                try {
+                    // Jika Firebase Auth bukan admin (misal masih anonymous dari init awal)
+                    if (!auth.currentUser || auth.currentUser.uid !== ADMIN_FIREBASE_UID) {
+                        await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_EMAIL_PASSWORD);
+                        logDebug('[init] Admin re-auth OK — UID: ' + auth.currentUser?.uid);
+                    }
+                    // Daftarkan ke koleksi admins agar rules isAdmin() lewat exists() juga work
+                    setDoc(doc(db, 'admins', auth.currentUser.uid), {
+                        username: 'sagatama_admin',
+                        lastLogin: serverTimestamp()
+                    }, { merge: true }).catch(e => logDebug('[init] admins doc: ' + e.message));
+                } catch (reAuthErr) {
+                    logDebug('[init] Admin re-auth gagal: ' + reAuthErr.message);
+                }
+                // Muat semua data admin
+                loadDataFromFirebase();
+                updateAdminSosialBadge();
+            }
+
             // Refresh SGT dari Firestore dengan strategi multi-fallback (v3)
             loadSGTDataFixed().catch(e => logDebug("BGround SGT load: " + e.message));
-            // Start realtime listener untuk SGT balance updates
-            if (currentUser.uid && currentUser.role !== 'admin') {
+            // Start realtime listener untuk SGT balance updates (hanya non-admin)
+            if (currentUser.uid && !_isAdminRestore) {
                 listenUserSGTBalanceFixed(currentUser.uid);
             }
             // Verifikasi user masih valid di Firestore
@@ -4660,13 +4756,29 @@ async function initFirebase() {
             }
             logDebug(`Firebase initialized OK (attempt ${attempt})`);
 
-            // Auto anonymous auth — penting agar Firestore rules "auth != null" lolos
+            // Auth cerdas: admin pakai email login, user biasa pakai anonymous
             if (auth && !auth.currentUser) {
                 try {
-                    await signInAnonymously(auth);
-                    logDebug('[Firebase] Anonymous auth aktif — Firestore write OK');
+                    const _saved = localStorage.getItem('sagatama_user');
+                    const _parsed = _saved ? JSON.parse(_saved) : null;
+                    const _isAdminSession = _parsed?.role === 'admin' || _parsed?.username === 'sagatama_admin';
+
+                    if (_isAdminSession) {
+                        // Admin: login email agar UID selalu N0G5CdKL1sWUq6rdxE3yOByXw8n1
+                        try {
+                            await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_EMAIL_PASSWORD);
+                            logDebug('[Firebase] Admin email auth OK — UID: ' + auth.currentUser?.uid);
+                        } catch (emailErr) {
+                            logDebug('[Firebase] Admin email login gagal: ' + emailErr.message + ' — fallback anon');
+                            await signInAnonymously(auth);
+                        }
+                    } else {
+                        // User biasa / tamu: anonymous
+                        await signInAnonymously(auth);
+                        logDebug('[Firebase] Anonymous auth aktif — Firestore write OK');
+                    }
                 } catch (anonErr) {
-                    logDebug('[Firebase] Anonymous auth gagal (non-fatal): ' + anonErr.message);
+                    logDebug('[Firebase] Auth gagal (non-fatal): ' + anonErr.message);
                     if (anonErr.code === 'auth/configuration-not-found' ||
                         anonErr.code === 'auth/operation-not-allowed') {
                         logDebug('[Firebase] PENTING: Aktifkan Anonymous Auth di Firebase Console!');
@@ -4799,6 +4911,8 @@ function loadDataFromFirebase() {
     Object.values(unsubscribers).forEach(u => typeof u === 'function' && u());
     unsubscribers = {};
 
+    const isAdminSession = currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
+
     try {
         const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
         unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
@@ -4808,37 +4922,37 @@ function loadDataFromFirebase() {
             renderFeaturedProducts();
             renderHomeCategories();
             updateAdminStats();
-            // Re-render admin products view kalau sedang aktif
-            const adminProductView = document.getElementById('admin-products-view');
-            if (adminProductView && adminProductView.classList.contains('active')) {
-                renderAdminProducts();
-            }
-        }, (err) => logDebug("Products error: " + err.message));
+            if (isAdminSession) renderAdminProducts();
+        }, (err) => logDebug("Products error: " + err.message + " | code: " + err.code));
     } catch (e) {
         logDebug("Products query error: " + e.message);
     }
 
     try {
-        const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(100)); // FIX #3: limit agar tidak overload Firestore channel
+        // Admin: ambil SEMUA order tanpa filter
+        // User biasa: tetap ambil semua lalu filter di client (Firestore rules handle security)
+        const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(200));
         unsubscribers.orders = onSnapshot(ordersQuery, (snapshot) => {
             orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            myOrders = currentUser ? orders.filter(o => o.customer === currentUser.username || o.customerUid === currentUser.uid) : [];
+            myOrders = currentUser && !isAdminSession
+                ? orders.filter(o => o.customer === currentUser.username || o.customerUid === currentUser.uid)
+                : orders;
             renderOrders();
-            renderAdminOrders();
-            renderAdminRecentOrders();
+            if (isAdminSession) {
+                renderAdminOrders();
+                renderAdminRecentOrders();
+                updateAdminStats();
+            }
             renderWallet();
-            updateAdminStats();
-        }, (err) => logDebug("Orders error: " + err.message));
+        }, (err) => logDebug("Orders error: " + err.message + " | code: " + err.code));
     } catch (e) {
         logDebug("Orders query error: " + e.message);
     }
 
     // Real-time listener untuk users SGT stats (admin only)
-    const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
-    if (isAdmin) {
+    if (isAdminSession) {
         try {
-            unsubscribers.users = onSnapshot(query(collection(db, 'users'), limit(200)), (snapshot) => { // FIX #3: limit users query
-                // Hitung stats SGT secara realtime
+            unsubscribers.users = onSnapshot(query(collection(db, 'users'), limit(200)), (snapshot) => {
                 let totalSGT = 0, totalHolders = 0, totalDistributed = 0;
                 const logRows = [];
                 snapshot.forEach(docSnap => {
@@ -4852,14 +4966,13 @@ function loadDataFromFirebase() {
                         }
                     });
                 });
-                const totalBurned = sgtTotalBurned || 0; // from Firestore via loadSupplyStats
+                const totalBurned = sgtTotalBurned || 0;
                 const upd = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
                 upd('admin-total-sgt', totalSGT.toLocaleString() + ' SGT');
                 upd('admin-total-holders', totalHolders + ' User');
                 upd('admin-total-distributed', totalDistributed.toLocaleString() + ' SGT');
                 upd('admin-total-burned', totalBurned.toLocaleString() + ' SGT');
                 upd('statTotalSGTIssued', totalDistributed.toLocaleString());
-                // Render log
                 const tbody = document.getElementById('sgt-logs-body');
                 if (tbody && logRows.length > 0) {
                     logRows.sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
@@ -4876,6 +4989,9 @@ function loadDataFromFirebase() {
         } catch (e) {
             logDebug("Users query error: " + e.message);
         }
+
+        // Load badge sosial (beasiswa & bansos pending)
+        updateAdminSosialBadge();
     }
 }
 
@@ -5295,14 +5411,13 @@ window.togglePasswordVisibility = function() {
     }
 };
 
-window.loginAdmin = function() {
+window.loginAdmin = async function() {
     const username = document.getElementById('adminUsername')?.value.trim();
     const password = document.getElementById('adminPassword')?.value;
     const errorDiv = document.getElementById('adminLoginError');
     const errorText = document.getElementById('adminLoginErrorText');
     const loginBtn = document.getElementById('adminLoginBtn') || document.querySelector('#adminLoginModal .btn-admin');
 
-    // Reset error
     if (errorDiv) errorDiv.style.display = 'none';
 
     if (!username || !password) {
@@ -5311,38 +5426,68 @@ window.loginAdmin = function() {
         return;
     }
 
-    // Disable tombol agar tidak dobel-klik
+    // Cek kredensial lokal dulu
+    if (username !== ADMIN_CREDENTIALS.username || password !== ADMIN_CREDENTIALS.password) {
+        if (errorText) errorText.innerText = 'Username atau password salah!';
+        if (errorDiv) {
+            errorDiv.style.display = 'block';
+            errorDiv.style.animation = 'shake 0.5s';
+            setTimeout(() => { errorDiv.style.animation = ''; }, 500);
+        }
+        return;
+    }
+
     if (loginBtn) { loginBtn.disabled = true; loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memverifikasi...'; }
 
-    setTimeout(() => {
-        if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
-            currentUser = {
-                uid: 'admin_sagatama_fixed',
-                username: 'sagatama_admin',
-                role: 'admin',
-                authType: 'admin',
-                walletAddress: null
-            };
-            localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
-            userRole = 'admin';
-            loadSGTDataFixed();
-            showSGTElements(false);
-            updateUI();
-            // Pastikan data produk & pesanan dimuat ulang setelah login admin
-            loadDataFromFirebase();
-            closeModal('adminLoginModal');
-            showToast('Login Admin berhasil! 👑', 'success');
-            setTimeout(() => switchView('admin-dashboard'), 500);
-        } else {
-            if (errorText) errorText.innerText = 'Username atau password salah!';
-            if (errorDiv) {
-                errorDiv.style.display = 'block';
-                errorDiv.style.animation = 'shake 0.5s';
-                setTimeout(() => { errorDiv.style.animation = ''; }, 500);
+    try {
+        // Login dengan email Firebase nyata → UID selalu tetap N0G5CdKL1sWUq6rdxE3yOByXw8n1
+        if (auth) {
+            try {
+                await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_EMAIL_PASSWORD);
+                logDebug('[Admin] Firebase email login OK, UID: ' + auth.currentUser?.uid);
+            } catch (emailErr) {
+                // Fallback: jika email login gagal (misal belum ada di Firebase Auth),
+                // daftarkan dulu atau gunakan anonymous
+                logDebug('[Admin] Email login gagal: ' + emailErr.message + ' — fallback anonymous');
+                if (!auth.currentUser) await signInAnonymously(auth);
             }
-            if (loginBtn) { loginBtn.disabled = false; loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i>Login sebagai Admin'; }
         }
-    }, 600);
+
+        currentUser = {
+            uid: ADMIN_FIREBASE_UID,
+            username: 'sagatama_admin',
+            role: 'admin',
+            authType: 'admin',
+            firebaseUid: auth?.currentUser?.uid || ADMIN_FIREBASE_UID,
+            walletAddress: null
+        };
+        localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
+        userRole = 'admin';
+
+        // Daftarkan UID ini ke koleksi 'admins' agar Firestore rules mengenalinya
+        if (db && auth?.currentUser) {
+            setDoc(doc(db, 'admins', auth.currentUser.uid), {
+                username: 'sagatama_admin',
+                email: ADMIN_EMAIL,
+                registeredAt: serverTimestamp()
+            }, { merge: true }).catch(e => logDebug('[Admin] Register admins doc: ' + e.message));
+        }
+
+        loadSGTDataFixed();
+        showSGTElements(false);
+        updateUI();
+        loadDataFromFirebase();
+        updateAdminSosialBadge();
+        closeModal('adminLoginModal');
+        showToast('Login Admin berhasil! 👑', 'success');
+        setTimeout(() => switchView('admin-dashboard'), 500);
+
+    } catch (err) {
+        logDebug('[Admin] Login error: ' + err.message);
+        if (errorText) errorText.innerText = 'Login gagal: ' + err.message;
+        if (errorDiv) errorDiv.style.display = 'block';
+        if (loginBtn) { loginBtn.disabled = false; loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i>Login sebagai Admin'; }
+    }
 };
 
 window.continueAsGuest = function() {
@@ -7344,7 +7489,21 @@ window.switchAdminSosialTab = function(tab, btn) {
     if (tab==='beasiswa') loadAdminBeasiswa();
     if (tab==='bansos')   loadAdminBansos();
     if (tab==='staking')  loadAdminStaking();
-    if (tab==='distribute') loadAdminDistLog();
+    if (tab==='distribute') { loadAdminDistLog(); updateSGTAdminStats(); }
+};
+
+// Auto-load beasiswa & bansos saat admin membuka view sosial
+window._origSwitchView = window.switchView;
+window.switchView = function(view) {
+    if (typeof window._origSwitchView === 'function') window._origSwitchView(view);
+    const isAdminSession = currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
+    if (view === 'admin-sgt-sosial' && isAdminSession) {
+        // Load tab pertama (beasiswa) secara otomatis
+        setTimeout(() => {
+            loadAdminBeasiswa();
+            updateAdminSosialBadge();
+        }, 200);
+    }
 };
 
 // ---- DANA POOL MANAGEMENT ----
@@ -7718,6 +7877,16 @@ window.approveApplication = async function(collection_, docId, userId, sgtAmount
     if (!confirm(`Setujui pengajuan ini dan kirim ${sgtAmount} SGT ke user?`)) return;
     if (!db) { showToast('Database tidak siap. Refresh halaman.', 'error'); return; }
     if (!currentUser || currentUser.role !== 'admin') { showToast('Hanya admin yang bisa menyetujui pengajuan.', 'error'); return; }
+
+    // Pastikan Firebase Auth aktif dengan UID admin yang tepat sebelum write
+    try {
+        if (auth && (!auth.currentUser || auth.currentUser.uid !== ADMIN_FIREBASE_UID)) {
+            await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_EMAIL_PASSWORD).catch(async () => {
+                if (!auth.currentUser) await signInAnonymously(auth);
+            });
+        }
+    } catch(authErr) { logDebug('[approve] auth ensure: ' + authErr.message); }
+
     try {
         await updateDoc(doc(db, collection_, docId), { status:'approved', approvedAt: serverTimestamp(), approvedBy: currentUser?.uid });
         // Credit SGT to user
@@ -7732,17 +7901,24 @@ window.approveApplication = async function(collection_, docId, userId, sgtAmount
             sgtUpdatedAt: serverTimestamp()
         }, { merge: true });
         logDebug('approveApplication OK: +' + sgtAmount + ' SGT → uid:' + userId + ' newBal:' + (currentBal+sgtAmount));
-        // Log
         await addDoc(collection(db, 'sgt_logs'), { adminId:currentUser?.uid, adminUsername:currentUser?.username||'admin', targetUserId:userId, amount:sgtAmount, type:collection_, description, timestamp:serverTimestamp() });
         showToast(`✅ Disetujui! ${sgtAmount} SGT dikirim ke user`, 'success');
         if (collection_==='beasiswa_applications') loadAdminBeasiswa();
         else loadAdminBansos();
         updateAdminSosialBadge();
-    } catch(e) { showToast('Gagal approve: '+e.message, 'error'); }
+    } catch(e) { showToast('Gagal approve: '+e.message, 'error'); logDebug('approveApplication err: '+e.message+' code:'+e.code); }
 };
 
 window.rejectApplication = async function(collection_, docId) {
     if (!confirm('Tolak pengajuan ini?')) return;
+    // Pastikan Firebase Auth aktif sebelum write
+    try {
+        if (auth && !auth.currentUser) {
+            await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_EMAIL_PASSWORD).catch(async () => {
+                await signInAnonymously(auth);
+            });
+        }
+    } catch(authErr) { logDebug('[reject] auth ensure: ' + authErr.message); }
     try {
         await updateDoc(doc(db, collection_, docId), { status:'rejected', rejectedAt:serverTimestamp() });
         showToast('Pengajuan ditolak', 'warning');
