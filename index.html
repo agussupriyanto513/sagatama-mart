@@ -33,7 +33,7 @@
             'handleStartShopping','adminLogin','loginAdmin','continueAsGuest',
             'togglePasswordVisibility','filterByCategory','filterOrders',
             'openProductModal','previewProductImage','saveProduct','searchProducts','showToast','updateSGTAdminStats',
-            'logDebug','showOrderDetail'
+            'logDebug','showOrderDetail','resetSupplyToken'
         ];
 
         _globalFns.forEach(function(name) {
@@ -1310,23 +1310,17 @@
         <!-- WALLET VIEW - PI + SGT TOKEN -->
         <div id="wallet-view" class="view">
             <h2 style="font-size:22px; font-weight:800; margin-bottom:16px; color:#1F2937;">
-                <i class="fas fa-wallet" style="color:#8B5CF6; margin-right:8px;"></i>Dompet
+                <i class="fas fa-wallet" style="color:#8B5CF6; margin-right:8px;"></i>Dompet SGT
             </h2>
 
-            <!-- Pi Balance Card -->
-            <div class="pi-card">
-                <div style="text-align:center; position:relative; z-index:1;">
-                    <p style="font-size:13px; opacity:0.9; font-weight:500;">Saldo Pi Anda</p>
-                    <p style="font-size:40px; font-weight:800; margin:12px 0;" id="walletPiBalance">π --</p>
-                    <p style="font-size:14px; opacity:0.8; margin-bottom:16px;">Terkoneksi ke Pi Browser</p>
-                    <div style="display:flex; gap:12px; justify-content:center;">
-                        <button onclick="refreshPiBalance()" style="background:rgba(255,255,255,0.2); border:none; color:white; padding:12px 24px; border-radius:12px; font-weight:600; cursor:pointer; backdrop-filter:blur(10px);">
-                            <i class="fas fa-sync-alt" style="margin-right:6px;"></i>Refresh
-                        </button>
-                        <button onclick="switchView('cart')" style="background:white; color:#7C3AED; border:none; padding:12px 24px; border-radius:12px; font-weight:700; cursor:pointer;">
-                            <i class="fas fa-shopping-bag" style="margin-right:6px;"></i>Belanja
-                        </button>
-                    </div>
+            <!-- Info Pi Wallet - tidak ditampilkan karena harus di Pi Browser -->
+            <div style="background:linear-gradient(135deg,#FEF3C7,#FFFBEB); border:2px solid #F59E0B; border-radius:16px; padding:16px; margin-bottom:16px; display:flex; align-items:center; gap:12px;">
+                <div style="width:44px;height:44px;background:linear-gradient(135deg,#F59E0B,#D97706);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;flex-shrink:0;">
+                    <i class="fab fa-pi"></i>
+                </div>
+                <div>
+                    <p style="font-weight:800;color:#92400E;font-size:13px;margin:0;">Dompet Pi Network</p>
+                    <p style="font-size:12px;color:#B45309;margin:2px 0 0;line-height:1.4;">Saldo & transaksi Pi tersedia langsung di <strong>Pi Browser Wallet</strong>. Buka aplikasi Pi untuk melihat saldo Anda.</p>
                 </div>
             </div>
 
@@ -2817,13 +2811,18 @@
                 <p style="font-size:13px; color:#6B7280;">Login dengan dompet Pi Anda</p>
             </div>
             
-            <!-- Admin Login -->
-            <div class="login-option admin" onclick="openAdminLoginModal()">
+            <!-- Admin Login - HIDDEN by default, tampil hanya jika diakses via secret code -->
+            <div id="adminLoginOption" class="login-option admin" onclick="openAdminLoginModal()" style="display:none;">
                 <div style="width:60px; height:60px; background:linear-gradient(135deg, #F59E0B, #D97706); border-radius:50%; margin:0 auto 16px; display:flex; align-items:center; justify-content:center; color:white; font-size:28px;">
                     <i class="fas fa-user-shield"></i>
                 </div>
                 <h4 style="font-weight:800; color:#D97706; margin-bottom:8px;">Admin Sagatama</h4>
                 <p style="font-size:13px; color:#6B7280;">Login untuk mengelola toko</p>
+            </div>
+            
+            <!-- Hidden admin trigger: ketuk logo 7x atau tambah ?admin=1 di URL -->
+            <div id="adminHintText" style="display:none; font-size:10px; color:#D1D5DB; text-align:center; margin-bottom:8px;">
+                <i class="fas fa-lock" style="margin-right:4px;"></i>Mode Admin
             </div>
             
             <button onclick="continueAsGuest()" style="width:100%; background:#F3F4F6; color:#6B7280; border:none; padding:14px; border-radius:12px; font-weight:700; cursor:pointer; margin-top:8px;">
@@ -3189,6 +3188,24 @@
                 </div>
                 <button onclick="burnSGT()" style="background:linear-gradient(135deg, #DC2626, #B91C1C); color:white; border:none; padding:14px; border-radius:12px; width:100%; font-weight:700; cursor:pointer; font-size:14px; font-family:inherit; display:flex; align-items:center; justify-content:center; gap:8px;">
                     <i class="fas fa-fire"></i> Burn Token
+                </button>
+            </div>
+
+            <!-- RESET SUPPLY TOKEN - Fitur Admin Lanjutan -->
+            <div style="background:linear-gradient(135deg,#1E1B4B,#312E81);border-radius:14px;padding:16px;margin-bottom:16px;border:2px solid #4338CA;">
+                <h4 style="font-weight:800;margin-bottom:4px;font-size:14px;color:#FCD34D;">⚙️ Reset Supply Token</h4>
+                <p style="font-size:11px;color:rgba(255,255,255,0.65);margin-bottom:12px;">Reset statistik supply dari awal. Saldo SGT user TIDAK terpengaruh.</p>
+                <div class="form-group">
+                    <label class="form-label" style="color:rgba(255,255,255,0.8);">Hard Cap Baru (SGT)</label>
+                    <input type="number" id="resetSupplyCap" class="form-input" placeholder="Default: 100000000" min="1000" style="background:rgba(255,255,255,0.1);color:white;border-color:rgba(255,255,255,0.2);">
+                    <p style="font-size:10px;color:rgba(255,255,255,0.5);margin:4px 0 0;">Kosongkan untuk pakai cap saat ini (100 Juta)</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" style="color:rgba(255,255,255,0.8);">Circulating Supply Awal (SGT)</label>
+                    <input type="number" id="resetSupplyStart" class="form-input" placeholder="0 = mulai dari nol" min="0" style="background:rgba(255,255,255,0.1);color:white;border-color:rgba(255,255,255,0.2);">
+                </div>
+                <button onclick="resetSupplyToken()" style="background:linear-gradient(135deg,#7C3AED,#5B21B6);color:white;border:2px solid #8B5CF6;padding:14px;border-radius:12px;width:100%;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;">
+                    <i class="fas fa-redo-alt"></i> Reset Supply (Perlu Password Admin)
                 </button>
             </div>
 
@@ -5103,11 +5120,37 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
                 createdAt: serverTimestamp(),
                 lastLogin: serverTimestamp(),
                 sgtBalance: oldBalance,
-                sgtTransactions: oldTransactions.slice(0, 50)
+                sgtTransactions: oldTransactions.slice(0, 50),
+                isNewUser: true
             };
             
             await setDoc(userRef, newData);
             logDebug(`[SGT-v3] Dokumen dibuat: ${piUid} | Balance: ${oldBalance}`);
+
+            // ══════════════════════════════════════════
+            // WELCOME BONUS: 50 SGT untuk user baru
+            // (hanya jika tidak ada data migrasi dari akun lama)
+            // ══════════════════════════════════════════
+            if (oldBalance === 0 && oldDocsToMigrate.length === 0) {
+                const welcomeBonus = 50;
+                const welcomeTx = {
+                    type: 'earn', amount: welcomeBonus,
+                    description: '🎉 Bonus Selamat Datang - User Baru',
+                    date: new Date().toISOString(), userId: piUid
+                };
+                await setDoc(userRef, {
+                    sgtBalance: welcomeBonus,
+                    sgtTransactions: [welcomeTx]
+                }, { merge: true });
+                // Update in-memory state
+                sgtBalance = welcomeBonus;
+                sgtTransactions = [welcomeTx];
+                // Mint ke supply
+                await mintSGT(welcomeBonus, piUid);
+                logDebug(`[SGT-v3] Welcome bonus diberikan: ${welcomeBonus} SGT → ${username}`);
+                // Toast akan muncul setelah auth selesai
+                setTimeout(() => showToast(`🎁 +${welcomeBonus} SGT Bonus Selamat Datang!`, 'success'), 1500);
+            }
             
             // Migrate: nolkan dokumen lama
             for (const oldDocId of oldDocsToMigrate) {
@@ -5137,6 +5180,42 @@ window.openAdminLoginModal = function() {
     document.getElementById('adminLoginModal')?.classList.add('active');
 };
 
+// ═══════════════════════════════════════════════════════
+// ADMIN ACCESS CONTROL - Sembunyikan dari user umum
+// Admin bisa akses via: ?admin=1 di URL, atau ketuk logo 7x
+// ═══════════════════════════════════════════════════════
+(function setupAdminAccess() {
+    // Check URL param
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('admin') === '1') {
+        const el = document.getElementById('adminLoginOption');
+        const hint = document.getElementById('adminHintText');
+        if (el) el.style.display = 'block';
+        if (hint) hint.style.display = 'block';
+        // Bersihkan URL dari param ?admin=1 setelah 1 detik
+        setTimeout(() => window.history.replaceState({}, document.title, window.location.pathname), 1000);
+    }
+
+    // Logo tap 7x untuk unlock admin button (tersembunyi)
+    let adminTapCount = 0, adminTapTimer = null;
+    document.getElementById('logoBtn')?.addEventListener('click', function() {
+        adminTapCount++;
+        clearTimeout(adminTapTimer);
+        adminTapTimer = setTimeout(() => { adminTapCount = 0; }, 2000);
+        if (adminTapCount >= 7) {
+            adminTapCount = 0;
+            const el = document.getElementById('adminLoginOption');
+            const hint = document.getElementById('adminHintText');
+            if (el) {
+                const isVisible = el.style.display !== 'none';
+                el.style.display = isVisible ? 'none' : 'block';
+                if (hint) hint.style.display = isVisible ? 'none' : 'block';
+                if (!isVisible) showToast('Mode Admin aktif', 'warning');
+            }
+        }
+    });
+})();
+
 window.togglePasswordVisibility = function() {
     const input = document.getElementById('adminPassword');
     const icon = document.getElementById('passwordToggleIcon');
@@ -5155,6 +5234,10 @@ window.loginAdmin = function() {
     const password = document.getElementById('adminPassword')?.value;
     const errorDiv = document.getElementById('adminLoginError');
     const errorText = document.getElementById('adminLoginErrorText');
+    const loginBtn = document.querySelector('#adminLoginModal button[onclick="loginAdmin()"]');
+
+    // Reset error
+    if (errorDiv) errorDiv.style.display = 'none';
 
     if (!username || !password) {
         if (errorText) errorText.innerText = 'Username dan password wajib diisi!';
@@ -5162,25 +5245,36 @@ window.loginAdmin = function() {
         return;
     }
 
-    if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
-        currentUser = {
-            uid: 'admin_' + Date.now(),
-            username: 'sagatama_admin',
-            role: 'admin',
-            authType: 'admin',
-            walletAddress: null
-        };
-        localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
-        loadSGTDataFixed();
-        showSGTElements(false);
-        updateUI();
-        closeModal('adminLoginModal');
-        showToast('Login Admin berhasil!', 'success');
-        setTimeout(() => switchView('admin-dashboard'), 500);
-    } else {
-        if (errorText) errorText.innerText = 'Username atau password salah!';
-        if (errorDiv) errorDiv.style.display = 'block';
-    }
+    // Disable tombol agar tidak dobel-klik
+    if (loginBtn) { loginBtn.disabled = true; loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memverifikasi...'; }
+
+    setTimeout(() => {
+        if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
+            currentUser = {
+                uid: 'admin_sagatama_fixed',
+                username: 'sagatama_admin',
+                role: 'admin',
+                authType: 'admin',
+                walletAddress: null
+            };
+            localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
+            userRole = 'admin';
+            loadSGTDataFixed();
+            showSGTElements(false);
+            updateUI();
+            closeModal('adminLoginModal');
+            showToast('Login Admin berhasil! 👑', 'success');
+            setTimeout(() => switchView('admin-dashboard'), 500);
+        } else {
+            if (errorText) errorText.innerText = 'Username atau password salah!';
+            if (errorDiv) {
+                errorDiv.style.display = 'block';
+                errorDiv.style.animation = 'shake 0.5s';
+                setTimeout(() => { errorDiv.style.animation = ''; }, 500);
+            }
+            if (loginBtn) { loginBtn.disabled = false; loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i>Login sebagai Admin'; }
+        }
+    }, 600);
 };
 
 window.continueAsGuest = function() {
@@ -7060,17 +7154,30 @@ function renderRewardHistory() {
     }).join('');
 }
 
-// Sosial Tab Switching (User)
+// Sosial Tab Switching (User) - FIXED: tambah semua tab yang ada
 window.switchSosialTab = function(tab, btn) {
-    ['rewards','beasiswa','bansos','staking','zakat'].forEach(t => {
+    const allTabs = ['rewards','beasiswa','bansos','staking','zakat','referral','voting','badges'];
+    allTabs.forEach(t => {
         const el = document.getElementById('sosial-tab-'+t);
         if (el) el.style.display = t===tab ? 'block' : 'none';
     });
     document.querySelectorAll('.tab-sosial button').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
+
+    // Load data sesuai tab yang dibuka
     if (tab==='staking') { loadBaitulStats(); loadActiveStaking(); }
     if (tab==='beasiswa') loadBeasiswaStatus();
     if (tab==='bansos')   loadBansosStatus();
+    if (tab==='referral') {
+        if (typeof loadReferralData === 'function') loadReferralData();
+    }
+    if (tab==='voting') {
+        if (typeof loadVotingData === 'function') loadVotingData('active');
+        if (typeof switchVoteTab === 'function') switchVoteTab('aktif', null);
+    }
+    if (tab==='badges') {
+        if (typeof renderBadges === 'function') renderBadges();
+    }
     if (tab==='zakat') {
         setTimeout(() => {
             if (typeof updateNisabUI === 'function') updateNisabUI();
@@ -8275,6 +8382,7 @@ if (typeof window._registerReal === 'function') {
         renderBadges: window.renderBadges,
         checkNewBadges: window.checkNewBadges,
         initFase3: window.initFase3,
+        resetSupplyToken: window.resetSupplyToken,
     });
 } // end if (_registerReal)
 
@@ -8304,6 +8412,54 @@ window.updateMintRate = async function() {
     logDebug('Mint rate updated to: ' + val);
 };
 
+// ═══════════════════════════════════════════════════════
+// RESET SUPPLY TOKEN - Admin Only
+// Reset total circulating supply dari 0 dengan cap baru
+// ═══════════════════════════════════════════════════════
+window.resetSupplyToken = async function() {
+    if (!currentUser || currentUser.role !== 'admin') { showToast('Hanya admin yang bisa reset supply', 'error'); return; }
+    
+    const newCapInput = document.getElementById('resetSupplyCap')?.value;
+    const newCap = newCapInput ? parseInt(newCapInput) : SGT_HARD_CAP;
+    const startCirculating = parseInt(document.getElementById('resetSupplyStart')?.value || '0');
+    
+    if (isNaN(newCap) || newCap < 1000) { showToast('Hard cap minimal 1.000 SGT', 'error'); return; }
+    if (isNaN(startCirculating) || startCirculating < 0) { showToast('Supply awal tidak valid', 'error'); return; }
+    if (startCirculating > newCap) { showToast('Supply awal tidak boleh melebihi hard cap', 'error'); return; }
+
+    const confirmMsg = `⚠️ PERHATIAN: Reset Supply Token\n\nHard Cap baru: ${newCap.toLocaleString()} SGT\nCirculating awal: ${startCirculating.toLocaleString()} SGT\n\nAksi ini akan mereset statistik supply token di Firestore.\nSaldo SGT user TIDAK akan terpengaruh.\n\nLanjutkan?`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+        // Double confirm dengan password admin
+        const pwd = prompt('Masukkan password admin untuk konfirmasi:');
+        if (pwd !== ADMIN_CREDENTIALS.password) { showToast('Password salah, reset dibatalkan', 'error'); return; }
+
+        await setDoc(doc(db, 'sgt_config', 'supply'), {
+            circulating: startCirculating,
+            hardCap: newCap,
+            totalBurned: 0,
+            resetAt: serverTimestamp(),
+            resetBy: currentUser.username,
+            mintRate: sgtRatePerPi,
+            updatedAt: serverTimestamp()
+        });
+
+        // Reset fee pool juga
+        await setDoc(doc(db, 'sgt_config', 'fee_pool'), {
+            total: 0, updatedAt: serverTimestamp()
+        });
+
+        sgtCirculatingSupply = startCirculating;
+        sgtTotalBurned = 0;
+        sgtFeePool = 0;
+
+        showToast(`✅ Supply token berhasil direset! Cap: ${newCap.toLocaleString()} SGT`, 'success');
+        logDebug(`Supply reset: cap=${newCap}, start=${startCirculating}, by=${currentUser.username}`);
+        setTimeout(() => loadSupplyStats(), 1000);
+    } catch(e) { showToast('Gagal reset supply: '+e.message, 'error'); }
+};
+
 // Sync admin modal supply panel when opened
 const _origOpenModal = window.openModal;
 window.openModal = function(id) {
@@ -8312,6 +8468,15 @@ window.openModal = function(id) {
     if (id === 'loginOptionsModal') {
         const warning = document.getElementById('notPiBrowserWarning');
         if (warning) warning.style.display = isPiBrowser ? 'none' : 'block';
+    }
+    if (id === 'adminLoginModal') {
+        // Reset error dan form setiap kali modal dibuka
+        const errorDiv = document.getElementById('adminLoginError');
+        const pwdField = document.getElementById('adminPassword');
+        const loginBtn = document.querySelector('#adminLoginModal button[onclick="loginAdmin()"]');
+        if (errorDiv) errorDiv.style.display = 'none';
+        if (pwdField) pwdField.value = '';
+        if (loginBtn) { loginBtn.disabled = false; loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i>Login sebagai Admin'; }
     }
     if (id === 'sgtAdminModal') {
         loadSupplyStats().then(() => {
