@@ -121,16 +121,15 @@
 
     <!-- Pi SDK -->
     <script>
-    // FIX: Suppress Pi SDK "Messaging promise timed out" di non-Pi Browser
     window.addEventListener('unhandledrejection', function(event) {
         var msg = (event.reason && event.reason.message) ? event.reason.message : String(event.reason || '');
         if (msg.indexOf('Messaging promise') !== -1 || msg.indexOf('timed out') !== -1) {
             event.preventDefault();
-            console.warn('[Pi SDK] Timeout (normal di luar Pi Browser):', msg);
+            console.warn('[Pi SDK] Timeout suppressed (normal di luar Pi Browser)');
         }
     });
     </script>
-    <script src="https://sdk.minepi.com/pi-sdk.js" onerror="console.warn('[Pi SDK] Gagal dimuat - berjalan di mode non-Pi Browser');"></script>
+    <script src="https://sdk.minepi.com/pi-sdk.js" onerror="console.warn('[Pi SDK] Gagal dimuat');"></script>
     
     <!-- External Libraries -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -1134,7 +1133,7 @@
         }
         .btn-sgt:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(245,158,11,0.45); }
     </style>
-<script>window.__V0_SANDBOX_ID__="sb-2ni48ld883a2"</script><script async src="/v0-runtime-dist.js"></script></head>
+<!-- v0-runtime-dist.js dihapus: hanya untuk Vercel v0 sandbox, menyebabkan 404 --></head>
 <body>
 
 <div id="loader-sso" class="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center transition-opacity duration-500" style="display:none;">
@@ -7355,45 +7354,30 @@ window.submitBeasiswa = async function() {
     const sekolah = document.getElementById('bsSekolah')?.value.trim();
     const alasan  = document.getElementById('bsAlasan')?.value.trim();
     if (!nama || !tingkat || !sekolah || !alasan) {
-        showToast('Lengkapi semua data terlebih dahulu', 'error');
-        return;
+        showToast('Lengkapi semua data terlebih dahulu', 'error'); return;
     }
-
-    // Disable tombol agar tidak double submit
     const btn = document.querySelector('#beasiswaModal button[onclick="submitBeasiswa()"]');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Mengirim...'; }
-
     const sgtNeeded = { sd:200, smp:350, sma:500, pt:1000 }[tingkat] || 200;
     try {
-        // FIX 1: Pastikan Firebase Auth aktif sebelum write ke Firestore
-        if (auth && !auth.currentUser) {
-            await signInAnonymously(auth);
-        }
-
-        // FIX 2: Gunakan currentUser.username (bukan displayName/email yang tidak ada di Pi login)
+        // Pastikan Firebase Auth aktif (Pi login tidak otomatis login Firebase)
+        if (auth && !auth.currentUser) { await signInAnonymously(auth); }
+        // PERBAIKAN: pakai currentUser.username, bukan displayName/email yang tidak ada
         await addDoc(collection(db, 'beasiswa_applications'), {
             userId:    currentUser.uid,
             username:  currentUser.username || currentUser.displayName || currentUser.email || 'user',
             nama, tingkat, sekolah, alasan, sgtNeeded,
-            status:    'pending',
-            createdAt: serverTimestamp()
+            status: 'pending', createdAt: serverTimestamp()
         });
-
         closeModal('beasiswaModal');
         showToast('✅ Pengajuan beasiswa berhasil dikirim!', 'success');
-        ['bsNama','bsSekolah','bsAlasan'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
-        const tingkatEl = document.getElementById('bsTingkat');
-        if (tingkatEl) tingkatEl.value = '';
+        ['bsNama','bsSekolah','bsAlasan'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
+        const el = document.getElementById('bsTingkat'); if(el) el.value = '';
         loadBeasiswaStatus();
-        // FIX 3: Guard updateAdminSosialBadge karena mungkin belum terdaftar
         if (typeof updateAdminSosialBadge === 'function') updateAdminSosialBadge();
     } catch(e) {
         logDebug('submitBeasiswa error: ' + e.message);
-        if (e.code === 'permission-denied') {
-            showToast('Akses ditolak. Pastikan sudah login dengan benar.', 'error');
-        } else {
-            showToast('Gagal mengirim: ' + e.message, 'error');
-        }
+        showToast('Gagal: ' + (e.code === 'permission-denied' ? 'Akses ditolak, coba login ulang' : e.message), 'error');
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px;"></i>Kirim Pengajuan'; }
     }
@@ -7421,58 +7405,43 @@ async function loadBeasiswaStatus() {
                 <p style="font-size:11px;color:#6B7280;margin:4px 0 0;">${s.sekolah} • ${s.sgtNeeded} SGT</p>
             </div>`;
         });
-    } catch(e) { logDebug('loadBeasiswaStatus err: '+e.message); if (e.code === 'permission-denied') { const c2 = document.getElementById('beasiswaUserStatus'); if(c2) c2.innerHTML = '<p style="color:#DC2626;font-size:12px;padding:10px;">⚠️ Gagal memuat data. Coba login ulang.</p>'; } }
+    } catch(e) { logDebug('loadBeasiswaStatus err: '+e.message); }
 }
 
 // ---- BANTUAN SOSIAL ----
 window.submitBantuan = async function() {
     if (!currentUser) { showToast('Silakan login dahulu', 'warning'); return; }
-    const nama     = document.getElementById('bsNamaSosial')?.value.trim();
-    const jenis    = document.getElementById('bsJenisSosial')?.value;
-    const deskripsi= document.getElementById('bsDeskriSosial')?.value.trim();
-    const telp     = document.getElementById('bsTelpSosial')?.value.trim();
+    const nama      = document.getElementById('bsNamaSosial')?.value.trim();
+    const jenis     = document.getElementById('bsJenisSosial')?.value;
+    const deskripsi = document.getElementById('bsDeskriSosial')?.value.trim();
+    const telp      = document.getElementById('bsTelpSosial')?.value.trim();
     if (!nama || !jenis || !deskripsi) {
-        showToast('Lengkapi semua data terlebih dahulu', 'error');
-        return;
+        showToast('Lengkapi semua data terlebih dahulu', 'error'); return;
     }
-
-    // Disable tombol agar tidak double submit
     const btn = document.querySelector('#bansosModal button[onclick="submitBantuan()"]');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Mengirim...'; }
-
     const sgtNeeded = { sembako:300, kesehatan:500, darurat:1000, tempat_tinggal:750 }[jenis] || 300;
     try {
-        // FIX 1: Pastikan Firebase Auth aktif sebelum write ke Firestore
-        if (auth && !auth.currentUser) {
-            await signInAnonymously(auth);
-        }
-
-        // FIX 2: Gunakan currentUser.username (bukan displayName/email yang tidak ada di Pi login)
+        // Pastikan Firebase Auth aktif (Pi login tidak otomatis login Firebase)
+        if (auth && !auth.currentUser) { await signInAnonymously(auth); }
+        // PERBAIKAN: pakai currentUser.username, bukan displayName/email yang tidak ada
         await addDoc(collection(db, 'bansos_applications'), {
             userId:    currentUser.uid,
             username:  currentUser.username || currentUser.displayName || currentUser.email || 'user',
             nama, jenis, deskripsi,
             telp:      telp || '-',
             sgtNeeded,
-            status:    'pending',
-            createdAt: serverTimestamp()
+            status: 'pending', createdAt: serverTimestamp()
         });
-
         closeModal('bansosModal');
         showToast('✅ Pengajuan bantuan sosial berhasil dikirim!', 'success');
-        ['bsNamaSosial','bsDeskriSosial','bsTelpSosial'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
-        const jenisEl = document.getElementById('bsJenisSosial');
-        if (jenisEl) jenisEl.value = '';
+        ['bsNamaSosial','bsDeskriSosial','bsTelpSosial'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
+        const el = document.getElementById('bsJenisSosial'); if(el) el.value = '';
         loadBansosStatus();
-        // FIX 3: Guard updateAdminSosialBadge
         if (typeof updateAdminSosialBadge === 'function') updateAdminSosialBadge();
     } catch(e) {
         logDebug('submitBantuan error: ' + e.message);
-        if (e.code === 'permission-denied') {
-            showToast('Akses ditolak. Pastikan sudah login dengan benar.', 'error');
-        } else {
-            showToast('Gagal mengirim: ' + e.message, 'error');
-        }
+        showToast('Gagal: ' + (e.code === 'permission-denied' ? 'Akses ditolak, coba login ulang' : e.message), 'error');
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px;"></i>Kirim Pengajuan'; }
     }
@@ -7500,7 +7469,7 @@ async function loadBansosStatus() {
                 <p style="font-size:11px;color:#6B7280;margin:4px 0 0;">${s.sgtNeeded} SGT</p>
             </div>`;
         });
-    } catch(e) { logDebug('loadBansosStatus err: '+e.message); if (e.code === 'permission-denied') { const c2 = document.getElementById('bansosUserStatus'); if(c2) c2.innerHTML = '<p style="color:#DC2626;font-size:12px;padding:10px;">⚠️ Gagal memuat data. Coba login ulang.</p>'; } }
+    } catch(e) { logDebug('loadBansosStatus err: '+e.message); }
 }
 
 // ---- ADMIN: BEASISWA ----
