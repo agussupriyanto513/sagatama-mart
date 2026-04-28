@@ -33,7 +33,10 @@
             'handleStartShopping','adminLogin','loginAdmin','continueAsGuest',
             'togglePasswordVisibility','filterByCategory','filterOrders',
             'openProductModal','previewProductImage','saveProduct','searchProducts','showToast','updateSGTAdminStats',
-            'logDebug','showOrderDetail','resetSupplyToken'
+            'logDebug','showOrderDetail','resetSupplyToken',
+            'submitBeasiswa','submitBantuan','switchSosialTab','switchAdminSosialTab',
+            'approveApplication','rejectApplication','adminDistribusiSGT',
+            'selectStaking','submitStaking','calcStakingPreview'
         ];
 
         _globalFns.forEach(function(name) {
@@ -1960,7 +1963,7 @@
                     <div id="beasiswaUserStatus">
                         <div style="background:#EFF6FF;border-radius:12px;padding:14px;text-align:center;">
                             <p style="color:#6B7280;font-size:13px;">Kamu belum mengajukan beasiswa</p>
-                            <button onclick="openModal('beasiswaModal')" style="margin-top:10px;background:#3B82F6;color:white;border:none;padding:10px 20px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">
+                            <button onclick="if(!window.currentUser){showToast('Silakan login dahulu','warning');openModal('loginOptionsModal');}else{openModal('beasiswaModal');}" style="margin-top:10px;background:#3B82F6;color:white;border:none;padding:10px 20px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">
                                 <i class="fas fa-plus" style="margin-right:6px;"></i>Ajukan Beasiswa
                             </button>
                         </div>
@@ -1996,7 +1999,7 @@
                     <div id="bansosUserStatus">
                         <div style="background:#FFFBEB;border-radius:12px;padding:14px;text-align:center;">
                             <p style="color:#6B7280;font-size:13px;">Belum ada pengajuan aktif</p>
-                            <button onclick="openModal('bansosModal')" style="margin-top:10px;background:#D97706;color:white;border:none;padding:10px 20px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">
+                            <button onclick="if(!window.currentUser){showToast('Silakan login dahulu','warning');openModal('loginOptionsModal');}else{openModal('bansosModal');}" style="margin-top:10px;background:#D97706;color:white;border:none;padding:10px 20px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">
                                 <i class="fas fa-hand-holding-usd" style="margin-right:6px;"></i>Ajukan Bantuan
                             </button>
                         </div>
@@ -2751,7 +2754,7 @@
             <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:10px;padding:12px;margin-bottom:16px;">
                 <p style="font-size:12px;color:#92400E;"><i class="fas fa-info-circle" style="margin-right:6px;"></i>Pengajuan akan diverifikasi oleh admin Sagatama dalam 1-3 hari kerja.</p>
             </div>
-            <button onclick="submitBeasiswa()" class="btn-primary" style="background:linear-gradient(135deg,#1D4ED8,#3B82F6);">
+            <button id="btnSubmitBeasiswa" onclick="submitBeasiswa()" class="btn-primary" style="background:linear-gradient(135deg,#1D4ED8,#3B82F6);">
                 <i class="fas fa-paper-plane" style="margin-right:8px;"></i>Kirim Pengajuan
             </button>
         </div>
@@ -2790,7 +2793,7 @@
             <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:10px;padding:12px;margin-bottom:16px;">
                 <p style="font-size:12px;color:#92400E;"><i class="fas fa-info-circle" style="margin-right:6px;"></i>Verifikasi dilakukan admin 1-3 hari. SGT akan dikreditkan setelah disetujui.</p>
             </div>
-            <button onclick="submitBantuan()" class="btn-primary" style="background:linear-gradient(135deg,#D97706,#F59E0B);">
+            <button id="btnSubmitBantuan" onclick="submitBantuan()" class="btn-primary" style="background:linear-gradient(135deg,#D97706,#F59E0B);">
                 <i class="fas fa-paper-plane" style="margin-right:8px;"></i>Kirim Pengajuan
             </button>
         </div>
@@ -2871,7 +2874,7 @@
                 <span id="adminLoginErrorText">Username atau password salah</span>
             </div>
             
-            <button id="adminLoginBtn" onclick="loginAdmin()" class="btn-admin" style="margin-bottom:12px;">
+            <button onclick="loginAdmin()" class="btn-admin" style="margin-bottom:12px;">
                 <i class="fas fa-sign-in-alt"></i>Login sebagai Admin
             </button>
             
@@ -4805,6 +4808,11 @@ function loadDataFromFirebase() {
             renderFeaturedProducts();
             renderHomeCategories();
             updateAdminStats();
+            // Re-render admin products view kalau sedang aktif
+            const adminProductView = document.getElementById('admin-products-view');
+            if (adminProductView && adminProductView.classList.contains('active')) {
+                renderAdminProducts();
+            }
         }, (err) => logDebug("Products error: " + err.message));
     } catch (e) {
         logDebug("Products query error: " + e.message);
@@ -5858,7 +5866,14 @@ window.switchView = function(view) {
             case 'account': renderAccount(); break;
             case 'wallet': renderWallet(); loadSupplyStats().catch(()=>{}); break;
             case 'admin-dashboard': renderAdminDashboard(); loadSupplyStats().catch(()=>{}); break;
-            case 'admin-products': currentAdminProductFilter = 'all'; renderAdminProducts(); break;
+            case 'admin-products':
+                currentAdminProductFilter = 'all';
+                // Tampilkan loading dulu, beri waktu Firebase kirim data (maks 2 detik)
+                renderAdminProducts();
+                if (products.length === 0) {
+                    setTimeout(() => renderAdminProducts(), 1500);
+                }
+                break;
             case 'admin-orders': currentAdminOrderFilter = 'all'; renderAdminOrders(); break;
             case 'admin-analytics': renderAdminAnalytics(); break;
             case 'sgt-sosial': if(typeof updateSosialUI==='function'){updateSosialUI(); if(typeof switchSosialTab==='function') switchSosialTab('rewards',null);} break;
@@ -5877,6 +5892,13 @@ window.toggleWallet = function() {
 
 window.openModal = function(modalId) {
     document.getElementById(modalId)?.classList.add('active');
+    // Panggil setupAdminAccess setiap kali loginOptionsModal dibuka
+    // agar tombol Admin selalu muncul di browser biasa (laptop)
+    if (modalId === 'loginOptionsModal') {
+        setTimeout(function() {
+            if (typeof window._setupAdminAccess === 'function') window._setupAdminAccess();
+        }, 80);
+    }
     // Sync SGT stats ke modal saat dibuka
     if (modalId === 'sgtAdminModal') {
         setTimeout(() => {
@@ -6422,6 +6444,19 @@ function renderAdminRecentOrders() {
 function renderAdminProducts() {
     const container = document.getElementById('adminProductList');
     if (!container) return;
+
+    // Kalau products masih kosong tapi Firebase listener belum pernah balik data,
+    // tampilkan loading skeleton dulu — bukan "Belum ada produk"
+    if (products.length === 0 && db && Object.keys(unsubscribers).length === 0) {
+        container.innerHTML = `<div style="text-align:center;padding:60px 20px;">
+            <div class="loading-spinner" style="margin:0 auto 16px;"></div>
+            <p style="color:#6B7280;font-size:14px;">Memuat produk dari database...</p>
+        </div>`;
+        // Pastikan listener aktif
+        loadDataFromFirebase();
+        return;
+    }
+
     let filtered = [...products];
     if (currentAdminProductFilter === 'outofstock') filtered = filtered.filter(p => !p.stock || p.stock <= 0);
     else if (currentAdminProductFilter === 'active') filtered = filtered.filter(p => p.stock && p.stock > 0);
@@ -7465,7 +7500,12 @@ async function loadActiveStaking() {
 
 // ---- BEASISWA ----
 window.submitBeasiswa = async function() {
-    if (!currentUser) { showToast('Silakan login dahulu', 'warning'); return; }
+    if (!currentUser) {
+        closeModal('beasiswaModal');
+        showToast('Silakan login terlebih dahulu untuk mengajukan beasiswa', 'warning');
+        setTimeout(() => openModal('loginOptionsModal'), 300);
+        return;
+    }
     const nama    = document.getElementById('bsNama')?.value.trim();
     const tingkat = document.getElementById('bsTingkat')?.value;
     const sekolah = document.getElementById('bsSekolah')?.value.trim();
@@ -7473,7 +7513,7 @@ window.submitBeasiswa = async function() {
     if (!nama || !tingkat || !sekolah || !alasan) {
         showToast('Lengkapi semua data terlebih dahulu', 'error'); return;
     }
-    const btn = document.querySelector('#beasiswaModal button[onclick="submitBeasiswa()"]');
+    const btn = document.getElementById('btnSubmitBeasiswa') || document.querySelector('#beasiswaModal button[onclick="submitBeasiswa()"]');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Mengirim...'; }
     const sgtNeeded = { sd:200, smp:350, sma:500, pt:1000 }[tingkat] || 200;
     try {
@@ -7534,7 +7574,12 @@ async function loadBeasiswaStatus() {
 
 // ---- BANTUAN SOSIAL ----
 window.submitBantuan = async function() {
-    if (!currentUser) { showToast('Silakan login dahulu', 'warning'); return; }
+    if (!currentUser) {
+        closeModal('bansosModal');
+        showToast('Silakan login terlebih dahulu untuk mengajukan bantuan', 'warning');
+        setTimeout(() => openModal('loginOptionsModal'), 300);
+        return;
+    }
     const nama      = document.getElementById('bsNamaSosial')?.value.trim();
     const jenis     = document.getElementById('bsJenisSosial')?.value;
     const deskripsi = document.getElementById('bsDeskriSosial')?.value.trim();
@@ -7542,7 +7587,7 @@ window.submitBantuan = async function() {
     if (!nama || !jenis || !deskripsi) {
         showToast('Lengkapi semua data terlebih dahulu', 'error'); return;
     }
-    const btn = document.querySelector('#bansosModal button[onclick="submitBantuan()"]');
+    const btn = document.getElementById('btnSubmitBantuan') || document.querySelector('#bansosModal button[onclick="submitBantuan()"]');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Mengirim...'; }
     const sgtNeeded = { sembako:300, kesehatan:500, darurat:1000, tempat_tinggal:750 }[jenis] || 300;
     try {
@@ -8656,34 +8701,10 @@ window.updateMintRate = async function() {
 const _origOpenModal = window.openModal;
 window.openModal = function(id) {
     if (typeof _origOpenModal === 'function') _origOpenModal(id);
-    if (id === 'loginOptionsModal') {
-        const warning    = document.getElementById('notPiBrowserWarning');
-        const adminBtn   = document.getElementById('adminLoginOption');
-        const adminHint  = document.getElementById('adminHintText');
-        const piOption   = document.querySelector('.login-option.pi');
-
-        if (!isPiBrowser) {
-            // Di laptop / browser biasa: langsung tampilkan tombol Admin
-            if (warning)   warning.style.display  = 'block';
-            if (adminBtn)  adminBtn.style.display  = 'block';
-            if (adminHint) adminHint.style.display = 'none';
-            // Disable Pi login option karena tidak bisa dipakai
-            if (piOption) {
-                piOption.style.opacity       = '0.4';
-                piOption.style.cursor        = 'not-allowed';
-                piOption.style.pointerEvents = 'none';
-                const lbl = piOption.querySelector('p:last-child');
-                if (lbl) lbl.textContent = 'Hanya tersedia di Pi Browser';
-            }
-        } else {
-            // Di Pi Browser: sembunyikan warning, sembunyikan tombol admin (default hidden)
-            if (warning) warning.style.display = 'none';
-        }
-    }
     if (id === 'adminLoginModal') {
         const errorDiv = document.getElementById('adminLoginError');
         const pwdField = document.getElementById('adminPassword');
-        const loginBtn = document.getElementById('adminLoginBtn') || document.querySelector('#adminLoginModal .btn-admin');
+        const loginBtn = document.querySelector('#adminLoginModal .btn-admin');
         if (errorDiv) errorDiv.style.display = 'none';
         if (pwdField) pwdField.value = '';
         if (loginBtn) { loginBtn.disabled = false; loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i>Login sebagai Admin'; }
@@ -8718,26 +8739,26 @@ window.openModal = function(id) {
     <!-- ADMIN ACCESS CONTROL - script biasa, bukan module -->
     <script>
     (function() {
-        function setupAdminAccess() {
+        // Expose ke window agar bisa dipanggil dari openModal di module script
+        window._setupAdminAccess = function setupAdminAccess() {
             var isPiBrowserEnv = navigator.userAgent.indexOf('PiBrowser') !== -1 ||
                                  typeof window.Pi !== 'undefined';
 
-            var adminBtn  = document.getElementById('adminLoginOption');
-            var adminHint = document.getElementById('adminHintText');
-            var piWarning = document.getElementById('notPiBrowserWarning');
+            var adminBtn      = document.getElementById('adminLoginOption');
+            var adminHint     = document.getElementById('adminHintText');
+            var piWarning     = document.getElementById('notPiBrowserWarning');
             var piLoginOption = document.querySelector('.login-option.pi');
 
             // ── Di LAPTOP / Browser biasa (bukan Pi Browser) ──
-            // Langsung tampilkan tombol Admin, sembunyikan peringatan Pi
+            // Langsung tampilkan tombol Admin
             if (!isPiBrowserEnv) {
                 if (adminBtn)  adminBtn.style.display  = 'block';
                 if (adminHint) adminHint.style.display = 'none';
-                // Greyed-out Pi login option agar tidak membingungkan
                 if (piLoginOption) {
-                    piLoginOption.style.opacity = '0.4';
-                    piLoginOption.style.cursor  = 'not-allowed';
+                    piLoginOption.style.opacity       = '0.4';
+                    piLoginOption.style.cursor        = 'not-allowed';
                     piLoginOption.style.pointerEvents = 'none';
-                    var label = piLoginOption.querySelector('p');
+                    var label = piLoginOption.querySelector('p:last-child');
                     if (label) label.textContent = 'Hanya tersedia di Pi Browser';
                 }
                 if (piWarning) piWarning.style.display = 'block';
@@ -8752,8 +8773,13 @@ window.openModal = function(id) {
                     window.history.replaceState({}, document.title, window.location.pathname);
                 }, 1000);
             }
+        };
 
-            // ── Ketuk logo 7x (fallback untuk Pi Browser) ──
+        // ── Ketuk logo 7x (fallback untuk Pi Browser) ──
+        // Didaftarkan sekali saat DOMContentLoaded
+        document.addEventListener('DOMContentLoaded', function() {
+            window._setupAdminAccess();
+
             var tapCount = 0, tapTimer = null;
             var logoEl = document.getElementById('logoBtn');
             if (logoEl) {
@@ -8763,6 +8789,8 @@ window.openModal = function(id) {
                     tapTimer = setTimeout(function() { tapCount = 0; }, 3000);
                     if (tapCount >= 7) {
                         tapCount = 0;
+                        var adminBtn = document.getElementById('adminLoginOption');
+                        var adminHint = document.getElementById('adminHintText');
                         if (adminBtn) {
                             var visible = adminBtn.style.display === 'block';
                             adminBtn.style.display  = visible ? 'none' : 'block';
@@ -8774,24 +8802,6 @@ window.openModal = function(id) {
                     }
                 }, true);
             }
-        }
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', setupAdminAccess);
-        } else {
-            setupAdminAccess();
-        }
-
-        // Jalankan ulang saat modal login dibuka (karena modal bisa dibuka kapan saja)
-        var _origOpen = window.openModal;
-        window.addEventListener('load', function() {
-            var origOpen2 = window.openModal;
-            window.openModal = function(id) {
-                if (typeof origOpen2 === 'function') origOpen2(id);
-                if (id === 'loginOptionsModal') {
-                    setTimeout(setupAdminAccess, 100);
-                }
-            };
         });
     })();
     </script>
