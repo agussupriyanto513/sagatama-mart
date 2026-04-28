@@ -4477,7 +4477,6 @@ async function init() {
         }
 
         logDebug("Initialization complete!");
-        // Init supply & mint rate from Firestore
         loadSupplyStats().catch(e => logDebug("Supply stats init: " + e.message));
         loadMintRateFromFirestore().catch(()=>{});
     } catch (e) {
@@ -4495,9 +4494,8 @@ async function init() {
                 </div>`;
         }
     } finally {
-        if (loading && loading.innerHTML.includes('Memuat...')) {
-            loading.style.display = 'none';
-        }
+        // SELALU sembunyikan loading overlay setelah init selesai
+        if (loading) loading.style.display = 'none';
     }
 }
 
@@ -4546,43 +4544,52 @@ async function initPiSDK() {
 
 async function initPiSDKRobust() {
     if (piInitPromise) return piInitPromise;
-    
+
     piInitPromise = new Promise(async (resolve) => {
+
+        // ── FAST PATH: kalau bukan Pi Browser, langsung skip ──
+        // Tidak perlu retry 5x × 2-10 detik = buang 34 detik percuma
+        if (!window.Pi && navigator.userAgent.indexOf('PiBrowser') === -1) {
+            logDebug('[AUTH-v3] Bukan Pi Browser — skip Pi SDK init');
+            resolve(false);
+            return;
+        }
+
         while (piInitAttempts < MAX_PI_INIT_ATTEMPTS) {
             piInitAttempts++;
             logDebug(`[AUTH-v3] Pi SDK init attempt ${piInitAttempts}/${MAX_PI_INIT_ATTEMPTS}`);
-            
+
             try {
                 if (!window.Pi) {
                     logDebug('[AUTH-v3] Pi object belum tersedia, menunggu...');
-                    await delay(2000);
+                    await delay(1500);
+                    // Cek lagi setelah delay — kalau tetap tidak ada, keluar
+                    if (!window.Pi) { resolve(false); return; }
                     continue;
                 }
-                
-                await window.Pi.init({ 
-                    version: "2.0", 
-                    sandbox: USE_SANDBOX 
+
+                await window.Pi.init({
+                    version: "2.0",
+                    sandbox: USE_SANDBOX
                 });
-                
+
                 isPiSDKReady = true;
-                isPiBrowser = true;
+                isPiBrowser  = true;
                 logDebug('[AUTH-v3] Pi SDK initialized ✅');
                 resolve(true);
                 return;
-                
+
             } catch (err) {
                 logDebug(`[AUTH-v3] Pi SDK init gagal: ${err.message}`);
-                // Exponential backoff: 2s, 4s, 8s, 10s, 10s
-                const waitTime = Math.min(2000 * Math.pow(2, piInitAttempts - 1), 10000);
-                logDebug(`[AUTH-v3] Retry dalam ${waitTime}ms...`);
+                const waitTime = Math.min(2000 * Math.pow(2, piInitAttempts - 1), 5000);
                 await delay(waitTime);
             }
         }
-        
+
         logDebug('[AUTH-v3] Pi SDK init gagal setelah max attempts');
         resolve(false);
     });
-    
+
     return piInitPromise;
 }
 
@@ -7039,6 +7046,20 @@ window.logDebug = function(msg) {
 document.addEventListener('DOMContentLoaded', () => {
     logDebug("DOM Loaded - Starting app...");
     init();
+
+    // ── SAFETY TIMEOUT ──
+    // Kalau setelah 8 detik loading masih muter (misal di laptop tanpa Pi Browser),
+    // paksa sembunyikan overlay dan buka modal login
+    setTimeout(() => {
+        const loading = document.getElementById('loadingOverlay');
+        if (loading && loading.style.display !== 'none') {
+            logDebug('[SAFETY] Loading timeout — force close & open login');
+            loading.style.display = 'none';
+            if (!currentUser) {
+                openModal('loginOptionsModal');
+            }
+        }
+    }, 8000);
 });
 
 // ============================================
