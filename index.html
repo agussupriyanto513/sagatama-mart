@@ -3292,17 +3292,17 @@ window.addEventListener('unhandledrejection', function(e) {
 // 2. Firestore Database → Create Database → region asia-southeast1
 // 3. Authentication → Sign-in method → Anonymous → ENABLE
 // 4. Authentication → Sign-in method → Email/Password → ENABLE
-//    Pastikan akun admin@sagatama.pi sudah terdaftar di Authentication
+//    Pastikan akun admin@portal-sagatama.pi sudah terdaftar di Authentication
 // 5. Firestore → Rules → paste rules berikut, lalu Publish:
 //
 // rules_version = '2';
 // service cloud.firestore {
 //   match /databases/{database}/documents {
 //
-//     // Admin dikenali dari UID tetap admin@sagatama.pi
+//     // Admin dikenali dari UID tetap admin@portal-sagatama.pi
 //     function isAdmin() {
 //       return request.auth != null && (
-//         request.auth.uid == "N0G5CdKL1sWUq6rdxE3yOByXw8n1" ||
+//         request.auth.uid == "8cHVtkw8JAbfF6GcvZGClGrYM143" ||
 //         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
 //       );
 //     }
@@ -3456,9 +3456,9 @@ let adminExchangeRate = 15000;
 
 const USE_SANDBOX = false;
 const ADMIN_CREDENTIALS = { username: 'sagatama_admin', password: 'Sagatama513' };
-// UID tetap admin@sagatama.pi — digunakan untuk isAdmin() check di Firestore
-const ADMIN_FIREBASE_UID = 'N0G5CdKL1sWUq6rdxE3yOByXw8n1';
-const ADMIN_EMAIL = 'admin@sagatama.pi';
+// UID tetap admin@portal-sagatama.pi — digunakan untuk isAdmin() check di Firestore
+const ADMIN_FIREBASE_UID = '8cHVtkw8JAbfF6GcvZGClGrYM143';
+const ADMIN_EMAIL = 'admin@portal-sagatama.pi';
 const ADMIN_EMAIL_PASSWORD = 'Sagatama513';
 
 // ============================================
@@ -4764,7 +4764,7 @@ async function initFirebase() {
                     const _isAdminSession = _parsed?.role === 'admin' || _parsed?.username === 'sagatama_admin';
 
                     if (_isAdminSession) {
-                        // Admin: login email agar UID selalu N0G5CdKL1sWUq6rdxE3yOByXw8n1
+                        // Admin: login email agar UID selalu 8cHVtkw8JAbfF6GcvZGClGrYM143
                         try {
                             await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_EMAIL_PASSWORD);
                             logDebug('[Firebase] Admin email auth OK — UID: ' + auth.currentUser?.uid);
@@ -5440,7 +5440,7 @@ window.loginAdmin = async function() {
     if (loginBtn) { loginBtn.disabled = true; loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memverifikasi...'; }
 
     try {
-        // Login dengan email Firebase nyata → UID selalu tetap N0G5CdKL1sWUq6rdxE3yOByXw8n1
+        // Login dengan email Firebase nyata → UID selalu tetap 8cHVtkw8JAbfF6GcvZGClGrYM143
         if (auth) {
             try {
                 await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_EMAIL_PASSWORD);
