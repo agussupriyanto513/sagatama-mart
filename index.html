@@ -120,21 +120,17 @@
     </script>
 
     <!-- Pi SDK -->
-    <!-- PATCH: Suppress unhandled Pi SDK messaging timeout errors di non-Pi Browser -->
     <script>
-    (function() {
-        // Intercept unhandled promise rejections dari Pi SDK agar tidak spam console
-        window.addEventListener('unhandledrejection', function(event) {
-            var msg = (event.reason && event.reason.message) ? event.reason.message : String(event.reason);
-            if (msg && (msg.indexOf('Messaging promise') !== -1 || msg.indexOf('timed out') !== -1)) {
-                // Error normal saat Pi SDK dipakai di luar Pi Browser - suppress
-                event.preventDefault();
-                console.warn('[Pi SDK] Messaging timeout (normal di luar Pi Browser):', msg);
-            }
-        });
-    })();
+    // FIX: Suppress Pi SDK "Messaging promise timed out" di non-Pi Browser
+    window.addEventListener('unhandledrejection', function(event) {
+        var msg = (event.reason && event.reason.message) ? event.reason.message : String(event.reason || '');
+        if (msg.indexOf('Messaging promise') !== -1 || msg.indexOf('timed out') !== -1) {
+            event.preventDefault(); // Cegah error merah di console
+            console.warn('[Pi SDK] Timeout (normal di luar Pi Browser):', msg);
+        }
+    });
     </script>
-    <script src="https://sdk.minepi.com/pi-sdk.js" onerror="console.warn('[Pi SDK] Gagal memuat pi-sdk.js - app berjalan mode non-Pi Browser');"></script>
+    <script src="https://sdk.minepi.com/pi-sdk.js" onerror="console.warn('[Pi SDK] pi-sdk.js tidak bisa dimuat - app berjalan di mode non-Pi Browser');"></script>
     
     <!-- External Libraries -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -1138,7 +1134,7 @@
         }
         .btn-sgt:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(245,158,11,0.45); }
     </style>
-<!-- PATCH: v0-runtime-dist.js dihapus (hanya untuk Vercel v0 sandbox, menyebabkan 404 di deployment biasa) --></head>
+<script>window.__V0_SANDBOX_ID__="sb-2ni48ld883a2"</script><script async src="/v0-runtime-dist.js"></script></head>
 <body>
 
 <div id="loader-sso" class="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center transition-opacity duration-500" style="display:none;">
@@ -4732,6 +4728,8 @@ function loadDataFromFirebase() {
             renderFeaturedProducts();
             renderHomeCategories();
             updateAdminStats();
+            // FIX: Pastikan admin-products view juga di-refresh saat data datang
+            renderAdminProducts();
         }, (err) => logDebug("Products error: " + err.message));
     } catch (e) {
         logDebug("Products query error: " + e.message);
@@ -5247,6 +5245,9 @@ window.loginAdmin = function() {
             loadSGTDataFixed();
             showSGTElements(false);
             updateUI();
+            // FIX: Load data dari Firestore setelah login admin
+            // agar products & orders langsung tersedia di admin view
+            if (db) loadDataFromFirebase();
             closeModal('adminLoginModal');
             showToast('Login Admin berhasil! 👑', 'success');
             setTimeout(() => switchView('admin-dashboard'), 500);
@@ -5767,7 +5768,17 @@ window.switchView = function(view) {
             case 'account': renderAccount(); break;
             case 'wallet': renderWallet(); loadSupplyStats().catch(()=>{}); break;
             case 'admin-dashboard': renderAdminDashboard(); loadSupplyStats().catch(()=>{}); break;
-            case 'admin-products': currentAdminProductFilter = 'all'; renderAdminProducts(); break;
+            case 'admin-products':
+                currentAdminProductFilter = 'all';
+                // FIX: Jika products belum ter-load (misal baru login admin),
+                // paksa reload dari Firestore sebelum render
+                if (products.length === 0 && db) {
+                    loadDataFromFirebase();
+                    setTimeout(() => renderAdminProducts(), 800);
+                } else {
+                    renderAdminProducts();
+                }
+                break;
             case 'admin-orders': currentAdminOrderFilter = 'all'; renderAdminOrders(); break;
             case 'admin-analytics': renderAdminAnalytics(); break;
             case 'sgt-sosial': if(typeof updateSosialUI==='function'){updateSosialUI(); if(typeof switchSosialTab==='function') switchSosialTab('rewards',null);} break;
