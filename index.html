@@ -3455,11 +3455,11 @@ let sgtFeePool           = 0; // akumulasi fee untuk APY staking
 let adminExchangeRate = 15000;
 
 const USE_SANDBOX = false;
-const ADMIN_CREDENTIALS = { username: 'sagatama_admin', password: 'Sagatama513' };
+const ADMIN_CREDENTIALS = { username: 'sagatama_admin', password: 'Admin513' };
 // UID tetap admin@portal-sagatama.pi — digunakan untuk isAdmin() check di Firestore
 const ADMIN_FIREBASE_UID = '8cHVtkw8JAbfF6GcvZGClGrYM143';
 const ADMIN_EMAIL = 'admin@portal-sagatama.pi';
-const ADMIN_EMAIL_PASSWORD = 'Sagatama513';
+const ADMIN_EMAIL_PASSWORD = 'Admin513';
 
 // ============================================
 // IMAGE HELPER - Fallback inline SVG, tidak pernah 404
@@ -4911,7 +4911,8 @@ function loadDataFromFirebase() {
     Object.values(unsubscribers).forEach(u => typeof u === 'function' && u());
     unsubscribers = {};
 
-    const isAdminSession = currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
+    // Gunakan fungsi agar selalu cek real-time, bukan di-capture sekali saat awal
+    const checkAdmin = () => currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
 
     try {
         const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
@@ -4922,7 +4923,7 @@ function loadDataFromFirebase() {
             renderFeaturedProducts();
             renderHomeCategories();
             updateAdminStats();
-            if (isAdminSession) renderAdminProducts();
+            if (checkAdmin()) renderAdminProducts();
         }, (err) => logDebug("Products error: " + err.message + " | code: " + err.code));
     } catch (e) {
         logDebug("Products query error: " + e.message);
@@ -4934,11 +4935,11 @@ function loadDataFromFirebase() {
         const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(200));
         unsubscribers.orders = onSnapshot(ordersQuery, (snapshot) => {
             orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            myOrders = currentUser && !isAdminSession
+            myOrders = currentUser && !checkAdmin()
                 ? orders.filter(o => o.customer === currentUser.username || o.customerUid === currentUser.uid)
                 : orders;
             renderOrders();
-            if (isAdminSession) {
+            if (checkAdmin()) {
                 renderAdminOrders();
                 renderAdminRecentOrders();
                 updateAdminStats();
@@ -4950,7 +4951,7 @@ function loadDataFromFirebase() {
     }
 
     // Real-time listener untuk users SGT stats (admin only)
-    if (isAdminSession) {
+    if (checkAdmin()) {
         try {
             unsubscribers.users = onSnapshot(query(collection(db, 'users'), limit(200)), (snapshot) => {
                 let totalSGT = 0, totalHolders = 0, totalDistributed = 0;
@@ -5481,6 +5482,17 @@ window.loginAdmin = async function() {
         closeModal('adminLoginModal');
         showToast('Login Admin berhasil! 👑', 'success');
         setTimeout(() => switchView('admin-dashboard'), 500);
+        // Reload ulang semua data setelah auth Firebase selesai (tunggu 1.5 detik)
+        setTimeout(() => {
+            loadDataFromFirebase();
+        }, 1500);
+        // Paksa update dashboard setelah data masuk
+        setTimeout(() => {
+            updateAdminStats();
+            renderAdminRecentOrders();
+            if (typeof renderAdminProducts === 'function') renderAdminProducts();
+            updateSGTAdminStats();
+        }, 3500);
 
     } catch (err) {
         logDebug('[Admin] Login error: ' + err.message);
@@ -6013,10 +6025,12 @@ window.switchView = function(view) {
             case 'admin-dashboard': renderAdminDashboard(); loadSupplyStats().catch(()=>{}); break;
             case 'admin-products':
                 currentAdminProductFilter = 'all';
-                // Tampilkan loading dulu, beri waktu Firebase kirim data (maks 2 detik)
                 renderAdminProducts();
                 if (products.length === 0) {
+                    // Kalau belum ada data, pastikan listener aktif & retry
+                    if (Object.keys(unsubscribers).length === 0) loadDataFromFirebase();
                     setTimeout(() => renderAdminProducts(), 1500);
+                    setTimeout(() => renderAdminProducts(), 3000);
                 }
                 break;
             case 'admin-orders': currentAdminOrderFilter = 'all'; renderAdminOrders(); break;
@@ -6444,6 +6458,9 @@ function renderAdminDashboard() {
     if (!(currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin')) { switchView('home'); return; }
     updateAdminStats();
     renderAdminRecentOrders();
+    // Retry setelah Firebase kirim data (antisipasi race condition saat pertama login)
+    setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); }, 2000);
+    setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); updateSGTAdminStats(); }, 4500);
 }
 
 function updateAdminStats() {
