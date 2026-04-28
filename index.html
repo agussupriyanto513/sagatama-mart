@@ -394,12 +394,14 @@
             inset: 0; 
             background: rgba(0,0,0,0.6); 
             z-index: 2000; 
-            align-items: center; 
+            align-items: flex-start;
             justify-content: center; 
-            padding: 16px; 
+            padding: 0;
             opacity: 0; 
-            transition: opacity 0.3s; 
-            backdrop-filter: blur(4px);
+            transition: opacity 0.3s;
+            /* Hapus backdrop-filter: menyebabkan input lag di Pi Browser WebView */
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }
         .modal.active { 
             display: flex; 
@@ -407,21 +409,18 @@
         }
         .modal-content { 
             background: white; 
-            width: 100%; 
+            width: calc(100% - 32px); 
             max-width: 420px; 
             border-radius: 24px; 
             padding: 24px; 
-            max-height: 85vh; 
-            overflow-y: auto; 
-            transform: scale(0.9); 
-            transition: transform 0.3s;
+            /* Hapus max-height + overflow-y pada content agar keyboard Pi tidak bug */
+            margin: 40px auto 80px auto;
             box-shadow: 0 20px 40px rgba(0,0,0,0.2);
             pointer-events: auto !important;
             position: relative;
             z-index: 2001;
-        }
-        .modal.active .modal-content { 
-            transform: scale(1); 
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
         }
         
         /* Loading */
@@ -687,14 +686,19 @@
             padding: 10px 14px; 
             border: 2px solid #E5E7EB;
             border-radius: 10px; 
-            font-size: 14px; 
-            transition: all 0.2s;
+            /* KRITIS: font-size 16px mencegah WebView auto-zoom
+               yang menyebabkan keyboard hilang/tidak muncul di Pi Browser */
+            font-size: 16px; 
+            transition: border-color 0.2s;
             pointer-events: auto !important;
             user-select: text !important;
             -webkit-user-select: text !important;
             touch-action: manipulation;
             cursor: text;
             background: white;
+            -webkit-appearance: none;
+            appearance: none;
+            box-sizing: border-box;
         }
         .form-input:focus { 
             outline: none; 
@@ -5133,7 +5137,7 @@ async function processPiAuthSuccess(authResult) {
         logDebug("[AUTH-v3] Firebase anon warning (non-kritis): " + fbErr.message);
     }
 
-    // KRITIS: Simpan firebaseUid ke currentUser agar query Firestore bisa pakai
+    // KRITIS: simpan firebaseUid ke currentUser agar query Firestore bisa pakai
     if (firebaseUid) {
         currentUser.firebaseUid = firebaseUid;
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
@@ -6077,20 +6081,23 @@ window.toggleWallet = function() {
 window.openModal = function(modalId) {
     const modalEl = document.getElementById(modalId);
     if (!modalEl) return;
+    // Scroll modal ke atas sebelum tampil (Pi Browser fix)
+    modalEl.scrollTop = 0;
     modalEl.classList.add('active');
-    // Pastikan semua input di dalam modal bisa diklik/diketik
-    setTimeout(function() {
+    // Pi Browser fix: enable semua input + hapus atribut yang menghalangi
+    const enableInputs = function() {
         modalEl.querySelectorAll('input, textarea, select').forEach(function(el) {
             el.style.pointerEvents = 'auto';
+            el.style.userSelect = 'text';
+            el.style.webkitUserSelect = 'text';
+            el.style.touchAction = 'manipulation';
+            el.style.fontSize = '16px'; // Cegah iOS/WebView auto-zoom yang block keyboard
             el.removeAttribute('disabled');
             el.removeAttribute('readonly');
         });
-        // Auto-focus input pertama (bantu Pi Browser)
-        const firstInput = modalEl.querySelector('input:not([type="hidden"]), textarea');
-        if (firstInput) {
-            try { firstInput.focus(); } catch(e) {}
-        }
-    }, 350); // tunggu animasi selesai
+    };
+    enableInputs();
+    setTimeout(enableInputs, 400);
     // Panggil setupAdminAccess setiap kali loginOptionsModal dibuka
     // agar tombol Admin selalu muncul di browser biasa (laptop)
     if (modalId === 'loginOptionsModal') {
@@ -6513,28 +6520,19 @@ function updateAdminStats() {
     updateSGTAdminStats();
 }
 
-// ── Throttle: updateSGTAdminStats max 1x per 60 detik ──────────
 let _sgtAdminStatsLastRun = 0;
 let _sgtAdminStatsRunning = false;
-
 async function updateSGTAdminStats() {
-    const now = Date.now();
-    const THROTTLE_MS = 60_000;
-    if (_sgtAdminStatsRunning) { logDebug('[SGT-Stats] Skipped: already running'); return; }
-    if (now - _sgtAdminStatsLastRun < THROTTLE_MS) {
-        logDebug('[SGT-Stats] Skipped: throttled (' + Math.round((THROTTLE_MS-(now-_sgtAdminStatsLastRun))/1000) + 's left)');
-        return;
-    }
-    _sgtAdminStatsRunning = true;
-    _sgtAdminStatsLastRun = now;
-    const _origTry = true; // marker
+    const now = Date.now(); const THROTTLE_MS = 60_000;
+    if (_sgtAdminStatsRunning) { logDebug('[SGT-Stats] Skipped: running'); return; }
+    if (now - _sgtAdminStatsLastRun < THROTTLE_MS) { logDebug('[SGT-Stats] Skipped: throttled'); return; }
+    _sgtAdminStatsRunning = true; _sgtAdminStatsLastRun = now;
     try {
-        if (!db) {
-                return;
-        }
+        if (!db) { _sgtAdminStatsRunning = false; return; }
         
         // Ambil semua user dari Firestore untuk hitung SGT stats
         const usersSnap = await getDocs(collection(db, 'users'));
+        console.log('[v0] updateSGTAdminStats: Found', usersSnap.size, 'users');
         
         let totalSGT = 0;
         let totalHolders = 0;
@@ -6544,7 +6542,8 @@ async function updateSGTAdminStats() {
         usersSnap.forEach(docSnap => {
             const data = docSnap.data();
             const bal = data.sgtBalance || 0;
-                if (bal > 0) {
+            console.log('[v0] User:', data.username, 'Balance:', bal);
+            if (bal > 0) {
                 totalSGT += bal;
                 totalHolders++;
             }
@@ -6562,11 +6561,13 @@ async function updateSGTAdminStats() {
             });
         });
         
+        console.log('[v0] updateSGTAdminStats: totalSGT=', totalSGT, 'holders=', totalHolders, 'distributed=', totalDistributed);
 
         // Juga ambil dari sgt_logs collection untuk data yang lebih lengkap
         try {
             const logsSnap = await getDocs(collection(db, 'sgt_logs'));
-                logsSnap.forEach(logDoc => {
+            console.log('[v0] updateSGTAdminStats: Found', logsSnap.size, 'log entries');
+            logsSnap.forEach(logDoc => {
                 const logData = logDoc.data();
                 if (logData.type === 'manual_distribution') {
                     // Cek apakah sudah ada di userLogRows
@@ -6584,7 +6585,8 @@ async function updateSGTAdminStats() {
                 }
             });
         } catch (logErr) {
-            }
+            console.log('[v0] updateSGTAdminStats: sgt_logs error', logErr.message);
+        }
 
         // Baca total burned dari localStorage admin (sementara)
         const totalBurned = sgtTotalBurned || 0; // from Firestore via loadSupplyStats
@@ -6626,9 +6628,8 @@ async function updateSGTAdminStats() {
         await loadSupplyStats();
         logDebug("SGT Admin stats updated: " + totalHolders + " holders, " + totalSGT + " SGT beredar");
     } catch (e) {
-        logDebug('[SGT-Stats] Error: ' + e.message);
-    } finally {
-        _sgtAdminStatsRunning = false;
+        console.log('[v0] updateSGTAdminStats: Error', e.message);
+        logDebug("SGT admin stats error: " + e.message);
     }
 }
 
@@ -6815,6 +6816,7 @@ function renderSalesChart() {
     const loadingEl = document.getElementById('salesChartLoading');
     
     if (!canvas) {
+        console.log('[v0] salesChart canvas not found');
         return;
     }
     
@@ -7708,16 +7710,11 @@ async function loadActiveStaking() {
     if (!currentUser || !db) return;
     const c = document.getElementById('activeStakingList');
     if (!c) return;
-    // Gunakan firebaseUid jika ada (cocok dengan request.auth.uid di rules),
-    // fallback ke piUid untuk data lama
     const queryUid = currentUser.firebaseUid || auth?.currentUser?.uid || currentUser.uid;
     try {
-        const q = query(collection(db, 'sgt_stakings'), where('firebaseUid','==',queryUid), where('status','==','active'));
-        let snap = await getDocs(q);
-        // Fallback: coba query dengan userId (Pi UID) untuk data lama sebelum fix
+        let snap = await getDocs(query(collection(db, 'sgt_stakings'), where('firebaseUid','==',queryUid), where('status','==','active')));
         if (snap.empty) {
-            const q2 = query(collection(db, 'sgt_stakings'), where('userId','==',currentUser.uid), where('status','==','active'));
-            snap = await getDocs(q2);
+            snap = await getDocs(query(collection(db, 'sgt_stakings'), where('userId','==',currentUser.uid), where('status','==','active')));
         }
         if (snap.empty) {
             c.innerHTML = '<div class="empty-state" style="padding:24px 0;"><i class="fas fa-lock-open" style="font-size:36px;"></i><p>Belum ada staking aktif</p></div>';
@@ -7800,12 +7797,8 @@ async function loadBeasiswaStatus() {
     if (!c) return;
     const queryUid = currentUser.firebaseUid || auth?.currentUser?.uid || currentUser.uid;
     try {
-        // Query pakai firebaseUid agar cocok dengan request.auth.uid di Firestore rules
         let snap = await getDocs(query(collection(db,'beasiswa_applications'),where('firebaseUid','==',queryUid)));
-        // Fallback ke userId (Pi UID) untuk data lama
-        if (snap.empty) {
-            snap = await getDocs(query(collection(db,'beasiswa_applications'),where('userId','==',currentUser.uid)));
-        }
+        if (snap.empty) snap = await getDocs(query(collection(db,'beasiswa_applications'),where('userId','==',currentUser.uid)));
         if (snap.empty) {
             c.innerHTML = `<div style="background:#EFF6FF;border-radius:12px;padding:14px;text-align:center;"><p style="color:#6B7280;font-size:13px;">Kamu belum mengajukan beasiswa</p><button onclick="openModal('beasiswaModal')" style="margin-top:10px;background:#3B82F6;color:white;border:none;padding:10px 20px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">+ Ajukan Beasiswa</button></div>`;
             return;
@@ -7881,12 +7874,8 @@ async function loadBansosStatus() {
     if (!c) return;
     const queryUid = currentUser.firebaseUid || auth?.currentUser?.uid || currentUser.uid;
     try {
-        // Query pakai firebaseUid agar cocok dengan request.auth.uid di Firestore rules
         let snap = await getDocs(query(collection(db,'bansos_applications'),where('firebaseUid','==',queryUid)));
-        // Fallback ke userId (Pi UID) untuk data lama
-        if (snap.empty) {
-            snap = await getDocs(query(collection(db,'bansos_applications'),where('userId','==',currentUser.uid)));
-        }
+        if (snap.empty) snap = await getDocs(query(collection(db,'bansos_applications'),where('userId','==',currentUser.uid)));
         if (snap.empty) {
             c.innerHTML = `<div style="background:#FFFBEB;border-radius:12px;padding:14px;text-align:center;"><p style="color:#6B7280;font-size:13px;">Belum ada pengajuan aktif</p><button onclick="openModal('bansosModal')" style="margin-top:10px;background:#D97706;color:white;border:none;padding:10px 20px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;"><i class='fas fa-hand-holding-usd' style='margin-right:6px;'></i>Ajukan Bantuan</button></div>`;
             return;
