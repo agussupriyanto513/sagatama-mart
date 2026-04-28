@@ -8329,6 +8329,92 @@ async function checkExpiredProposals() {
 setInterval(checkExpiredProposals, 5*60*1000);
 
 
+// ═══════════════════════════════════════════════════════
+// RESET SUPPLY TOKEN - Admin Only (DALAM MODULE — akses db)
+// Reset total circulating supply dari 0 dengan cap baru
+// Saldo SGT user TIDAK terpengaruh
+// ═══════════════════════════════════════════════════════
+window.resetSupplyToken = async function() {
+    if (!currentUser || currentUser.role !== 'admin') {
+        showToast('Hanya admin yang bisa reset supply', 'error'); return;
+    }
+
+    const newCapRaw  = document.getElementById('resetSupplyCap')?.value;
+    const newCap     = newCapRaw && parseInt(newCapRaw) > 0 ? parseInt(newCapRaw) : SGT_HARD_CAP;
+    const startRaw   = document.getElementById('resetSupplyStart')?.value;
+    const startCirc  = startRaw && parseInt(startRaw) >= 0 ? parseInt(startRaw) : 0;
+
+    if (isNaN(newCap)   || newCap < 1000)  { showToast('Hard cap minimal 1.000 SGT', 'error'); return; }
+    if (isNaN(startCirc)|| startCirc < 0)  { showToast('Supply awal tidak valid', 'error'); return; }
+    if (startCirc > newCap)                { showToast('Supply awal tidak boleh melebihi hard cap', 'error'); return; }
+
+    const msg = `⚠️ RESET SUPPLY TOKEN\n\nHard Cap baru   : ${newCap.toLocaleString()} SGT\nCirculating awal: ${startCirc.toLocaleString()} SGT\nTotal Burned    : 0 (direset)\nFee Pool        : 0 (direset)\n\nSaldo SGT setiap user TIDAK berubah.\nStatistik supply saja yang direset.\n\nLanjutkan?`;
+    if (!confirm(msg)) return;
+
+    const pwd = prompt('Masukkan password admin untuk konfirmasi reset:');
+    if (!pwd) return;
+    if (pwd !== ADMIN_CREDENTIALS.password) {
+        showToast('❌ Password salah, reset dibatalkan', 'error'); return;
+    }
+
+    const btn = document.querySelector('button[onclick="resetSupplyToken()"]');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mereset...'; }
+
+    try {
+        if (!db) throw new Error('Database belum siap');
+
+        // Reset sgt_config/supply
+        await setDoc(doc(db, 'sgt_config', 'supply'), {
+            circulating   : startCirc,
+            hardCap       : newCap,
+            totalBurned   : 0,
+            mintRate      : sgtRatePerPi,
+            resetAt       : serverTimestamp(),
+            resetBy       : currentUser.username,
+            updatedAt     : serverTimestamp()
+        }); // overwrite total, bukan merge
+
+        // Reset sgt_config/fee_pool
+        await setDoc(doc(db, 'sgt_config', 'fee_pool'), {
+            total      : 0,
+            resetAt    : serverTimestamp(),
+            updatedAt  : serverTimestamp()
+        });
+
+        // Reset dana_pools juga agar konsisten
+        await setDoc(doc(db, 'sgt_config', 'dana_pools'), {
+            baitul_maal      : 0,
+            bansos           : 0,
+            beasiswa         : 0,
+            bansos_disbursed : 0,
+            resetAt          : serverTimestamp()
+        });
+
+        // Update in-memory state
+        sgtCirculatingSupply = startCirc;
+        sgtTotalBurned       = 0;
+        sgtFeePool           = 0;
+
+        // Refresh semua UI supply
+        await loadSupplyStats();
+
+        showToast(`✅ Supply token direset! Circulating: ${startCirc.toLocaleString()} | Cap: ${newCap.toLocaleString()} SGT`, 'success');
+        logDebug(`[RESET] Supply reset by ${currentUser.username} | cap=${newCap} | start=${startCirc}`);
+
+        // Clear input fields
+        const capEl = document.getElementById('resetSupplyCap');
+        const stEl  = document.getElementById('resetSupplyStart');
+        if (capEl) capEl.value = '';
+        if (stEl)  stEl.value  = '';
+
+    } catch(e) {
+        showToast('Gagal reset supply: ' + e.message, 'error');
+        logDebug('[RESET] Error: ' + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo-alt"></i> Reset Supply (Perlu Password Admin)'; }
+    }
+};
+
 if (typeof window._registerReal === 'function') {
     window._registerReal({
         switchView, openModal, closeModal, addToCart, toggleWallet,
@@ -8382,7 +8468,7 @@ if (typeof window._registerReal === 'function') {
         renderBadges: window.renderBadges,
         checkNewBadges: window.checkNewBadges,
         initFase3: window.initFase3,
-        resetSupplyToken: window.resetSupplyToken,
+        resetSupplyToken: window.resetSupplyToken,   // ← defined above, inside module
     });
 } // end if (_registerReal)
 
@@ -8412,53 +8498,7 @@ window.updateMintRate = async function() {
     logDebug('Mint rate updated to: ' + val);
 };
 
-// ═══════════════════════════════════════════════════════
-// RESET SUPPLY TOKEN - Admin Only
-// Reset total circulating supply dari 0 dengan cap baru
-// ═══════════════════════════════════════════════════════
-window.resetSupplyToken = async function() {
-    if (!currentUser || currentUser.role !== 'admin') { showToast('Hanya admin yang bisa reset supply', 'error'); return; }
-    
-    const newCapInput = document.getElementById('resetSupplyCap')?.value;
-    const newCap = newCapInput ? parseInt(newCapInput) : SGT_HARD_CAP;
-    const startCirculating = parseInt(document.getElementById('resetSupplyStart')?.value || '0');
-    
-    if (isNaN(newCap) || newCap < 1000) { showToast('Hard cap minimal 1.000 SGT', 'error'); return; }
-    if (isNaN(startCirculating) || startCirculating < 0) { showToast('Supply awal tidak valid', 'error'); return; }
-    if (startCirculating > newCap) { showToast('Supply awal tidak boleh melebihi hard cap', 'error'); return; }
 
-    const confirmMsg = `⚠️ PERHATIAN: Reset Supply Token\n\nHard Cap baru: ${newCap.toLocaleString()} SGT\nCirculating awal: ${startCirculating.toLocaleString()} SGT\n\nAksi ini akan mereset statistik supply token di Firestore.\nSaldo SGT user TIDAK akan terpengaruh.\n\nLanjutkan?`;
-    if (!confirm(confirmMsg)) return;
-
-    try {
-        // Double confirm dengan password admin
-        const pwd = prompt('Masukkan password admin untuk konfirmasi:');
-        if (pwd !== ADMIN_CREDENTIALS.password) { showToast('Password salah, reset dibatalkan', 'error'); return; }
-
-        await setDoc(doc(db, 'sgt_config', 'supply'), {
-            circulating: startCirculating,
-            hardCap: newCap,
-            totalBurned: 0,
-            resetAt: serverTimestamp(),
-            resetBy: currentUser.username,
-            mintRate: sgtRatePerPi,
-            updatedAt: serverTimestamp()
-        });
-
-        // Reset fee pool juga
-        await setDoc(doc(db, 'sgt_config', 'fee_pool'), {
-            total: 0, updatedAt: serverTimestamp()
-        });
-
-        sgtCirculatingSupply = startCirculating;
-        sgtTotalBurned = 0;
-        sgtFeePool = 0;
-
-        showToast(`✅ Supply token berhasil direset! Cap: ${newCap.toLocaleString()} SGT`, 'success');
-        logDebug(`Supply reset: cap=${newCap}, start=${startCirculating}, by=${currentUser.username}`);
-        setTimeout(() => loadSupplyStats(), 1000);
-    } catch(e) { showToast('Gagal reset supply: '+e.message, 'error'); }
-};
 
 // Sync admin modal supply panel when opened
 const _origOpenModal = window.openModal;
