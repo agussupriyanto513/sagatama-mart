@@ -2938,6 +2938,11 @@
                 </p>
             </div>
 
+            <!-- Peringatan jika bukan Pi Browser -->
+            <div id="paymentNotPiBrowserNote" style="display:none;background:#FEF3C7;border:1.5px solid #F59E0B;border-radius:10px;padding:12px;margin-bottom:10px;font-size:12px;color:#92400E;font-weight:600;text-align:center;">
+                <i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>
+                Pembayaran Pi hanya tersedia di <strong>Pi Browser</strong>. Buka aplikasi Pi Browser untuk melanjutkan transaksi.
+            </div>
             <button onclick="processPayment()" id="btnProcessPayment" class="btn-primary" style="margin-bottom:10px;">
                 <i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi
             </button>
@@ -3259,14 +3264,51 @@ window.onerror = function(msg, url, line) {
     return false;
 };
 window.addEventListener('unhandledrejection', function(e) {
-    console.error("Promise rejection:", e.reason);
-    if (typeof logDebug === 'function') logDebug("REJECTION: " + (e.reason?.message || e.reason));
-    e.preventDefault();
+    const msg = (e.reason?.message || String(e.reason || '')).toLowerCase();
+    // Hanya suppress error Pi SDK yang memang normal di luar Pi Browser
+    const isPiSDKNoise = msg.includes('messaging promise') || msg.includes('timed out') ||
+                         msg.includes('pi is not defined') || msg.includes('pi sdk') ||
+                         msg.includes('cannot read properties of undefined') && msg.includes('pi');
+    if (isPiSDKNoise) {
+        e.preventDefault();
+        console.warn('[Pi SDK] Non-fatal promise suppressed (normal di luar Pi Browser):', e.reason?.message || e.reason);
+        if (typeof logDebug === 'function') logDebug('[Pi SDK] Suppressed: ' + (e.reason?.message || e.reason));
+        return;
+    }
+    // Log rejection lain tapi JANGAN preventDefault — biar dev bisa debug
+    console.error('[App] Unhandled rejection:', e.reason);
+    if (typeof logDebug === 'function') logDebug('REJECTION: ' + (e.reason?.message || e.reason));
 });
 
 // ============================================
 // CONFIG & STATE
 // ============================================
+// ============================================================
+// FIRESTORE SETUP CHECKLIST (untuk developer/admin):
+// 1. Buka https://console.firebase.google.com → project portal-sagatama
+// 2. Firestore Database → Create Database (jika belum ada) → pilih region asia-southeast1
+// 3. Authentication → Sign-in method → Anonymous → ENABLE
+// 4. Firestore → Rules → paste rules berikut, lalu Publish:
+//
+// rules_version = '2';
+// service cloud.firestore {
+//   match /databases/{database}/documents {
+//     // Produk: semua bisa baca, hanya admin yang bisa tulis
+//     match /products/{id} { allow read: if true; allow write: if request.auth != null; }
+//     // Order: user yang login bisa baca/tulis ordernya sendiri
+//     match /orders/{id} { allow read, write: if request.auth != null; }
+//     // User: user bisa baca/tulis data sendiri
+//     match /users/{uid} { allow read, write: if request.auth != null; }
+//     // Beasiswa & bansos: user login bisa submit, semua bisa baca
+//     match /beasiswa_applications/{id} { allow read, write: if request.auth != null; }
+//     match /bansos_applications/{id} { allow read, write: if request.auth != null; }
+//     // SGT configs: bisa baca semua, tulis hanya auth
+//     match /sgt_config/{id} { allow read: if true; allow write: if request.auth != null; }
+//     match /{document=**} { allow read, write: if request.auth != null; }
+//   }
+// }
+// ============================================================
+
 const firebaseConfig = {
     apiKey: "AIzaSyDNWOochfAyHjBYUNyq2IAYhA9p7Ie834M",
     authDomain: "portal-sagatama.firebaseapp.com",
@@ -4603,20 +4645,56 @@ async function initPiSDKRobust() {
 }
 
 async function initFirebase() {
-    try {
-        app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        // Gunakan experimentalAutoDetectLongPolling untuk fix Firestore 404 stale channel error
-        db = initializeFirestore(app, {
-            experimentalAutoDetectLongPolling: true,
-            useFetchStreams: false
-        });
-        logDebug("Firebase initialized (long polling aktif)");
-        return true;
-    } catch (e) {
-        logDebug("Firebase error: " + e.message);
-        return false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            if (!app) app = initializeApp(firebaseConfig);
+            if (!auth) auth = getAuth(app);
+            if (!db) {
+                db = initializeFirestore(app, {
+                    experimentalAutoDetectLongPolling: true,
+                    useFetchStreams: false
+                });
+            }
+            logDebug(`Firebase initialized OK (attempt ${attempt})`);
+
+            // Auto anonymous auth — penting agar Firestore rules "auth != null" lolos
+            if (auth && !auth.currentUser) {
+                try {
+                    await signInAnonymously(auth);
+                    logDebug('[Firebase] Anonymous auth aktif — Firestore write OK');
+                } catch (anonErr) {
+                    logDebug('[Firebase] Anonymous auth gagal (non-fatal): ' + anonErr.message);
+                    if (anonErr.code === 'auth/configuration-not-found' ||
+                        anonErr.code === 'auth/operation-not-allowed') {
+                        logDebug('[Firebase] PENTING: Aktifkan Anonymous Auth di Firebase Console!');
+                        showFirebaseSetupWarning('Anonymous Auth belum aktif di Firebase Console.');
+                    }
+                }
+            }
+            return true;
+        } catch (e) {
+            logDebug(`Firebase init error (attempt ${attempt}/3): ${e.message}`);
+            if (attempt < 3) {
+                await new Promise(r => setTimeout(r, 1500 * attempt));
+            } else {
+                logDebug('Firebase gagal. Cek: (1) Firestore aktif di Firebase Console, (2) Security rules, (3) Koneksi internet.');
+                showFirebaseSetupWarning('Firestore tidak terhubung. Cek Firebase Console & rules.');
+                return false;
+            }
+        }
     }
+    return false;
+}
+
+function showFirebaseSetupWarning(msg) {
+    if (isPiBrowser) return;
+    if (document.getElementById('_fbWarningBanner')) return;
+    const banner = document.createElement('div');
+    banner.id = '_fbWarningBanner';
+    banner.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#FEF3C7;border:2px solid #F59E0B;color:#92400E;padding:10px 16px;border-radius:12px;font-size:12px;font-weight:700;z-index:9999;max-width:90%;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
+    banner.innerHTML = `<i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>${msg} <button onclick="this.parentElement.remove()" style="margin-left:8px;background:none;border:none;cursor:pointer;font-weight:900;color:#92400E;">\u2715</button>`;
+    if (document.body) document.body.appendChild(banner);
+    setTimeout(() => { if (banner.parentElement) banner.remove(); }, 15000);
 }
 
 // ============================================
@@ -5492,24 +5570,40 @@ async function createPiPayment() {
 }
 
 async function approvePaymentOnServer(paymentId) {
-    const response = await fetch('/api/payments/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId })
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error_message || result.error || "Gagal Approve");
+    // Timeout 20 detik untuk approve — jika server tidak merespons segera
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    let response;
+    try {
+        response = await fetch('/api/payments/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentId }),
+            signal: controller.signal
+        });
+    } catch (fetchErr) {
+        if (fetchErr.name === 'AbortError') {
+            throw new Error('Server approve timeout (20s). Cek koneksi atau hubungi admin.');
+        }
+        throw new Error('Tidak dapat menghubungi server approve: ' + fetchErr.message);
+    } finally {
+        clearTimeout(timeoutId);
+    }
 
-    // Simpan ke pending_payments di Firestore untuk tracking
+    let result;
+    try { result = await response.json(); } catch { result = {}; }
+    if (!response.ok) throw new Error(result.error_message || result.error || `Server error ${response.status}`);
+
+    // Simpan ke pending_payments di Firestore untuk tracking (non-kritis)
     if (db) {
-        await addDoc(collection(db, 'pending_payments'), {
+        addDoc(collection(db, 'pending_payments'), {
             paymentId,
             status: 'pending_approval',
             createdAt: serverTimestamp(),
             customer: currentUser?.username,
             customerUid: currentUser?.uid,
             amount: pendingPayment?.amount || 0
-        }).catch(e => logDebug("Pending payment save error (non-kritis): " + e.message));
+        }).catch(e => logDebug("Pending payment save (non-kritis): " + e.message));
     }
     return result;
 }
@@ -6702,12 +6796,33 @@ window.openPayment = function() {
         }).join('');
     }
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi'; }
+    // Tampilkan/sembunyikan note Pi Browser berdasarkan environment
+    const pbNote = document.getElementById('paymentNotPiBrowserNote');
+    if (pbNote) pbNote.style.display = (!isPiBrowser || !isPiSDKReady) ? 'block' : 'none';
     openModal('paymentModal');
 };
 
 window.processPayment = async function() {
     const btn = document.getElementById('btnProcessPayment');
     if (btn?.disabled) return;
+
+    // Guard: pastikan hanya berjalan di Pi Browser
+    if (!isPiBrowser || !isPiSDKReady) {
+        showToast('Pembayaran Pi hanya tersedia di Pi Browser. Gunakan aplikasi Pi Browser untuk bertransaksi.', 'warning');
+        logDebug('[Payment] Ditolak: bukan Pi Browser atau SDK belum siap. isPiBrowser=' + isPiBrowser + ' isPiSDKReady=' + isPiSDKReady);
+        // Tampilkan info di modal jika ada
+        const paymentNote = document.getElementById('paymentNotPiBrowserNote');
+        if (paymentNote) paymentNote.style.display = 'block';
+        return;
+    }
+
+    // Guard: pastikan user sudah login Pi
+    if (!isPiAuthenticated || !piAuth) {
+        showToast('Silakan login dengan akun Pi terlebih dahulu', 'warning');
+        openModal('loginOptionsModal');
+        return;
+    }
+
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Memproses...'; }
     try {
         await createPiPayment();
@@ -7360,9 +7475,12 @@ window.submitBeasiswa = async function() {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Mengirim...'; }
     const sgtNeeded = { sd:200, smp:350, sma:500, pt:1000 }[tingkat] || 200;
     try {
+        if (!db) throw new Error('Database belum siap, coba refresh halaman.');
         // Pastikan Firebase Auth aktif (Pi login tidak otomatis login Firebase)
-        if (auth && !auth.currentUser) { await signInAnonymously(auth); }
-        // PERBAIKAN: pakai currentUser.username, bukan displayName/email yang tidak ada
+        if (auth && !auth.currentUser) {
+            try { await signInAnonymously(auth); }
+            catch (authErr) { logDebug('Anon auth skip (non-fatal): ' + authErr.message); }
+        }
         await addDoc(collection(db, 'beasiswa_applications'), {
             userId:    currentUser.uid,
             username:  currentUser.username || currentUser.displayName || currentUser.email || 'user',
@@ -7376,8 +7494,12 @@ window.submitBeasiswa = async function() {
         loadBeasiswaStatus();
         if (typeof updateAdminSosialBadge === 'function') updateAdminSosialBadge();
     } catch(e) {
-        logDebug('submitBeasiswa error: ' + e.message);
-        showToast('Gagal: ' + (e.code === 'permission-denied' ? 'Akses ditolak, coba login ulang' : e.message), 'error');
+        logDebug('submitBeasiswa error: ' + e.message + ' | code: ' + e.code);
+        let errMsg = e.message;
+        if (e.code === 'permission-denied') errMsg = 'Akses ditolak. Aktifkan Anonymous Auth di Firebase Console atau coba login ulang.';
+        else if (e.code === 'unavailable' || (e.message||'').includes('offline')) errMsg = 'Tidak ada koneksi internet. Periksa jaringan dan coba lagi.';
+        else if (e.code === 'not-found') errMsg = 'Database tidak ditemukan. Hubungi admin untuk mengaktifkan Firestore.';
+        showToast('Gagal kirim beasiswa: ' + errMsg, 'error');
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px;"></i>Kirim Pengajuan'; }
     }
@@ -7422,9 +7544,11 @@ window.submitBantuan = async function() {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Mengirim...'; }
     const sgtNeeded = { sembako:300, kesehatan:500, darurat:1000, tempat_tinggal:750 }[jenis] || 300;
     try {
-        // Pastikan Firebase Auth aktif (Pi login tidak otomatis login Firebase)
-        if (auth && !auth.currentUser) { await signInAnonymously(auth); }
-        // PERBAIKAN: pakai currentUser.username, bukan displayName/email yang tidak ada
+        if (!db) throw new Error('Database belum siap, coba refresh halaman.');
+        if (auth && !auth.currentUser) {
+            try { await signInAnonymously(auth); }
+            catch (authErr) { logDebug('Anon auth skip (non-fatal): ' + authErr.message); }
+        }
         await addDoc(collection(db, 'bansos_applications'), {
             userId:    currentUser.uid,
             username:  currentUser.username || currentUser.displayName || currentUser.email || 'user',
@@ -7440,8 +7564,12 @@ window.submitBantuan = async function() {
         loadBansosStatus();
         if (typeof updateAdminSosialBadge === 'function') updateAdminSosialBadge();
     } catch(e) {
-        logDebug('submitBantuan error: ' + e.message);
-        showToast('Gagal: ' + (e.code === 'permission-denied' ? 'Akses ditolak, coba login ulang' : e.message), 'error');
+        logDebug('submitBantuan error: ' + e.message + ' | code: ' + e.code);
+        let errMsg = e.message;
+        if (e.code === 'permission-denied') errMsg = 'Akses ditolak. Aktifkan Anonymous Auth di Firebase Console atau coba login ulang.';
+        else if (e.code === 'unavailable' || (e.message||'').includes('offline')) errMsg = 'Tidak ada koneksi internet. Periksa jaringan dan coba lagi.';
+        else if (e.code === 'not-found') errMsg = 'Database tidak ditemukan. Hubungi admin untuk mengaktifkan Firestore.';
+        showToast('Gagal kirim bantuan sosial: ' + errMsg, 'error');
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px;"></i>Kirim Pengajuan'; }
     }
@@ -7541,6 +7669,8 @@ async function loadAdminBansos() {
 // Approve / Reject applications
 window.approveApplication = async function(collection_, docId, userId, sgtAmount, description) {
     if (!confirm(`Setujui pengajuan ini dan kirim ${sgtAmount} SGT ke user?`)) return;
+    if (!db) { showToast('Database tidak siap. Refresh halaman.', 'error'); return; }
+    if (!currentUser || currentUser.role !== 'admin') { showToast('Hanya admin yang bisa menyetujui pengajuan.', 'error'); return; }
     try {
         await updateDoc(doc(db, collection_, docId), { status:'approved', approvedAt: serverTimestamp(), approvedBy: currentUser?.uid });
         // Credit SGT to user
