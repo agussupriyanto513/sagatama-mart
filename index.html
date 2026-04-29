@@ -3582,7 +3582,7 @@ function saveSGTData(forceFirestore = false) {
     if (db && currentUser.uid && !isAdminSession && (!sgtListenerActive || forceFirestore)) {
         setDoc(doc(db, 'users', currentUser.uid), {
             sgtBalance: sgtBalance,
-            sgtTransactions: sgtTransactions.slice(0, 50),
+            sgtTransactions: sgtTransactions.slice(0, 200),
             sgtUpdatedAt: serverTimestamp()
         }, { merge: true }).catch(e => logDebug("SGT Firestore save error: " + e.message));
     } else if (sgtListenerActive && !forceFirestore) {
@@ -3706,7 +3706,7 @@ function renderSGTTransactionHistory() {
         container.innerHTML = `<div class="empty-state"><i class="fas fa-coins"></i><p>Belum ada transaksi SGT</p></div>`;
         return;
     }
-    container.innerHTML = sgtTransactions.slice(0, 20).map(t => {
+    container.innerHTML = sgtTransactions.map(t => {
         const isEarn = t.type === 'earn';
         const date = t.date ? new Date(t.date).toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'}) : '-';
         return `
@@ -3881,14 +3881,14 @@ window.processSGTTransfer = async function() {
         const newTxSender = { type:'transfer', amount, description:`Transfer ke @${targetUserInput}`, date:new Date().toISOString(), userId:currentUser.uid };
         sgtTransactions.unshift(newTxSender);
         await setDoc(doc(db, 'users', currentUser.uid), {
-            sgtBalance, sgtTransactions: sgtTransactions.slice(0,50), sgtUpdatedAt: serverTimestamp()
+            sgtBalance, sgtTransactions: sgtTransactions.slice(0, 200), sgtUpdatedAt: serverTimestamp()
         }, { merge: true });
         // Update penerima
         const receiverBal = (receiverData.sgtBalance || 0) + amount;
         const receiverTxs = receiverData.sgtTransactions || [];
         await setDoc(doc(db, 'users', receiverDoc.id), {
             sgtBalance: receiverBal,
-            sgtTransactions: [{ type:'earn', amount, description:`Transfer dari @${currentUser.username}`, date:new Date().toISOString() }, ...receiverTxs].slice(0,50),
+            sgtTransactions: [{ type:'earn', amount, description:`Transfer dari @${currentUser.username}`, date:new Date().toISOString() }, ...receiverTxs].slice(0,200),
             sgtUpdatedAt: serverTimestamp()
         }, { merge: true });
 
@@ -4036,7 +4036,7 @@ window._real_.distributeSGTManual = async function() {
         };
         
         const newBalance = currentBal + amount;
-        const newTransactions = [newTx, ...currentTxs].slice(0, 50);
+        const newTransactions = [newTx, ...currentTxs].slice(0, 200);
         
         await setDoc(doc(db, 'users', targetUid), {
             username: targetUser,
@@ -4349,7 +4349,7 @@ async function migrateUserData(fromDocId, toDocId) {
         const mergedTxs = [
             ...(toData.sgtTransactions || []),
             ...(fromData.sgtTransactions || [])
-        ].slice(0, 50);
+        ].slice(0, 200);
         
         await setDoc(doc(db, 'users', toDocId), {
             ...toData,
@@ -4949,14 +4949,28 @@ function loadDataFromFirebase() {
     }
 
     try {
-        // Admin: ambil SEMUA order tanpa filter
-        // User biasa: tetap ambil semua lalu filter di client (Firestore rules handle security)
-        const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(200));
+        // Admin: ambil SEMUA order | User: query by customerUid sesuai Firestore rules
+        const ordersQuery = checkAdmin()
+            ? query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(200))
+            : query(collection(db, "orders"),
+                where("customerUid", "==", currentUser.uid),
+                orderBy("createdAt", "desc"),
+                limit(200));
         unsubscribers.orders = onSnapshot(ordersQuery, (snapshot) => {
-            orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            myOrders = currentUser && !checkAdmin()
-                ? orders.filter(o => o.customer === currentUser.username || o.customerUid === currentUser.uid)
-                : orders;
+            const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            if (checkAdmin()) {
+                orders = docs;
+                myOrders = docs;
+            } else {
+                // Gabung semua field ownership agar tidak ada yang terlewat
+                myOrders = docs.filter(o =>
+                    o.customerUid === currentUser.uid ||
+                    o.firebaseUid === currentUser.uid ||
+                    o.userId === currentUser.uid ||
+                    o.customer === currentUser.username
+                );
+                orders = myOrders;
+            }
             renderOrders();
             if (checkAdmin()) {
                 renderAdminOrders();
@@ -5364,7 +5378,7 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
                 createdAt: serverTimestamp(),
                 lastLogin: serverTimestamp(),
                 sgtBalance: oldBalance,
-                sgtTransactions: oldTransactions.slice(0, 50),
+                sgtTransactions: oldTransactions.slice(0, 200),
                 isNewUser: true
             };
             
@@ -5556,7 +5570,7 @@ window.logout = function() {
         try {
             setDoc(doc(db, 'users', logoutUid), {
                 sgtBalance: sgtBalance,
-                sgtTransactions: sgtTransactions.slice(0, 50),
+                sgtTransactions: sgtTransactions.slice(0, 200),
                 sgtUpdatedAt: serverTimestamp()
             }, { merge: true }).catch(e => logDebug("Logout SGT flush error: " + e.message));
         } catch(e) {}
@@ -6250,9 +6264,13 @@ function renderWallet() {
     if (walletBalance) walletBalance.innerText = 'π --';
 
     const myTransactions = orders
-        .filter(o => o.customer === currentUser?.username || o.customerUid === currentUser?.uid)
-        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
-        .slice(0, 10);
+        .filter(o =>
+            o.customerUid === currentUser?.uid ||
+            o.firebaseUid === currentUser?.uid ||
+            o.userId === currentUser?.uid ||
+            o.customer === currentUser?.username
+        )
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
     if (myTransactions.length === 0) {
         historyContainer.innerHTML = `<div class="empty-state" style="padding:40px 20px;text-align:center;">
@@ -7985,7 +8003,7 @@ window.approveApplication = async function(collection_, docId, userId, sgtAmount
         const newTx = { type:'earn', amount:sgtAmount, description, date:new Date().toISOString(), userId };
         await setDoc(userRef, {
             sgtBalance: currentBal + sgtAmount,
-            sgtTransactions: [newTx, ...existingTxs].slice(0, 50),
+            sgtTransactions: [newTx, ...existingTxs].slice(0, 200),
             sgtUpdatedAt: serverTimestamp()
         }, { merge: true });
         logDebug('approveApplication OK: +' + sgtAmount + ' SGT → uid:' + userId + ' newBal:' + (currentBal+sgtAmount));
@@ -8596,7 +8614,7 @@ window.claimReferral = async function() {
             const curBal = refUserSnap.data().sgtBalance || 0;
             await setDoc(doc(db,'users',refData.userId), {
                 sgtBalance: curBal+200,
-                sgtTransactions: [{type:'earn',amount:200,description:`Referral bonus dari @${currentUser.username}`,date:new Date().toISOString()},...(refUserSnap.data().sgtTransactions||[])].slice(0,50),
+                sgtTransactions: [{type:'earn',amount:200,description:`Referral bonus dari @${currentUser.username}`,date:new Date().toISOString()},...(refUserSnap.data().sgtTransactions||[])].slice(0, 200),
                 updatedAt:serverTimestamp()
             }, {merge:true});
             await mintSGT(200, refData.userId);
