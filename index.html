@@ -3888,7 +3888,7 @@ window.processSGTTransfer = async function() {
         const receiverTxs = receiverData.sgtTransactions || [];
         await setDoc(doc(db, 'users', receiverDoc.id), {
             sgtBalance: receiverBal,
-            sgtTransactions: [{ type:'earn', amount, description:`Transfer dari @${currentUser.username}`, date:new Date().toISOString() }, ...receiverTxs].slice(0,200),
+            sgtTransactions: [{ type:'earn', amount, description:`Transfer dari @${currentUser.username}`, date:new Date().toISOString() }, ...receiverTxs].slice(0, 200),
             sgtUpdatedAt: serverTimestamp()
         }, { merge: true });
 
@@ -4949,52 +4949,54 @@ function loadDataFromFirebase() {
     }
 
     try {
-        // FIX: Firestore rules evaluate request.auth.uid = Firebase UID (not Pi UID).
-        // Query must use firebaseUid field so the rule ownership check can pass.
-        // Falls back to Pi UID only if firebaseUid is not yet available.
-        const fbUid = currentUser?.firebaseUid || null;
-
-        if (!checkAdmin() && !fbUid) {
-            // Firebase auth not ready yet — defer until onAuthStateChanged fires
-            logDebug("Orders query deferred: firebaseUid not ready");
-            const unsubAuth = auth?.onAuthStateChanged(fbUser => {
-                if (fbUser) {
-                    unsubAuth && unsubAuth();
-                    currentUser.firebaseUid = fbUser.uid;
-                    if (!unsubscribers.orders) loadDataFromFirebase();
-                }
-            });
+        // KRITIS: request.auth.uid di Firestore = Firebase UID (bukan Pi UID)
+        // Query WAJIB menggunakan firebaseUid agar cocok dengan rule Firestore
+        let ordersQuery;
+        if (checkAdmin()) {
+            ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(500));
         } else {
-            const ordersQuery = checkAdmin()
-                ? query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(200))
-                : query(collection(db, "orders"),
+            const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid || null;
+            if (fbUid) {
+                ordersQuery = query(
+                    collection(db, "orders"),
                     where("firebaseUid", "==", fbUid),
                     orderBy("createdAt", "desc"),
-                    limit(200));
-            unsubscribers.orders = onSnapshot(ordersQuery, (snapshot) => {
-                const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                if (checkAdmin()) {
-                    orders = docs;
-                    myOrders = docs;
-                } else {
-                    // Client-side filter covers all ownership fields as extra safety net
-                    myOrders = docs.filter(o =>
-                        o.firebaseUid === currentUser.firebaseUid ||
-                        o.customerUid === currentUser.uid ||
-                        o.userId === currentUser.firebaseUid ||
-                        o.customer === currentUser.username
-                    );
-                    orders = myOrders;
-                }
-                renderOrders();
-                if (checkAdmin()) {
-                    renderAdminOrders();
-                    renderAdminRecentOrders();
-                    updateAdminStats();
-                }
-                renderWallet();
-            }, (err) => logDebug("Orders error: " + err.message + " | code: " + err.code));
+                    limit(200)
+                );
+            } else {
+                ordersQuery = query(
+                    collection(db, "orders"),
+                    where("customerUid", "==", currentUser?.uid),
+                    orderBy("createdAt", "desc"),
+                    limit(200)
+                );
+            }
         }
+        unsubscribers.orders = onSnapshot(ordersQuery, (snapshot) => {
+            const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            if (checkAdmin()) {
+                orders = docs;
+                myOrders = docs;
+            } else {
+                const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
+                orders = docs;
+                myOrders = docs.filter(o =>
+                    o.firebaseUid === fbUid ||
+                    o.customerUid === currentUser?.uid ||
+                    o.firebaseUid === currentUser?.uid ||
+                    o.userId === fbUid ||
+                    o.userId === currentUser?.uid ||
+                    o.customer === currentUser?.username
+                );
+            }
+            renderOrders();
+            if (checkAdmin()) {
+                renderAdminOrders();
+                renderAdminRecentOrders();
+                updateAdminStats();
+            }
+            renderWallet();
+        }, (err) => logDebug("Orders error: " + err.message + " | code: " + err.code));
     } catch (e) {
         logDebug("Orders query error: " + e.message);
     }
@@ -5198,13 +5200,15 @@ async function processPiAuthSuccess(authResult) {
     
     loadDataFromFirebase();
     
-    // Re-filter myOrders setelah login berhasil
+    // Re-filter myOrders setelah login berhasil — cover semua field ownership
     if (orders.length > 0) {
+        const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
         myOrders = orders.filter(o =>
-            o.customer === currentUser.username ||
+            o.firebaseUid === fbUid ||
             o.customerUid === currentUser.uid ||
-            o.firebaseUid === currentUser.firebaseUid ||
-            o.userId === currentUser.firebaseUid
+            o.userId === fbUid ||
+            o.userId === currentUser.uid ||
+            o.customer === currentUser.username
         );
         renderOrders();
     }
@@ -5693,9 +5697,6 @@ async function createPiPayment() {
             })),
             customer: currentUser?.username || 'guest',
             customerUid: currentUser?.uid || null,
-            // FIX: store firebaseUid so Firestore rules can match request.auth.uid
-            firebaseUid: currentUser?.firebaseUid || auth?.currentUser?.uid || null,
-            userId: currentUser?.firebaseUid || auth?.currentUser?.uid || null,
             timestamp: new Date().toISOString(),
             totalPi,
             shippingAddress: currentUser?.address || null
@@ -5831,9 +5832,6 @@ async function approvePaymentOnServer(paymentId) {
             createdAt: serverTimestamp(),
             customer: currentUser?.username,
             customerUid: currentUser?.uid,
-            // FIX: firebaseUid for Firestore rules match
-            firebaseUid: currentUser?.firebaseUid || auth?.currentUser?.uid || null,
-            userId: currentUser?.firebaseUid || auth?.currentUser?.uid || null,
             amount: pendingPayment?.amount || 0
         }).catch(e => logDebug("Pending payment save (non-kritis): " + e.message));
     }
@@ -5860,6 +5858,9 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     const sgtEarned = calculateSGTReward(finalAmount);
 
     // Langkah 2: Simpan order ke Firestore DULU
+    // KRITIS: simpan KEDUA UID — Pi UID & Firebase UID
+    // Firebase rules mengecek request.auth.uid = Firebase UID
+    const fbUidForOrder = currentUser?.firebaseUid || auth?.currentUser?.uid || null;
     const orderData = {
         paymentId,
         txid,
@@ -5867,10 +5868,9 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
         items: finalItems,
         status: 'paid',
         customer: currentUser?.username || 'User',
-        customerUid: currentUser?.uid || '',
-        // FIX: firebaseUid must be stored so Firestore rules (request.auth.uid) can match
-        firebaseUid: currentUser?.firebaseUid || auth?.currentUser?.uid || '',
-        userId: currentUser?.firebaseUid || auth?.currentUser?.uid || '',
+        customerUid: currentUser?.uid || '',      // Pi UID (untuk filter client)
+        firebaseUid: fbUidForOrder || '',          // Firebase UID (untuk Firestore rules)
+        userId: fbUidForOrder || currentUser?.uid || '', // fallback
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         metadata: pendingPayment?.metadata || {},
@@ -6005,9 +6005,6 @@ async function handleIncompletePayment(payment) {
                     status: 'paid',
                     customer: currentUser?.username || 'User',
                     customerUid: currentUser?.uid || '',
-                    // FIX: firebaseUid must be stored so Firestore rules can match
-                    firebaseUid: currentUser?.firebaseUid || auth?.currentUser?.uid || '',
-                    userId: currentUser?.firebaseUid || auth?.currentUser?.uid || '',
                     createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp(),
                     metadata: payment.metadata || {},
@@ -6294,10 +6291,12 @@ function renderWallet() {
     const walletBalance = document.getElementById('walletPiBalance');
     if (walletBalance) walletBalance.innerText = 'π --';
 
+    const _fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
     const myTransactions = orders
         .filter(o =>
+            o.firebaseUid === _fbUid ||
             o.customerUid === currentUser?.uid ||
-            o.firebaseUid === currentUser?.uid ||
+            o.userId === _fbUid ||
             o.userId === currentUser?.uid ||
             o.customer === currentUser?.username
         )
