@@ -1149,27 +1149,7 @@
         }
         .btn-sgt:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(245,158,11,0.45); }
     </style>
-<!-- v0-runtime-dist.js dihapus: hanya untuk Vercel v0 sandbox, menyebabkan 404 -->
-    <!-- ===== STELLAR SDK untuk Smart Contract Escrow ===== -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/stellar.js/10.4.1/stellar.min.js"></script>
-    <script>
-    // ============================================================
-    // SAGATAMA ESCROW SMART CONTRACT CONFIG
-    // Contract ID di Pi/Stellar Testnet
-    // Ganti ke MAINNET contract ID setelah Protocol 23 stabil
-    // ============================================================
-    const ESCROW_CONFIG = {
-        CONTRACT_ID: 'CBVEC4J5TNRDNEEEFX5ILD7WXZYZNSFHCMOF7B5UIKIBICGRIT4AXZTD',
-        NETWORK: 'testnet', // ganti ke 'mainnet' saat production
-        NETWORK_PASSPHRASE: 'Test SDF Network ; September 2015',
-        RPC_URL: 'https://soroban-testnet.stellar.org',
-        TOKEN_ID: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC', // Native XLM testnet
-        ADMIN_ADDRESS: 'GCYVWDQ2YFSK3R3BDJIACAFNLQSPTMYOIZ2JHPJRNF2IMZ2FTADDPYJ4',
-    };
-
-    // EscrowService didefinisikan setelah Firebase init (di body)
-    </script>
-</head>
+<!-- v0-runtime-dist.js dihapus: hanya untuk Vercel v0 sandbox, menyebabkan 404 --></head>
 <body>
 
 <div id="loader-sso" class="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center transition-opacity duration-500" style="display:none;">
@@ -3843,7 +3823,12 @@ window.burnSGTFromSupply = async function burnSGTFromSupply(amount, reason) {
 // ============================================
 async function awardSGT(piAmount, description) {
     if (!currentUser) { logDebug('[awardSGT] Skip: tidak ada currentUser'); return 0; }
-    if (piAmount < sgtMinPurchase) { logDebug('[awardSGT] Skip: piAmount terlalu kecil'); return 0; }
+    // Di testnet, Pi amount selalu 0 — gunakan minimum 0.001 agar SGT tetap diberikan
+    const effectiveAmount = (piAmount <= 0 && ESCROW_CONFIG.NETWORK === 'testnet')
+        ? 0.001
+        : piAmount;
+    if (effectiveAmount < sgtMinPurchase) { logDebug('[awardSGT] Skip: piAmount terlalu kecil'); return 0; }
+    piAmount = effectiveAmount;
 
     const tier        = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05, name: 'Bronze' };
     const baseSGT     = Math.floor(piAmount * sgtRatePerPi);
@@ -3898,6 +3883,11 @@ async function awardSGT(piAmount, description) {
     saveSGTData(true);
     updateSGTUI();
     if (typeof updateSosialUI === 'function') updateSosialUI();
+    // Pastikan wallet SGT balance diupdate langsung
+    const _walletBal = document.getElementById('walletSgtBalance');
+    if (_walletBal) _walletBal.textContent = sgtBalance.toLocaleString();
+    const _sgtPiEq = document.getElementById('sgtPiEquivalent');
+    if (_sgtPiEq) _sgtPiEq.textContent = (sgtBalance / (sgtRatePerPi || 100)).toFixed(8);
     showToast(`+${userShare.toLocaleString()} SGT (Tier ${tier.name}) 🎉`, 'success');
     logDebug('SGT awarded: ' + userShare + ' | fee: ' + feeAmount + ' | sosial: ' + sosialShare);
     return userShare;
@@ -6064,28 +6054,6 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     await saveOrderToFirebase(orderData, paymentId);
     logDebug("Order berhasil disimpan: " + paymentId);
 
-    // ===== ESCROW: Simpan record on-chain ke Firestore =====
-    // Order status = 'escrow_pending' sampai buyer konfirmasi barang diterima
-    const escrowOrderId = orderData.orderId || paymentId.substring(0, 8);
-    await EscrowService.saveEscrowRecord(paymentId, {
-        orderId: escrowOrderId,
-        paymentId,
-        txid,
-        buyerUid: fbUidForOrder || currentUser?.uid,
-        buyerUsername: currentUser?.username,
-        amount: finalAmount,
-        status: 'escrow_active',  // Dana tertahan di smart contract
-        contractId: ESCROW_CONFIG.CONTRACT_ID,
-    });
-    // Update status order ke escrow_active
-    try {
-        await setDoc(doc(db, 'orders', paymentId), {
-            escrowStatus: 'active',
-            escrowContractId: ESCROW_CONFIG.CONTRACT_ID,
-            escrowNetwork: ESCROW_CONFIG.NETWORK,
-        }, { merge: true });
-    } catch(e) { logDebug('Escrow order update error: ' + e.message); }
-
     // Langkah 3: Award SGT (tiered, hard-cap-safe, fee-pool-funded)
     const orderId = pendingPayment?.metadata?.orderId || paymentId.substring(0, 8);
     const actualSGT = await awardSGT(finalAmount, `Reward pesanan #${orderId}`);
@@ -6492,9 +6460,6 @@ function renderWallet() {
     const historyContainer = document.getElementById('transactionHistory');
     if (!historyContainer) return;
 
-    const walletBalance = document.getElementById('walletPiBalance');
-    if (walletBalance) walletBalance.innerText = 'π --';
-
     const _fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
     const myTransactions = orders
         .filter(o =>
@@ -6505,6 +6470,32 @@ function renderWallet() {
             o.customer === currentUser?.username
         )
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+    // Update stats wallet: total Pi spent + jumlah transaksi + SGT earned
+    const totalPiSpent = myTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+    const totalTx = myTransactions.length;
+    const totalSGTEarned = myTransactions.reduce((sum, t) => sum + (t.sgtEarned || 0), 0);
+
+    // Update elemen stat di wallet card
+    const statEarned = document.getElementById('statSgtEarned');
+    const statTx = document.getElementById('statSgtTx');
+    const statSpent = document.getElementById('statSgtSpent');
+    const sgtPiEq = document.getElementById('sgtPiEquivalent');
+    const walletSgtBal = document.getElementById('walletSgtBalance');
+    const rewardBar = document.getElementById('rewardProgressBar');
+    const rewardText = document.getElementById('rewardProgressText');
+
+    if (statEarned) statEarned.textContent = Math.max(totalSGTEarned, sgtBalance).toLocaleString();
+    if (statTx) statTx.textContent = totalTx;
+    if (statSpent) statSpent.textContent = 'π ' + totalPiSpent.toFixed(4);
+    if (sgtPiEq) sgtPiEq.textContent = (sgtBalance / (sgtRatePerPi || 100)).toFixed(8);
+    if (walletSgtBal) walletSgtBal.textContent = sgtBalance.toLocaleString();
+
+    // Progress bar ke reward berikutnya (500 SGT)
+    const nextMilestone = 500;
+    const progress = Math.min((sgtBalance % nextMilestone) / nextMilestone * 100, 100);
+    if (rewardBar) rewardBar.style.width = progress + '%';
+    if (rewardText) rewardText.textContent = (sgtBalance % nextMilestone) + ' / ' + nextMilestone + ' SGT';
 
     if (myTransactions.length === 0) {
         historyContainer.innerHTML = `<div class="empty-state" style="padding:40px 20px;text-align:center;">
@@ -6604,6 +6595,26 @@ function updateCartUI() {
     if (document.getElementById('cart-view')?.classList.contains('active')) updateCartSummary();
 }
 
+
+// ============================================================
+// ESCROW STATUS BADGE
+// ============================================================
+function getEscrowBadge(order) {
+    if (!order.escrowStatus) return '';
+    // Jangan tampil badge di order yang sudah selesai/dibatalkan
+    const doneStatuses = ['completed', 'cancelled', 'failed'];
+    if (doneStatuses.includes(order.status) && order.escrowStatus !== 'refunded') return '';
+    const badges = {
+        'active':   { color: '#F59E0B', bg: '#FEF3C7', icon: 'fa-shield-alt',   text: 'Escrow Aktif' },
+        'released': { color: '#059669', bg: '#D1FAE5', icon: 'fa-check-circle',  text: 'Dana Dicairkan' },
+        'refunded': { color: '#EF4444', bg: '#FEE2E2', icon: 'fa-undo',          text: 'Direfund' },
+    };
+    const b = badges[order.escrowStatus];
+    if (!b) return '';
+    return `<span style="background:${b.bg};color:${b.color};font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;margin-top:4px;">
+        <i class="fas ${b.icon}"></i>${b.text}
+    </span>`;
+}
 function renderOrders() {
     const container = document.getElementById('ordersList');
     if (!container) return;
@@ -6629,7 +6640,7 @@ function renderOrders() {
                 </div>
                 <span class="badge badge-${o.status}">${getStatusLabel(o.status)}</span>
             </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${o.escrowStatus ? '6px' : '0'};">
                 <p style="font-size:12px;color:#9CA3AF;">${formatDate(o.createdAt)}</p>
                 <p style="font-weight:800;color:#8B5CF6;font-size:16px;">π ${o.amount?.toFixed(8) || '0.0000'}</p>
             </div>
@@ -7467,190 +7478,13 @@ window.showOrderDetail = function(id) {
             <p style="font-size:11px;color:#059669;font-weight:600;margin-bottom:8px;">TX Hash</p>
             <p style="font-size:12px;color:#065F46;font-family:monospace;word-break:break-all;background:#D1FAE5;padding:10px;border-radius:8px;">${o.txid}</p>
         </div>` : ''}
-        ${isAdmin && ['paid','processing','shipped'].includes(o.status) ? `<div style="display:flex;gap:10px;flex-wrap:wrap;">
+        ${isAdmin && ['paid','processing','shipped'].includes(o.status) ? `<div style="display:flex;gap:10px;">
             ${o.status==='paid' ? `<button onclick="updateOrderStatus('${o.id}','processing');closeModal('orderDetailModal');" class="btn-primary">Proses Pesanan</button>` : ''}
             ${o.status==='processing' ? `<button onclick="updateOrderStatus('${o.id}','shipped');closeModal('orderDetailModal');" class="btn-primary" style="background:#3B82F6;">Kirim Pesanan</button>` : ''}
             ${o.status==='shipped' ? `<button onclick="updateOrderStatus('${o.id}','completed');closeModal('orderDetailModal');" class="btn-primary" style="background:#059669;">Selesaikan</button>` : ''}
-            ${['paid','processing','shipped'].includes(o.status) && o.escrowStatus === 'active' ? `
-            <button onclick="adminRefundEscrow('${o.id}');closeModal('orderDetailModal');"
-                style="background:linear-gradient(135deg,#EF4444,#DC2626);color:white;border:none;padding:14px 20px;border-radius:12px;font-weight:700;cursor:pointer;font-size:14px;font-family:inherit;display:flex;align-items:center;gap:8px;width:100%;justify-content:center;margin-top:8px;">
-                <i class="fas fa-undo"></i> Refund Escrow ke Buyer
-            </button>` : ''}
-        </div>` : ''}
-        ${!isAdmin && o.status === 'shipped' && o.escrowStatus === 'active' ? `
-        <div style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border-radius:16px;padding:20px;border:2px solid #059669;margin-top:8px;">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-                <div style="width:44px;height:44px;background:#059669;border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;">
-                    <i class="fas fa-shield-alt"></i>
-                </div>
-                <div>
-                    <p style="font-weight:800;color:#065F46;font-size:14px;">Dana Aman di Escrow Blockchain</p>
-                    <p style="font-size:11px;color:#059669;">π ${o.amount?.toFixed(4) || '0'} tersimpan di smart contract</p>
-                </div>
-            </div>
-            <p style="font-size:12px;color:#065F46;margin-bottom:12px;">Sudah menerima barang? Tekan tombol di bawah untuk mencairkan dana ke penjual.</p>
-            <button onclick="buyerReleaseEscrow('${o.id}');closeModal('orderDetailModal');"
-                style="background:linear-gradient(135deg,#059669,#047857);color:white;border:none;padding:16px;border-radius:12px;font-weight:800;cursor:pointer;font-size:15px;font-family:inherit;width:100%;display:flex;align-items:center;justify-content:center;gap:10px;">
-                <i class="fas fa-check-circle"></i> Barang Diterima — Cairkan Dana
-            </button>
         </div>` : ''}`;
     openModal('orderDetailModal');
 };
-
-
-
-// ============================================================
-// ESCROW SERVICE — didefinisikan setelah Firebase init
-// ============================================================
-const EscrowService = {
-
-    async saveEscrowRecord(orderId, data) {
-        if (!db) { logDebug('EscrowService: db belum siap'); return; }
-        try {
-            await setDoc(doc(db, 'escrow_records', orderId), {
-                ...data,
-                contractId: ESCROW_CONFIG.CONTRACT_ID,
-                network: ESCROW_CONFIG.NETWORK,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-            });
-            logDebug('Escrow record saved: ' + orderId);
-        } catch(e) {
-            logDebug('Escrow save error: ' + e.message);
-        }
-    },
-
-    async updateEscrowStatus(orderId, status, txHash) {
-        if (!db) { logDebug('EscrowService: db belum siap'); return; }
-        try {
-            await setDoc(doc(db, 'escrow_records', orderId), {
-                status,
-                txHash: txHash || null,
-                updatedAt: serverTimestamp(),
-            }, { merge: true });
-            logDebug('Escrow status updated: ' + orderId + ' -> ' + status);
-        } catch(e) {
-            logDebug('Escrow update error: ' + e.message);
-        }
-    }
-};
-
-// ============================================================
-// ESCROW SMART CONTRACT — BUYER RELEASE & ADMIN REFUND
-// ============================================================
-
-// Buyer tekan "Barang Diterima" → dana cair ke seller via smart contract
-window.buyerReleaseEscrow = async function(orderId) {
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return showToast('Order tidak ditemukan', 'error');
-
-    const confirmed = confirm(
-        '✅ Konfirmasi Penerimaan Barang\n\n' +
-        'Dana akan dicairkan ke penjual melalui Smart Contract Blockchain.\n\n' +
-        'Tindakan ini tidak dapat dibatalkan. Lanjutkan?'
-    );
-    if (!confirmed) return;
-
-    showToast('⛓️ Memproses di blockchain...', 'info');
-
-    try {
-        // Update status di Firestore
-        await setDoc(doc(db, 'orders', orderId), {
-            status: 'completed',
-            escrowStatus: 'released',
-            escrowReleasedAt: serverTimestamp(),
-            escrowReleasedBy: currentUser?.uid,
-        }, { merge: true });
-
-        // Update escrow record
-        await EscrowService.updateEscrowStatus(orderId, 'released', null);
-
-        // Log SGT transaction sebagai bukti
-        await addDoc(collection(db, 'sgt_transactions'), {
-            type: 'escrow_release',
-            orderId,
-            amount: order.amount,
-            from: currentUser?.uid,
-            firebaseUid: currentUser?.firebaseUid || auth?.currentUser?.uid,
-            description: 'Escrow released: Barang diterima buyer',
-            contractId: ESCROW_CONFIG.CONTRACT_ID,
-            network: ESCROW_CONFIG.NETWORK,
-            timestamp: serverTimestamp(),
-        });
-
-        showToast('🎉 Dana berhasil dicairkan ke penjual via blockchain!', 'success');
-        renderOrders();
-        renderWallet();
-
-    } catch(e) {
-        logDebug('Release escrow error: ' + e.message);
-        showToast('Gagal release escrow: ' + e.message, 'error');
-    }
-};
-
-// Admin tekan "Refund" → dana kembali ke buyer via smart contract
-window.adminRefundEscrow = async function(orderId) {
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return showToast('Order tidak ditemukan', 'error');
-    if (!checkAdmin()) return showToast('Akses ditolak', 'error');
-
-    const reason = prompt('Alasan refund (wajib diisi):');
-    if (!reason) return showToast('Alasan refund wajib diisi', 'error');
-
-    showToast('⛓️ Memproses refund di blockchain...', 'info');
-
-    try {
-        // Update status di Firestore
-        await setDoc(doc(db, 'orders', orderId), {
-            status: 'refunded',
-            escrowStatus: 'refunded',
-            escrowRefundedAt: serverTimestamp(),
-            escrowRefundedBy: currentUser?.uid,
-            refundReason: reason,
-        }, { merge: true });
-
-        // Update escrow record
-        await EscrowService.updateEscrowStatus(orderId, 'refunded', null);
-
-        // Log di sgt_transactions
-        await addDoc(collection(db, 'sgt_transactions'), {
-            type: 'escrow_refund',
-            orderId,
-            amount: order.amount,
-            adminUid: currentUser?.uid,
-            refundReason: reason,
-            description: 'Escrow refunded by admin: ' + reason,
-            contractId: ESCROW_CONFIG.CONTRACT_ID,
-            network: ESCROW_CONFIG.NETWORK,
-            timestamp: serverTimestamp(),
-        });
-
-        showToast('✅ Refund berhasil! Dana kembali ke buyer via blockchain.', 'success');
-        renderOrders();
-        if (typeof renderAdminOrders === 'function') renderAdminOrders();
-
-    } catch(e) {
-        logDebug('Refund escrow error: ' + e.message);
-        showToast('Gagal refund escrow: ' + e.message, 'error');
-    }
-};
-
-// ============================================================
-// ESCROW STATUS BADGE — tampilkan status escrow di order card
-// ============================================================
-function getEscrowBadge(order) {
-    if (!order.escrowStatus) return '';
-    const badges = {
-        'active':   { color: '#F59E0B', bg: '#FEF3C7', icon: 'fa-shield-alt',   text: 'Escrow Aktif' },
-        'released': { color: '#059669', bg: '#D1FAE5', icon: 'fa-check-circle',  text: 'Dana Dicairkan' },
-        'refunded': { color: '#EF4444', bg: '#FEE2E2', icon: 'fa-undo',          text: 'Direfund' },
-    };
-    const b = badges[order.escrowStatus];
-    if (!b) return '';
-    return `<span style="background:${b.bg};color:${b.color};font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;">
-        <i class="fas ${b.icon}"></i>${b.text}
-    </span>`;
-}
 
 // ============================================
 // PRODUCT FORM
