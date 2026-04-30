@@ -5039,14 +5039,51 @@ function loadDataFromFirebase() {
         logDebug("Products query error: " + e.message);
     }
 
+    // Helper: filter myOrders dari semua field kepemilikan
+    function _filterMyOrders(docs) {
+        const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
+        return docs.filter(o =>
+            o.firebaseUid === fbUid ||
+            o.firebaseUid === currentUser?.uid ||
+            o.customerUid === currentUser?.uid ||
+            o.userId === fbUid ||
+            o.userId === currentUser?.uid ||
+            o.customer === currentUser?.username
+        );
+    }
+
+    // Helper: snapshot handler yang sama untuk semua query variant
+    function _handleOrdersSnapshot(snapshot) {
+        const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (checkAdmin()) {
+            orders = docs;
+            myOrders = docs;
+        } else {
+            orders = docs;
+            myOrders = _filterMyOrders(docs);
+        }
+        renderOrders();
+        if (checkAdmin()) {
+            renderAdminOrders();
+            renderAdminRecentOrders();
+            updateAdminStats();
+        }
+        renderWallet();
+    }
+
     try {
         // KRITIS: request.auth.uid di Firestore = Firebase UID (bukan Pi UID)
         // Query WAJIB menggunakan firebaseUid agar cocok dengan rule Firestore
         let ordersQuery;
         if (checkAdmin()) {
             ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(500));
+            unsubscribers.orders = onSnapshot(ordersQuery, _handleOrdersSnapshot,
+                (err) => logDebug("Orders error: " + err.message + " | code: " + err.code));
         } else {
             const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid || null;
+
+            // Coba query dengan composite index (firebaseUid + createdAt)
+            // Jika index belum ada (failed-precondition), fallback ke query tanpa orderBy
             if (fbUid) {
                 ordersQuery = query(
                     collection(db, "orders"),
@@ -5062,32 +5099,42 @@ function loadDataFromFirebase() {
                     limit(200)
                 );
             }
+
+            unsubscribers.orders = onSnapshot(ordersQuery, _handleOrdersSnapshot, async (err) => {
+                logDebug("Orders error: " + err.message + " | code: " + err.code);
+
+                // FALLBACK: jika index belum siap (failed-precondition), query tanpa orderBy
+                // lalu sort di sisi client
+                if (err.code === 'failed-precondition') {
+                    logDebug("[Orders] Index belum siap — fallback ke client-side sort");
+                    try {
+                        let fallbackQuery;
+                        if (fbUid) {
+                            fallbackQuery = query(
+                                collection(db, "orders"),
+                                where("firebaseUid", "==", fbUid),
+                                limit(200)
+                            );
+                        } else if (currentUser?.uid) {
+                            fallbackQuery = query(
+                                collection(db, "orders"),
+                                where("customerUid", "==", currentUser?.uid),
+                                limit(200)
+                            );
+                        } else {
+                            logDebug("[Orders] Tidak ada fbUid/uid, skip fallback");
+                            return;
+                        }
+                        // Gunakan onSnapshot fallback (tanpa orderBy, sort di client)
+                        if (unsubscribers.orders_fallback) unsubscribers.orders_fallback();
+                        unsubscribers.orders_fallback = onSnapshot(fallbackQuery, _handleOrdersSnapshot,
+                            (e2) => logDebug("Orders fallback error: " + e2.message));
+                    } catch (fe) {
+                        logDebug("[Orders] Fallback error: " + fe.message);
+                    }
+                }
+            });
         }
-        unsubscribers.orders = onSnapshot(ordersQuery, (snapshot) => {
-            const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            if (checkAdmin()) {
-                orders = docs;
-                myOrders = docs;
-            } else {
-                const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
-                orders = docs;
-                myOrders = docs.filter(o =>
-                    o.firebaseUid === fbUid ||
-                    o.customerUid === currentUser?.uid ||
-                    o.firebaseUid === currentUser?.uid ||
-                    o.userId === fbUid ||
-                    o.userId === currentUser?.uid ||
-                    o.customer === currentUser?.username
-                );
-            }
-            renderOrders();
-            if (checkAdmin()) {
-                renderAdminOrders();
-                renderAdminRecentOrders();
-                updateAdminStats();
-            }
-            renderWallet();
-        }, (err) => logDebug("Orders error: " + err.message + " | code: " + err.code));
     } catch (e) {
         logDebug("Orders query error: " + e.message);
     }
@@ -8919,8 +8966,14 @@ window.loadDataFromFirebase = function() {
     // FIX #4: Setelah data load, pastikan myOrders ter-filter ulang jika currentUser sudah ada
     setTimeout(() => {
         if (currentUser && orders.length > 0) {
+            const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
             myOrders = orders.filter(o =>
-                o.customer === currentUser.username || o.customerUid === currentUser.uid
+                o.firebaseUid === fbUid ||
+                o.firebaseUid === currentUser?.uid ||
+                o.customerUid === currentUser?.uid ||
+                o.userId === fbUid ||
+                o.userId === currentUser?.uid ||
+                o.customer === currentUser?.username
             );
             if (typeof renderOrders === 'function') renderOrders();
         }
