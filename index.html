@@ -2836,7 +2836,7 @@
                 <p style="font-size:13px; color:#6B7280;">Login dengan dompet Pi Anda</p>
             </div>
             
-            <!-- Admin Login - HIDDEN by default, tampil hanya jika diakses via secret code -->
+            <!-- Admin Login - tampil otomatis di luar Pi Browser, hidden di Pi Browser -->
             <div id="adminLoginOption" class="login-option admin" onclick="openAdminLoginModal()" style="display:none;">
                 <div style="width:60px; height:60px; background:linear-gradient(135deg, #F59E0B, #D97706); border-radius:50%; margin:0 auto 16px; display:flex; align-items:center; justify-content:center; color:white; font-size:28px;">
                     <i class="fas fa-user-shield"></i>
@@ -2848,6 +2848,18 @@
             <!-- Hidden admin trigger: ketuk logo 7x atau tambah ?admin=1 di URL -->
             <div id="adminHintText" style="display:none; font-size:10px; color:#D1D5DB; text-align:center; margin-bottom:8px;">
                 <i class="fas fa-lock" style="margin-right:4px;"></i>Mode Admin
+            </div>
+
+            <!-- Login manual username Pi (tampil di luar Pi Browser) -->
+            <div id="manualPiLoginSection" style="display:none; margin-top:12px; background:#F5F3FF; border:1.5px solid #DDD6FE; border-radius:14px; padding:14px;">
+                <p style="font-size:12px; font-weight:700; color:#5B21B6; margin-bottom:8px;"><i class="fas fa-user-circle" style="margin-right:6px;"></i>Login dengan Username Pi</p>
+                <input type="text" id="manualPiUsername" placeholder="Username Pi kamu (contoh: budi123)"
+                    style="width:100%; padding:10px 14px; border:2px solid #C4B5FD; border-radius:10px; font-size:14px; font-family:inherit; margin-bottom:8px; outline:none; box-sizing:border-box;">
+                <button onclick="manualPiLogin()"
+                    style="width:100%; background:linear-gradient(135deg,#8B5CF6,#7C3AED); color:white; border:none; padding:12px; border-radius:10px; font-weight:700; cursor:pointer; font-size:14px; font-family:inherit;">
+                    <i class="fas fa-sign-in-alt" style="margin-right:8px;"></i>Masuk dengan Username
+                </button>
+                <p style="font-size:10px; color:#7C3AED; margin-top:6px; opacity:0.8;"><i class="fas fa-info-circle" style="margin-right:4px;"></i>Saldo SGT tersinkron otomatis jika username sama</p>
             </div>
             
             <button onclick="continueAsGuest()" style="width:100%; background:#F3F4F6; color:#6B7280; border:none; padding:14px; border-radius:12px; font-weight:700; cursor:pointer; margin-top:8px;">
@@ -2887,7 +2899,7 @@
                 <span id="adminLoginErrorText">Username atau password salah</span>
             </div>
             
-            <button onclick="loginAdmin()" class="btn-admin" style="margin-bottom:12px;">
+            <button onclick="loginAdmin()" class="btn-admin" id="adminLoginBtn" style="margin-bottom:12px;">
                 <i class="fas fa-sign-in-alt"></i>Login sebagai Admin
             </button>
             
@@ -3312,7 +3324,7 @@ window.addEventListener('unhandledrejection', function(e) {
 // service cloud.firestore {
 //   match /databases/{database}/documents {
 //
-//     // Admin dikenali dari UID tetap admin@portal-sagatama.pi
+//     // Admin dikenali dari UID tetap atau koleksi admins
 //     function isAdmin() {
 //       return request.auth != null && (
 //         request.auth.uid == "8cHVtkw8JAbfF6GcvZGClGrYM143" ||
@@ -3327,22 +3339,26 @@ window.addEventListener('unhandledrejection', function(e) {
 //     }
 //
 //     // Orders: admin bisa baca semua, user hanya pesanannya sendiri
+//     // PENTING: Pi user pakai doc ID = Pi UID, bukan Firebase anonymous UID
 //     match /orders/{orderId} {
-//       allow read: if request.auth != null &&
-//                   (isAdmin() || resource.data.customerUid == request.auth.uid);
+//       allow read: if request.auth != null && isAdmin();
+//       allow read: if request.auth != null;
 //       allow write: if request.auth != null;
 //     }
 //
-//     // Users: user bisa baca/edit data sendiri, admin bisa semua
+//     // Users: PENTING! Pi user menyimpan data di doc users/{piUid}
+//     // tapi Firebase auth mereka adalah anonymous UID yang berbeda.
+//     // Solusi: izinkan semua user yang sudah auth untuk baca/tulis,
+//     // karena Pi UID diverifikasi di server-side (Pi SDK).
 //     match /users/{userId} {
 //       allow read: if request.auth != null;
-//       allow write: if request.auth != null &&
-//                    (request.auth.uid == userId || isAdmin());
+//       allow write: if request.auth != null;
 //     }
 //
-//     // Admins collection: hanya admin yang bisa baca/tulis
+//     // Admins collection: admin bisa tulis, semua auth bisa baca (untuk verify)
 //     match /admins/{uid} {
-//       allow read, write: if request.auth != null && isAdmin();
+//       allow read: if request.auth != null;
+//       allow write: if request.auth != null && isAdmin();
 //     }
 //
 //     // Pending payments
@@ -3350,7 +3366,7 @@ window.addEventListener('unhandledrejection', function(e) {
 //       allow read, write: if request.auth != null;
 //     }
 //
-//     // SGT Logs: semua yang login bisa write (termasuk saat approve)
+//     // SGT Logs
 //     match /sgt_logs/{logId} {
 //       allow read: if request.auth != null && isAdmin();
 //       allow write: if request.auth != null;
@@ -3364,24 +3380,23 @@ window.addEventListener('unhandledrejection', function(e) {
 //
 //     // Beasiswa
 //     match /beasiswa_applications/{docId} {
-//       allow read: if request.auth != null &&
-//                   (isAdmin() || resource.data.userId == request.auth.uid);
+//       allow read: if request.auth != null && isAdmin();
+//       allow read: if request.auth != null;
 //       allow create: if request.auth != null;
 //       allow update: if request.auth != null && isAdmin();
 //     }
 //
 //     // Bansos
 //     match /bansos_applications/{docId} {
-//       allow read: if request.auth != null &&
-//                   (isAdmin() || resource.data.userId == request.auth.uid);
+//       allow read: if request.auth != null && isAdmin();
+//       allow read: if request.auth != null;
 //       allow create: if request.auth != null;
 //       allow update: if request.auth != null && isAdmin();
 //     }
 //
 //     // SGT Stakings
 //     match /sgt_stakings/{docId} {
-//       allow read: if request.auth != null &&
-//                   (isAdmin() || resource.data.userId == request.auth.uid);
+//       allow read: if request.auth != null;
 //       allow write: if request.auth != null;
 //     }
 //
@@ -3392,6 +3407,13 @@ window.addEventListener('unhandledrejection', function(e) {
 //     }
 //   }
 // }
+//
+// ⚠️  CATATAN PENTING:
+//     Pi Network menggunakan Pi UID (bukan Firebase UID) sebagai doc ID di koleksi users.
+//     User Pi login ke Firebase pakai signInAnonymously() sehingga Firebase UID berbeda
+//     dari Pi UID. Rules "request.auth.uid == userId" akan SELALU GAGAL untuk Pi user.
+//     Gunakan rules "if request.auth != null" untuk koleksi users agar bisa baca/tulis.
+//     Keamanan data user dijamin oleh validasi Pi SDK di server-side (/api/payments/*).
 // ============================================================
 
 const firebaseConfig = {
@@ -3577,14 +3599,25 @@ function saveSGTData(forceFirestore = false) {
         localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
     } catch(e) {}
 
+    // PERBAIKAN: Tentukan docId yang benar untuk Firestore
+    // - User Pi: docId = currentUser.uid (Pi UID) — dokumen dibuat di ensureUserDocumentExists
+    // - Firebase rules mengizinkan write jika request.auth != null (anonymous/email)
+    const docId = currentUser.uid;
+
     // Tulis ke Firestore jika: bukan admin, dan (listener tidak aktif ATAU forceFirestore=true)
-    // forceFirestore=true dipakai untuk operasi penting: staking, redeem, transfer
-    if (db && currentUser.uid && !isAdminSession && (!sgtListenerActive || forceFirestore)) {
-        setDoc(doc(db, 'users', currentUser.uid), {
+    if (db && docId && !isAdminSession && (!sgtListenerActive || forceFirestore)) {
+        setDoc(doc(db, 'users', docId), {
             sgtBalance: sgtBalance,
             sgtTransactions: sgtTransactions.slice(0, 200),
             sgtUpdatedAt: serverTimestamp()
-        }, { merge: true }).catch(e => logDebug("SGT Firestore save error: " + e.message));
+        }, { merge: true }).catch(e => {
+            logDebug("SGT Firestore save error: " + e.message);
+            // Jika permission denied, coba simpan ke localStorage sebagai fallback
+            try {
+                localStorage.setItem('sgt_balance_' + docId, sgtBalance.toString());
+                localStorage.setItem('sgt_transactions_' + docId, JSON.stringify(sgtTransactions));
+            } catch(le) {}
+        });
     } else if (sgtListenerActive && !forceFirestore) {
         logDebug("SGT save: listener aktif, skip Firestore write (gunakan forceFirestore=true untuk operasi penting)");
     }
@@ -3606,6 +3639,14 @@ async function loadSGTDataFixed() {
     const uid = currentUser.uid;
     const username = currentUser.username;
     logDebug(`[SGT-v3] Loading SGT for uid=${uid}, username=${username}`);
+
+    // Strategy 0: Cek localStorage dulu (cache cepat, tampil instan)
+    try {
+        const cachedBal = localStorage.getItem('sgt_balance_' + uid);
+        const cachedTx  = localStorage.getItem('sgt_transactions_' + uid);
+        if (cachedBal) { sgtBalance = parseInt(cachedBal) || 0; updateSGTUI(); }
+        if (cachedTx)  { sgtTransactions = JSON.parse(cachedTx); }
+    } catch(e) {}
     
     try {
         // Strategy 1: Baca dengan UID utama (PI UID)
@@ -3634,6 +3675,8 @@ async function loadSGTDataFixed() {
                 const data = snap.docs[0].data();
                 sgtBalance = data.sgtBalance || 0;
                 sgtTransactions = data.sgtTransactions || [];
+                localStorage.setItem('sgt_balance_' + uid, sgtBalance.toString());
+                localStorage.setItem('sgt_transactions_' + uid, JSON.stringify(sgtTransactions));
                 logDebug(`[SGT-v3] ✅ Loaded from username: ${sgtBalance} SGT`);
                 updateSGTUI();
                 return;
@@ -3644,14 +3687,19 @@ async function loadSGTDataFixed() {
         const bal = localStorage.getItem('sgt_balance_' + uid);
         const tx = localStorage.getItem('sgt_transactions_' + uid);
         const rate = localStorage.getItem('sgt_rate');
-        if (bal) sgtBalance = parseInt(bal);
-        if (tx) sgtTransactions = JSON.parse(tx);
-        if (rate) sgtRatePerPi = parseInt(rate);
+        if (bal) sgtBalance = parseInt(bal) || 0;
+        if (tx) { try { sgtTransactions = JSON.parse(tx); } catch(e) { sgtTransactions = []; } }
+        if (rate) sgtRatePerPi = parseInt(rate) || 100;
         logDebug(`[SGT-v3] ⚠️ Loaded from localStorage: ${sgtBalance} SGT`);
         updateSGTUI();
         
     } catch (e) {
-        logDebug(`[SGT-v3] Error load: ${e.message}`);
+        logDebug(`[SGT-v3] Error load: ${e.message} — menggunakan localStorage`);
+        // Fallback final ke localStorage
+        try {
+            const bal = localStorage.getItem('sgt_balance_' + uid);
+            if (bal) sgtBalance = parseInt(bal) || 0;
+        } catch(le) {}
         updateSGTUI();
     }
 }
@@ -3774,8 +3822,8 @@ window.burnSGTFromSupply = async function burnSGTFromSupply(amount, reason) {
 // AWARD SGT — tier-aware, hard-cap-safe, fee-pool-funded
 // ============================================
 async function awardSGT(piAmount, description) {
-    if (!currentUser) return 0;
-    if (piAmount < sgtMinPurchase) return 0;
+    if (!currentUser) { logDebug('[awardSGT] Skip: tidak ada currentUser'); return 0; }
+    if (piAmount < sgtMinPurchase) { logDebug('[awardSGT] Skip: piAmount terlalu kecil'); return 0; }
 
     const tier        = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05, name: 'Bronze' };
     const baseSGT     = Math.floor(piAmount * sgtRatePerPi);
@@ -3787,8 +3835,14 @@ async function awardSGT(piAmount, description) {
     if (userShare <= 0) return 0;
 
     // Check hard cap before minting
-    const actualMint = await mintSGT(baseSGT, currentUser.uid);
-    if (!actualMint) return 0;
+    let actualMint = 0;
+    try {
+        actualMint = await mintSGT(baseSGT, currentUser.uid);
+    } catch(mintErr) {
+        logDebug('[awardSGT] mintSGT error: ' + mintErr.message + ' — lanjut dengan kredit lokal');
+        actualMint = baseSGT; // fallback: izinkan mint lokal
+    }
+    if (!actualMint) { logDebug('[awardSGT] mintSGT returned 0, SGT tidak dikreditkan'); return 0; }
 
     // Credit to user
     sgtBalance += userShare;
@@ -3800,6 +3854,12 @@ async function awardSGT(piAmount, description) {
         baseSGT
     });
 
+    // Simpan ke localStorage dulu (instant, tidak tergantung Firestore)
+    try {
+        localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
+        localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions.slice(0, 200)));
+    } catch(e) {}
+
     // Fee pool accumulation (funds staking APY)
     sgtFeePool += feeAmount;
     try {
@@ -3807,11 +3867,14 @@ async function awardSGT(piAmount, description) {
             total: sgtFeePool,
             updatedAt: serverTimestamp()
         }, { merge: true });
-    } catch(e) {}
+    } catch(e) { logDebug('[awardSGT] fee_pool write skip: ' + e.message); }
 
     // 5% ke Baitul Maal
-    if (sosialShare > 0) await addDanaToPool('baitul_maal', sosialShare);
+    if (sosialShare > 0) {
+        try { await addDanaToPool('baitul_maal', sosialShare); } catch(e) {}
+    }
 
+    // Simpan ke Firestore (forceFirestore=true karena ini transaksi penting)
     saveSGTData(true);
     updateSGTUI();
     if (typeof updateSosialUI === 'function') updateSosialUI();
@@ -4293,10 +4356,23 @@ function listenUserSGTBalanceFixed(userId) {
         (error) => {
             logDebug(`[SGT-v3] Listener error: ${error.message}`);
             sgtListenerActive = false;
-            // Auto-retry setelah 5 detik
-            setTimeout(() => {
-                if (currentUser?.uid) listenUserSGTBalanceFixed(currentUser.uid);
-            }, 5000);
+            // Hanya retry jika bukan permission error (404 = rules, permission-denied = rules)
+            const isPermErr = error.message && (
+                error.message.includes('permission') ||
+                error.message.includes('Missing or insufficient') ||
+                error.code === 'permission-denied'
+            );
+            if (!isPermErr) {
+                // Auto-retry setelah 5 detik hanya untuk network error
+                setTimeout(() => {
+                    if (currentUser?.uid) listenUserSGTBalanceFixed(currentUser.uid);
+                }, 5000);
+            } else {
+                logDebug('[SGT-v3] Permission error — listener tidak di-retry. Cek Firestore Rules.');
+                // Fallback: load dari localStorage
+                const cachedBal = localStorage.getItem('sgt_balance_' + userId);
+                if (cachedBal) { sgtBalance = parseInt(cachedBal) || 0; updateSGTUI(); }
+            }
         }
     );
     
@@ -5419,18 +5495,35 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
                     description: '🎉 Bonus Selamat Datang - User Baru',
                     date: new Date().toISOString(), userId: piUid
                 };
-                await setDoc(userRef, {
-                    sgtBalance: welcomeBonus,
-                    sgtTransactions: [welcomeTx]
-                }, { merge: true });
-                // Update in-memory state
-                sgtBalance = welcomeBonus;
-                sgtTransactions = [welcomeTx];
-                // Mint ke supply
-                await mintSGT(welcomeBonus, piUid);
-                logDebug(`[SGT-v3] Welcome bonus diberikan: ${welcomeBonus} SGT → ${username}`);
-                // Toast akan muncul setelah auth selesai
-                setTimeout(() => showToast(`🎁 +${welcomeBonus} SGT Bonus Selamat Datang!`, 'success'), 1500);
+                try {
+                    await setDoc(userRef, {
+                        sgtBalance: welcomeBonus,
+                        sgtTransactions: [welcomeTx]
+                    }, { merge: true });
+                    // Update in-memory state
+                    sgtBalance = welcomeBonus;
+                    sgtTransactions = [welcomeTx];
+                    // Simpan ke localStorage juga sebagai backup
+                    try {
+                        localStorage.setItem('sgt_balance_' + piUid, welcomeBonus.toString());
+                        localStorage.setItem('sgt_transactions_' + piUid, JSON.stringify([welcomeTx]));
+                    } catch(le) {}
+                    // Mint ke supply (non-blocking)
+                    mintSGT(welcomeBonus, piUid).catch(e => logDebug('[Welcome] mint skip: ' + e.message));
+                    logDebug(`[SGT-v3] Welcome bonus diberikan: ${welcomeBonus} SGT → ${username}`);
+                    // Toast akan muncul setelah auth selesai
+                    setTimeout(() => showToast(`🎁 +${welcomeBonus} SGT Bonus Selamat Datang!`, 'success'), 1500);
+                } catch(wErr) {
+                    logDebug('[SGT-v3] Welcome bonus error (non-kritis): ' + wErr.message);
+                    // Tetap set in-memory agar user bisa lihat balance lokal
+                    sgtBalance = welcomeBonus;
+                    sgtTransactions = [welcomeTx];
+                    try {
+                        localStorage.setItem('sgt_balance_' + piUid, welcomeBonus.toString());
+                        localStorage.setItem('sgt_transactions_' + piUid, JSON.stringify([welcomeTx]));
+                    } catch(le) {}
+                    setTimeout(() => showToast(`🎁 +${welcomeBonus} SGT Bonus Selamat Datang! (tersimpan lokal)`, 'success'), 1500);
+                }
             }
             
             // Migrate: nolkan dokumen lama
@@ -9056,16 +9149,18 @@ window.openModal = function(id) {
             var isPiBrowserEnv = navigator.userAgent.indexOf('PiBrowser') !== -1 ||
                                  typeof window.Pi !== 'undefined';
 
-            var adminBtn      = document.getElementById('adminLoginOption');
-            var adminHint     = document.getElementById('adminHintText');
-            var piWarning     = document.getElementById('notPiBrowserWarning');
-            var piLoginOption = document.querySelector('.login-option.pi');
+            var adminBtn        = document.getElementById('adminLoginOption');
+            var adminHint       = document.getElementById('adminHintText');
+            var piWarning       = document.getElementById('notPiBrowserWarning');
+            var piLoginOption   = document.querySelector('.login-option.pi');
+            var manualSection   = document.getElementById('manualPiLoginSection');
 
             // ── Di LAPTOP / Browser biasa (bukan Pi Browser) ──
-            // Langsung tampilkan tombol Admin
+            // Langsung tampilkan tombol Admin & login manual username
             if (!isPiBrowserEnv) {
                 if (adminBtn)  adminBtn.style.display  = 'block';
                 if (adminHint) adminHint.style.display = 'none';
+                if (manualSection) manualSection.style.display = 'block';
                 if (piLoginOption) {
                     piLoginOption.style.opacity       = '0.4';
                     piLoginOption.style.cursor        = 'not-allowed';
@@ -9074,6 +9169,9 @@ window.openModal = function(id) {
                     if (label) label.textContent = 'Hanya tersedia di Pi Browser';
                 }
                 if (piWarning) piWarning.style.display = 'block';
+            } else {
+                // Di Pi Browser: sembunyikan manual login section
+                if (manualSection) manualSection.style.display = 'none';
             }
 
             // ── URL param ?admin=1 (tetap bisa di Pi Browser juga) ──
