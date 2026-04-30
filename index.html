@@ -4487,24 +4487,36 @@ window.fixAllUserDocuments = async function() {
     try {
         const snap = await getDocs(collection(db, 'users'));
         let fixed = 0;
+        const batch = writeBatch(db);
         
         snap.forEach(docSnap => {
             const data = docSnap.data();
             const docId = docSnap.id;
-            
+            const updates = {};
+
+            // Fix 1: pastikan field uid ada
             if (!data.uid && data.username) {
-                setDoc(doc(db, 'users', docId), {
-                    uid: docId
-                }, { merge: true });
+                updates.uid = docId;
                 fixed++;
+            }
+            // Fix 2: jika belum ada firebaseUid, isi dengan docId sebagai fallback
+            // (akan ter-update dengan Firebase anon UID saat user login berikutnya)
+            if (!data.firebaseUid) {
+                updates.firebaseUid = data.uid || docId;
+                fixed++;
+            }
+            if (Object.keys(updates).length > 0) {
+                batch.set(doc(db, 'users', docId), updates, { merge: true });
             }
         });
         
-        showToast(`${fixed} dokumen diperbaiki`, 'success');
-        logDebug(`[SGT-v3] Fixed ${fixed} user documents`);
+        await batch.commit();
+        showToast(`${fixed} field diperbaiki di dokumen user`, 'success');
+        logDebug(`[fix] Fixed ${fixed} fields across user documents`);
         
     } catch (e) {
         showToast('Gagal: ' + e.message, 'error');
+        logDebug('[fix] fixAllUserDocuments error: ' + e.message);
     }
 };
 
@@ -4844,8 +4856,11 @@ async function initFirebase() {
             if (!app) app = initializeApp(firebaseConfig);
             if (!auth) auth = getAuth(app);
             if (!db) {
+                // experimentalForceLongPolling: matikan WebChannel sepenuhnya
+                // → tidak ada lagi Listen/channel 404 atau ERR_QUIC
+                // AutoDetect sering tetap memilih WebChannel (yg bermasalah) → paksa long polling
                 db = initializeFirestore(app, {
-                    experimentalAutoDetectLongPolling: true,
+                    experimentalForceLongPolling: true,
                     useFetchStreams: false
                 });
             }
@@ -5637,6 +5652,13 @@ window.loginAdmin = async function() {
         closeModal('adminLoginModal');
         showToast('Login Admin berhasil! 👑', 'success');
         setTimeout(() => switchView('admin-dashboard'), 500);
+        // Auto-fix dokumen user yang belum punya firebaseUid (silent, non-blocking)
+        setTimeout(() => {
+            if (db) {
+                logDebug('[Admin] Auto-fixing user documents (firebaseUid stamp)...');
+                window.fixAllUserDocuments().catch(e => logDebug('[Admin] fixAllUserDocuments: ' + e.message));
+            }
+        }, 3000);
         // Paksa update dashboard setelah data masuk — TANPA reload listener
         // (listener sudah aktif dari loadDataFromFirebase() di atas)
         setTimeout(() => {
