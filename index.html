@@ -1167,62 +1167,7 @@
         ADMIN_ADDRESS: 'GCYVWDQ2YFSK3R3BDJIACAFNLQSPTMYOIZ2JHPJRNF2IMZ2FTADDPYJ4',
     };
 
-    // ============================================================
-    // ESCROW SERVICE — Komunikasi dengan Smart Contract
-    // ============================================================
-    const EscrowService = {
-
-        // Cek status escrow sebuah order dari blockchain
-        async getStatus(orderId) {
-            try {
-                const res = await fetch(ESCROW_CONFIG.RPC_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        jsonrpc: '2.0', id: 1,
-                        method: 'simulateTransaction',
-                        params: { transaction: orderId }
-                    })
-                });
-                return null; // akan diisi saat SDK tersedia di browser
-            } catch(e) {
-                console.log('Escrow status check:', e.message);
-                return null;
-            }
-        },
-
-        // Simpan info escrow ke Firestore (sebagai referensi on-chain)
-        async saveEscrowRecord(orderId, data) {
-            if (!db) return;
-            try {
-                await setDoc(doc(db, 'escrow_records', orderId), {
-                    ...data,
-                    contractId: ESCROW_CONFIG.CONTRACT_ID,
-                    network: ESCROW_CONFIG.NETWORK,
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                });
-                logDebug('Escrow record saved: ' + orderId);
-            } catch(e) {
-                logDebug('Escrow save error: ' + e.message);
-            }
-        },
-
-        // Update status escrow di Firestore setelah release/refund
-        async updateEscrowStatus(orderId, status, txHash) {
-            if (!db) return;
-            try {
-                await setDoc(doc(db, 'escrow_records', orderId), {
-                    status,
-                    txHash: txHash || null,
-                    updatedAt: serverTimestamp(),
-                }, { merge: true });
-                logDebug('Escrow status updated: ' + orderId + ' -> ' + status);
-            } catch(e) {
-                logDebug('Escrow update error: ' + e.message);
-            }
-        }
-    };
+    // EscrowService didefinisikan setelah Firebase init (di body)
     </script>
 </head>
 <body>
@@ -7552,6 +7497,43 @@ window.showOrderDetail = function(id) {
     openModal('orderDetailModal');
 };
 
+
+
+// ============================================================
+// ESCROW SERVICE — didefinisikan setelah Firebase init
+// ============================================================
+const EscrowService = {
+
+    async saveEscrowRecord(orderId, data) {
+        if (!db) { logDebug('EscrowService: db belum siap'); return; }
+        try {
+            await setDoc(doc(db, 'escrow_records', orderId), {
+                ...data,
+                contractId: ESCROW_CONFIG.CONTRACT_ID,
+                network: ESCROW_CONFIG.NETWORK,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+            logDebug('Escrow record saved: ' + orderId);
+        } catch(e) {
+            logDebug('Escrow save error: ' + e.message);
+        }
+    },
+
+    async updateEscrowStatus(orderId, status, txHash) {
+        if (!db) { logDebug('EscrowService: db belum siap'); return; }
+        try {
+            await setDoc(doc(db, 'escrow_records', orderId), {
+                status,
+                txHash: txHash || null,
+                updatedAt: serverTimestamp(),
+            }, { merge: true });
+            logDebug('Escrow status updated: ' + orderId + ' -> ' + status);
+        } catch(e) {
+            logDebug('Escrow update error: ' + e.message);
+        }
+    }
+};
 
 // ============================================================
 // ESCROW SMART CONTRACT — BUYER RELEASE & ADMIN REFUND
