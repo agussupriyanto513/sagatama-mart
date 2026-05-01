@@ -5351,51 +5351,49 @@ window.authenticatePi = async function() {
     }, 35000);
 
     try {
-    // Step 1: Inisialisasi Pi SDK dengan retry
-    const sdkReady = await initPiSDKRobust();
-    
-    if (!sdkReady) {
-        logDebug('[AUTH-v3] Pi SDK tidak tersedia, menampilkan fallback');
-        showToast('Pi Browser tidak terdeteksi. Gunakan login manual.', 'warning');
-        showManualLoginFallback();
-        return;
-    }
-    
-    // Step 2: Validasi environment
-    if (!isPiBrowser) {
-        showToast('Login Pi hanya tersedia di Pi Browser', 'warning');
-        showManualLoginFallback();
-        return;
-    }
-    
-    
-    try {
+        // Step 1: Inisialisasi Pi SDK dengan retry
+        const sdkReady = await initPiSDKRobust();
+
+        if (!sdkReady) {
+            logDebug('[AUTH-v3] Pi SDK tidak tersedia, menampilkan fallback');
+            showToast('Pi Browser tidak terdeteksi. Gunakan login manual.', 'warning');
+            showManualLoginFallback();
+            return;
+        }
+
+        // Step 2: Validasi environment
+        if (!isPiBrowser) {
+            showToast('Login Pi hanya tersedia di Pi Browser', 'warning');
+            showManualLoginFallback();
+            return;
+        }
+
         showToast('Menghubungkan ke Pi Network...', 'info');
-        
+
         const scopes = ['username', 'payments'];
-        
+
         const onIncompletePaymentFound = async (payment) => {
             logDebug("[AUTH-v3] Incomplete payment: " + payment?.identifier);
-            try { 
-                await handleIncompletePayment(payment); 
+            try {
+                await handleIncompletePayment(payment);
             } catch (err) {
                 logDebug("[AUTH-v3] Handle incomplete error: " + err.message);
             }
         };
-        
-        // PERBAIKAN: Timeout 30 detik (bukan 60) - user tidak sabar menunggu
+
+        // Timeout 30 detik
         const authResult = await Promise.race([
             window.Pi.authenticate(scopes, onIncompletePaymentFound),
-            new Promise((_, reject) => 
+            new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Timeout: Pi auth terlalu lama')), 30000)
             )
         ]);
-        
+
         if (!authResult?.user) {
             throw new Error('Auth result tidak valid - user object hilang');
         }
-        
-        // Step 4: Proses hasil auth
+
+        // Step 3: Proses hasil auth
         await processPiAuthSuccess(authResult);
         
     } catch (error) {
