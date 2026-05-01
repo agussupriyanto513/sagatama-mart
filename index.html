@@ -122,43 +122,94 @@
     })();
     </script>
 
-    <!-- Pi SDK -->
+    <!-- Pi SDK - hanya dimuat di Pi Browser, gagal diam-diam di browser biasa -->
     <script>
     window.addEventListener('unhandledrejection', function(event) {
         var msg = (event.reason && event.reason.message) ? event.reason.message : String(event.reason || '');
         if (msg.indexOf('Messaging promise') !== -1 || msg.indexOf('timed out') !== -1) {
             event.preventDefault();
-            console.warn('[Pi SDK] Timeout suppressed (normal di luar Pi Browser)');
+            // suppress normal: Pi SDK timeout di luar Pi Browser
         }
     });
+    // Patch console.warn: tahan pesan Pi SDK agar tidak muncul di console production
+    (function() {
+        var _warn = console.warn.bind(console);
+        console.warn = function() {
+            var msg = Array.prototype.join.call(arguments, ' ');
+            if (msg.indexOf('[Pi SDK]') !== -1 ||
+                msg.indexOf('cdn.tailwindcss') !== -1 ||
+                msg.indexOf('Messaging promise') !== -1) return;
+            _warn.apply(console, arguments);
+        };
+    })();
     </script>
-    <script src="https://sdk.minepi.com/pi-sdk.js" onerror="console.warn('[Pi SDK] Gagal dimuat');"></script>
+    <script src="https://sdk.minepi.com/pi-sdk.js" onerror="/* Pi SDK tidak tersedia di luar Pi Browser - normal */"></script>
     
     <!-- External Libraries -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Tailwind Config -->
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        pi: {
-                            purple: '#8B5CF6',
-                            dark: '#7C3AED',
-                            light: '#A78BFA',
-                            accent: '#F59E0B'
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['Plus Jakarta Sans', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
+    <!-- Tailwind CDN dihapus - diganti CSS utility di bawah agar tidak ada warning produksi -->
+
+    <!-- Tailwind utility replacements (hanya class yang benar-benar dipakai) -->
+    <style>
+        /* Layout */
+        .flex          { display: flex !important; }
+        .flex-col      { flex-direction: column !important; }
+        .items-center  { align-items: center !important; }
+        .justify-center{ justify-content: center !important; }
+        .fixed         { position: fixed !important; }
+        .absolute      { position: absolute !important; }
+        .relative      { position: relative !important; }
+        .inset-0       { top:0; right:0; bottom:0; left:0 !important; }
+        .block         { display: block !important; }
+        .hidden        { display: none !important; }
+
+        /* Spacing */
+        .mt-2  { margin-top: 0.5rem !important; }
+        .mt-6  { margin-top: 1.5rem !important; }
+        .py-2  { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+        .py-4  { padding-top: 1rem !important; padding-bottom: 1rem !important; }
+
+        /* Sizing */
+        .w-20  { width: 5rem !important; }
+        .h-20  { height: 5rem !important; }
+
+        /* Typography */
+        .text-center  { text-align: center !important; }
+        .text-right   { text-align: right !important; }
+        .text-xs      { font-size: 0.75rem !important; line-height: 1rem !important; }
+        .text-xl      { font-size: 1.25rem !important; line-height: 1.75rem !important; }
+        .text-\[10px\]{ font-size: 10px !important; }
+        .font-bold    { font-weight: 700 !important; }
+        .font-medium  { font-weight: 500 !important; }
+        .tracking-tight { letter-spacing: -0.025em !important; }
+
+        /* Colors */
+        .bg-white           { background-color: #ffffff !important; }
+        .text-emerald-600   { color: #059669 !important; }
+        .text-green-600     { color: #16a34a !important; }
+        .text-slate-400     { color: #94a3b8 !important; }
+        .text-slate-800     { color: #1e293b !important; }
+        .border-emerald-100 { border-color: #d1fae5 !important; }
+        .border-t-emerald-600 { border-top-color: #059669 !important; }
+
+        /* Border & Radius */
+        .border-4     { border-width: 4px !important; border-style: solid; }
+        .border-b     { border-bottom-width: 1px !important; border-bottom-style: solid; }
+        .rounded-full { border-radius: 9999px !important; }
+
+        /* Opacity */
+        .opacity-0  { opacity: 0 !important; }
+        .opacity-80 { opacity: 0.8 !important; }
+
+        /* Z-index */
+        .z-\[9999\] { z-index: 9999 !important; }
+
+        /* Transition & Animation */
+        .transition-opacity { transition-property: opacity !important; transition-timing-function: cubic-bezier(0.4,0,0.2,1) !important; }
+        .duration-500       { transition-duration: 500ms !important; }
+        .animate-spin       { animation: spin 1s linear infinite !important; }
+    </style>
     
     <style>
         * { 
@@ -3823,12 +3874,7 @@ window.burnSGTFromSupply = async function burnSGTFromSupply(amount, reason) {
 // ============================================
 async function awardSGT(piAmount, description) {
     if (!currentUser) { logDebug('[awardSGT] Skip: tidak ada currentUser'); return 0; }
-    // Di testnet, Pi amount selalu 0 — gunakan minimum 0.001 agar SGT tetap diberikan
-    const effectiveAmount = (piAmount <= 0 && ESCROW_CONFIG.NETWORK === 'testnet')
-        ? 0.001
-        : piAmount;
-    if (effectiveAmount < sgtMinPurchase) { logDebug('[awardSGT] Skip: piAmount terlalu kecil'); return 0; }
-    piAmount = effectiveAmount;
+    if (piAmount < sgtMinPurchase) { logDebug('[awardSGT] Skip: piAmount terlalu kecil'); return 0; }
 
     const tier        = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05, name: 'Bronze' };
     const baseSGT     = Math.floor(piAmount * sgtRatePerPi);
@@ -3883,11 +3929,6 @@ async function awardSGT(piAmount, description) {
     saveSGTData(true);
     updateSGTUI();
     if (typeof updateSosialUI === 'function') updateSosialUI();
-    // Pastikan wallet SGT balance diupdate langsung
-    const _walletBal = document.getElementById('walletSgtBalance');
-    if (_walletBal) _walletBal.textContent = sgtBalance.toLocaleString();
-    const _sgtPiEq = document.getElementById('sgtPiEquivalent');
-    if (_sgtPiEq) _sgtPiEq.textContent = (sgtBalance / (sgtRatePerPi || 100)).toFixed(8);
     showToast(`+${userShare.toLocaleString()} SGT (Tier ${tier.name}) 🎉`, 'success');
     logDebug('SGT awarded: ' + userShare + ' | fee: ' + feeAmount + ' | sosial: ' + sosialShare);
     return userShare;
@@ -4662,6 +4703,11 @@ async function init() {
             currentUser = JSON.parse(savedUser);
             userRole = currentUser.role || 'user';
             logDebug("Restored user session: " + currentUser.username);
+            // FIX BUG-2: Restore flag isPiAuthenticated agar guard payment tidak block user
+            // yang sudah pernah login Pi sebelumnya (session masih ada di localStorage)
+            if (currentUser.authType === 'pi' || currentUser.authType === 'pi_manual') {
+                isPiAuthenticated = true;
+            }
             // Langsung update UI dengan data cache - tidak perlu tunggu network
             updateUI();
             updateCartUI();
@@ -4723,6 +4769,12 @@ async function init() {
                 // Muat semua data admin
                 loadDataFromFirebase();
                 updateAdminSosialBadge();
+            }
+
+            // FIX BUG-1: Muat data (termasuk orders) untuk user biasa yang restore session
+            // Sebelumnya hanya admin yang memanggil loadDataFromFirebase() di sini!
+            if (!_isAdminRestore) {
+                loadDataFromFirebase();
             }
 
             // Refresh SGT dari Firestore dengan strategi multi-fallback (v3)
@@ -5382,7 +5434,7 @@ function handlePiAuthError(error, loginBtn, originalHTML) {
     // Reset state untuk memungkinkan retry
     isPiSDKReady = false;
     piInitPromise = null;
-    piInitAttempts = 0;
+    piInitAttempts = 0; // FIX BUG-3: selalu reset attempts agar retry bisa jalan dari awal
     
     if (msg.includes('consent') || msg.includes('cancel') || msg.includes('dibatalkan')) {
         showToast('Login dibatalkan', 'warning');
@@ -5489,6 +5541,9 @@ window.manualPiLogin = async function() {
         
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
         
+        // FIX BUG-4: set isPiAuthenticated agar guard payment tidak block user manual login
+        isPiAuthenticated = true;
+
         await loadSGTDataFixed();
         listenUserSGTBalanceFixed(targetUid);
         
@@ -6460,6 +6515,9 @@ function renderWallet() {
     const historyContainer = document.getElementById('transactionHistory');
     if (!historyContainer) return;
 
+    const walletBalance = document.getElementById('walletPiBalance');
+    if (walletBalance) walletBalance.innerText = 'π --';
+
     const _fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
     const myTransactions = orders
         .filter(o =>
@@ -6470,32 +6528,6 @@ function renderWallet() {
             o.customer === currentUser?.username
         )
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-
-    // Update stats wallet: total Pi spent + jumlah transaksi + SGT earned
-    const totalPiSpent = myTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-    const totalTx = myTransactions.length;
-    const totalSGTEarned = myTransactions.reduce((sum, t) => sum + (t.sgtEarned || 0), 0);
-
-    // Update elemen stat di wallet card
-    const statEarned = document.getElementById('statSgtEarned');
-    const statTx = document.getElementById('statSgtTx');
-    const statSpent = document.getElementById('statSgtSpent');
-    const sgtPiEq = document.getElementById('sgtPiEquivalent');
-    const walletSgtBal = document.getElementById('walletSgtBalance');
-    const rewardBar = document.getElementById('rewardProgressBar');
-    const rewardText = document.getElementById('rewardProgressText');
-
-    if (statEarned) statEarned.textContent = Math.max(totalSGTEarned, sgtBalance).toLocaleString();
-    if (statTx) statTx.textContent = totalTx;
-    if (statSpent) statSpent.textContent = 'π ' + totalPiSpent.toFixed(4);
-    if (sgtPiEq) sgtPiEq.textContent = (sgtBalance / (sgtRatePerPi || 100)).toFixed(8);
-    if (walletSgtBal) walletSgtBal.textContent = sgtBalance.toLocaleString();
-
-    // Progress bar ke reward berikutnya (500 SGT)
-    const nextMilestone = 500;
-    const progress = Math.min((sgtBalance % nextMilestone) / nextMilestone * 100, 100);
-    if (rewardBar) rewardBar.style.width = progress + '%';
-    if (rewardText) rewardText.textContent = (sgtBalance % nextMilestone) + ' / ' + nextMilestone + ' SGT';
 
     if (myTransactions.length === 0) {
         historyContainer.innerHTML = `<div class="empty-state" style="padding:40px 20px;text-align:center;">
@@ -6595,26 +6627,6 @@ function updateCartUI() {
     if (document.getElementById('cart-view')?.classList.contains('active')) updateCartSummary();
 }
 
-
-// ============================================================
-// ESCROW STATUS BADGE
-// ============================================================
-function getEscrowBadge(order) {
-    if (!order.escrowStatus) return '';
-    // Jangan tampil badge di order yang sudah selesai/dibatalkan
-    const doneStatuses = ['completed', 'cancelled', 'failed'];
-    if (doneStatuses.includes(order.status) && order.escrowStatus !== 'refunded') return '';
-    const badges = {
-        'active':   { color: '#F59E0B', bg: '#FEF3C7', icon: 'fa-shield-alt',   text: 'Escrow Aktif' },
-        'released': { color: '#059669', bg: '#D1FAE5', icon: 'fa-check-circle',  text: 'Dana Dicairkan' },
-        'refunded': { color: '#EF4444', bg: '#FEE2E2', icon: 'fa-undo',          text: 'Direfund' },
-    };
-    const b = badges[order.escrowStatus];
-    if (!b) return '';
-    return `<span style="background:${b.bg};color:${b.color};font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;margin-top:4px;">
-        <i class="fas ${b.icon}"></i>${b.text}
-    </span>`;
-}
 function renderOrders() {
     const container = document.getElementById('ordersList');
     if (!container) return;
@@ -6640,11 +6652,10 @@ function renderOrders() {
                 </div>
                 <span class="badge badge-${o.status}">${getStatusLabel(o.status)}</span>
             </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${o.escrowStatus ? '6px' : '0'};">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
                 <p style="font-size:12px;color:#9CA3AF;">${formatDate(o.createdAt)}</p>
                 <p style="font-weight:800;color:#8B5CF6;font-size:16px;">π ${o.amount?.toFixed(8) || '0.0000'}</p>
             </div>
-            ${getEscrowBadge(o)}
         </div>`).join('');
 }
 
