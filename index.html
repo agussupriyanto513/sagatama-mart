@@ -4944,10 +4944,13 @@ async function initPiSDKRobust() {
                     continue;
                 }
 
-                await window.Pi.init({
-                    version: "2.0",
-                    sandbox: USE_SANDBOX
-                });
+                await Promise.race([
+                    window.Pi.init({
+                        version: "2.0",
+                        sandbox: USE_SANDBOX
+                    }),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Pi.init timeout 8 detik')), 8000))
+                ]);
 
                 isPiSDKReady = true;
                 isPiBrowser  = true;
@@ -5323,7 +5326,31 @@ async function withPiTimeout(promise, timeoutMs = 30000, operationName = 'Pi ope
 
 window.authenticatePi = async function() {
     logDebug("[AUTH-v3] authenticatePi dipanggil");
-    
+
+    // Tampilkan loading state pada tombol LEBIH AWAL
+    const loginBtn = document.querySelector('.login-option.pi');
+    const originalBtnHTML = loginBtn ? loginBtn.innerHTML : null;
+    if (loginBtn) {
+        loginBtn.innerHTML = `
+            <div style="width:60px;height:60px;margin:0 auto 16px;">
+                <div class="loading-spinner" style="width:40px;height:40px;margin:10px auto;border-color:#8B5CF620;border-top-color:#8B5CF6;"></div>
+            </div>
+            <h4 style="color:#8B5CF6;font-weight:800;">Menghubungkan...</h4>
+            <p style="font-size:12px;color:#6B7280;">Tunggu sebentar ya</p>
+        `;
+        loginBtn.style.pointerEvents = 'none';
+    }
+
+    // Safety: selalu restore tombol setelah 35 detik apapun yg terjadi
+    const btnSafetyTimer = setTimeout(() => {
+        if (loginBtn && originalBtnHTML) {
+            loginBtn.innerHTML = originalBtnHTML;
+            loginBtn.style.pointerEvents = 'auto';
+        }
+        logDebug('[AUTH-v3] Safety timer: tombol login di-restore');
+    }, 35000);
+
+    try {
     // Step 1: Inisialisasi Pi SDK dengan retry
     const sdkReady = await initPiSDKRobust();
     
@@ -5341,20 +5368,6 @@ window.authenticatePi = async function() {
         return;
     }
     
-    // Step 3: Tampilkan loading state pada tombol
-    const loginBtn = document.querySelector('.login-option.pi');
-    const originalBtnHTML = loginBtn ? loginBtn.innerHTML : null;
-    
-    if (loginBtn) {
-        loginBtn.innerHTML = `
-            <div style="width:60px;height:60px;margin:0 auto 16px;">
-                <div class="loading-spinner" style="width:40px;height:40px;margin:10px auto;border-color:#8B5CF620;border-top-color:#8B5CF6;"></div>
-            </div>
-            <h4 style="color:#8B5CF6;font-weight:800;">Menghubungkan...</h4>
-            <p style="font-size:12px;color:#6B7280;">Tunggu sebentar ya</p>
-        `;
-        loginBtn.style.pointerEvents = 'none';
-    }
     
     try {
         showToast('Menghubungkan ke Pi Network...', 'info');
@@ -5388,6 +5401,8 @@ window.authenticatePi = async function() {
     } catch (error) {
         logDebug("[AUTH-v3] ❌ Auth error: " + error.message);
         handlePiAuthError(error, loginBtn, originalBtnHTML);
+    } finally {
+        clearTimeout(btnSafetyTimer);
     }
 };
 
