@@ -3610,13 +3610,23 @@ async function handleSSO() {
     // Ada token SSO - tampilkan loader sementara proses login
     if (loader) loader.style.display = 'flex';
 
+    // Safety net: paksa sembunyikan loader setelah 8 detik apapun yang terjadi
+    const ssoSafetyTimer = setTimeout(() => {
+        if (loader) { loader.classList.add('opacity-0'); setTimeout(() => { loader.style.display = 'none'; }, 500); }
+        logDebug('[SSO] Safety timer: loader dipaksa sembunyikan');
+    }, 8000);
+
     try {
-        await signInWithCustomToken(auth, authToken);
+        await Promise.race([
+            signInWithCustomToken(auth, authToken),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('SSO timeout 10 detik')), 10000))
+        ]);
         logDebug("SSO login berhasil");
         window.history.replaceState({}, document.title, window.location.pathname);
     } catch (error) {
         logDebug("SSO gagal: " + error.message);
     } finally {
+        clearTimeout(ssoSafetyTimer);
         if (loader) {
             loader.classList.add('opacity-0');
             setTimeout(() => { loader.style.display = 'none'; }, 500);
@@ -4767,6 +4777,15 @@ async function init() {
     // Tampilkan loading hanya jika belum ada user cache (first time load)
     if (!currentUser && loading) loading.style.display = 'flex';
 
+    // SAFETY NET GLOBAL: paksa sembunyikan loadingOverlay setelah 15 detik apapun yang terjadi
+    const globalLoadingSafety = setTimeout(() => {
+        const lo = document.getElementById('loadingOverlay');
+        if (lo && lo.style.display !== 'none') {
+            lo.style.display = 'none';
+            logDebug('[INIT] Safety timer: loadingOverlay dipaksa sembunyikan setelah 15 detik');
+        }
+    }, 15000);
+
     try {
         detectPiEnv();
 
@@ -4836,6 +4855,8 @@ async function init() {
     } catch (e) {
         logDebug("Init error: " + e.message);
         console.error("INIT ERROR:", e);
+        // Pastikan loading overlay selalu hilang saat error
+        if (loading) loading.style.display = 'none';
         if (loading) {
             loading.innerHTML = `
                 <div style="text-align:center; padding:20px;">
@@ -4849,6 +4870,7 @@ async function init() {
         }
     } finally {
         // SELALU sembunyikan loading overlay setelah init selesai
+        clearTimeout(globalLoadingSafety);
         if (loading) loading.style.display = 'none';
     }
 }
