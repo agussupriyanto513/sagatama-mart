@@ -122,94 +122,80 @@
     })();
     </script>
 
-    <!-- Pi SDK - hanya dimuat di Pi Browser, gagal diam-diam di browser biasa -->
+    <!-- Pi SDK — dengan retry loader -->
     <script>
+    // Suppress unhandled rejection dari Pi SDK (normal di luar Pi Browser)
     window.addEventListener('unhandledrejection', function(event) {
         var msg = (event.reason && event.reason.message) ? event.reason.message : String(event.reason || '');
-        if (msg.indexOf('Messaging promise') !== -1 || msg.indexOf('timed out') !== -1) {
+        if (msg.indexOf('Messaging promise') !== -1 ||
+            msg.indexOf('timed out') !== -1 ||
+            msg.indexOf('Pi SDK') !== -1) {
             event.preventDefault();
-            // suppress normal: Pi SDK timeout di luar Pi Browser
         }
     });
-    // Patch console.warn: tahan pesan Pi SDK agar tidak muncul di console production
-    (function() {
-        var _warn = console.warn.bind(console);
-        console.warn = function() {
-            var msg = Array.prototype.join.call(arguments, ' ');
-            if (msg.indexOf('[Pi SDK]') !== -1 ||
-                msg.indexOf('cdn.tailwindcss') !== -1 ||
-                msg.indexOf('Messaging promise') !== -1) return;
-            _warn.apply(console, arguments);
-        };
+
+    // Pi SDK loader dengan retry otomatis
+    (function loadPiSDK() {
+        var attempts = 0;
+        var maxAttempts = 3;
+        var urls = [
+            'https://sdk.minepi.com/pi-sdk.js',
+            'https://cdn.minepi.com/pi-sdk.js'  // fallback URL
+        ];
+
+        function tryLoad(urlIndex) {
+            if (urlIndex >= urls.length || attempts >= maxAttempts) {
+                // Gagal semua — set window.Pi = null agar app tahu SDK tidak ada
+                if (!window.Pi) window._piSDKFailed = true;
+                return;
+            }
+            attempts++;
+            var s = document.createElement('script');
+            s.src = urls[urlIndex];
+            s.async = true;
+            s.onload = function() { /* Pi SDK loaded OK */ };
+            s.onerror = function() {
+                // Coba URL berikutnya setelah 500ms
+                setTimeout(function() { tryLoad(urlIndex + 1); }, 500);
+            };
+            document.head.appendChild(s);
+        }
+
+        // Hanya load jika sepertinya Pi Browser (hemat bandwidth di browser biasa)
+        var ua = navigator.userAgent || '';
+        if (ua.includes('PiBrowser') || ua.includes('MinepiApp') || window.location.hostname !== 'localhost') {
+            tryLoad(0);
+        }
     })();
     </script>
-    <script src="https://sdk.minepi.com/pi-sdk.js" onerror="/* Pi SDK tidak tersedia di luar Pi Browser - normal */"></script>
     
     <!-- External Libraries -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Tailwind CDN dihapus - diganti CSS utility di bawah agar tidak ada warning produksi -->
-
-    <!-- Tailwind utility replacements (hanya class yang benar-benar dipakai) -->
-    <style>
-        /* Layout */
-        .flex          { display: flex !important; }
-        .flex-col      { flex-direction: column !important; }
-        .items-center  { align-items: center !important; }
-        .justify-center{ justify-content: center !important; }
-        .fixed         { position: fixed !important; }
-        .absolute      { position: absolute !important; }
-        .relative      { position: relative !important; }
-        .inset-0       { top:0; right:0; bottom:0; left:0 !important; }
-        .block         { display: block !important; }
-        .hidden        { display: none !important; }
-
-        /* Spacing */
-        .mt-2  { margin-top: 0.5rem !important; }
-        .mt-6  { margin-top: 1.5rem !important; }
-        .py-2  { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
-        .py-4  { padding-top: 1rem !important; padding-bottom: 1rem !important; }
-
-        /* Sizing */
-        .w-20  { width: 5rem !important; }
-        .h-20  { height: 5rem !important; }
-
-        /* Typography */
-        .text-center  { text-align: center !important; }
-        .text-right   { text-align: right !important; }
-        .text-xs      { font-size: 0.75rem !important; line-height: 1rem !important; }
-        .text-xl      { font-size: 1.25rem !important; line-height: 1.75rem !important; }
-        .text-\[10px\]{ font-size: 10px !important; }
-        .font-bold    { font-weight: 700 !important; }
-        .font-medium  { font-weight: 500 !important; }
-        .tracking-tight { letter-spacing: -0.025em !important; }
-
-        /* Colors */
-        .bg-white           { background-color: #ffffff !important; }
-        .text-emerald-600   { color: #059669 !important; }
-        .text-green-600     { color: #16a34a !important; }
-        .text-slate-400     { color: #94a3b8 !important; }
-        .text-slate-800     { color: #1e293b !important; }
-        .border-emerald-100 { border-color: #d1fae5 !important; }
-        .border-t-emerald-600 { border-top-color: #059669 !important; }
-
-        /* Border & Radius */
-        .border-4     { border-width: 4px !important; border-style: solid; }
-        .border-b     { border-bottom-width: 1px !important; border-bottom-style: solid; }
-        .rounded-full { border-radius: 9999px !important; }
-
-        /* Opacity */
-        .opacity-0  { opacity: 0 !important; }
-        .opacity-80 { opacity: 0.8 !important; }
-
-        /* Z-index */
-        .z-\[9999\] { z-index: 9999 !important; }
-
-        /* Transition & Animation */
-        .transition-opacity { transition-property: opacity !important; transition-timing-function: cubic-bezier(0.4,0,0.2,1) !important; }
-        .duration-500       { transition-duration: 500ms !important; }
-        .animate-spin       { animation: spin 1s linear infinite !important; }
-    </style>
+    <!-- Tailwind CSS — versi production (tidak ada warning CDN) -->
+    <script>
+        // Config harus didefinisikan SEBELUM Tailwind dimuat
+        window.tailwind = window.tailwind || {};
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        pi: {
+                            purple: '#8B5CF6',
+                            dark: '#7C3AED',
+                            light: '#A78BFA',
+                            accent: '#F59E0B'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.17/lib/index.min.js" 
+            onerror="this.onerror=null;this.src='https://unpkg.com/tailwindcss@3.4.17/lib/index.min.js'"></script>
     
     <style>
         * { 
@@ -4703,11 +4689,6 @@ async function init() {
             currentUser = JSON.parse(savedUser);
             userRole = currentUser.role || 'user';
             logDebug("Restored user session: " + currentUser.username);
-            // FIX BUG-2: Restore flag isPiAuthenticated agar guard payment tidak block user
-            // yang sudah pernah login Pi sebelumnya (session masih ada di localStorage)
-            if (currentUser.authType === 'pi' || currentUser.authType === 'pi_manual') {
-                isPiAuthenticated = true;
-            }
             // Langsung update UI dengan data cache - tidak perlu tunggu network
             updateUI();
             updateCartUI();
@@ -4769,12 +4750,6 @@ async function init() {
                 // Muat semua data admin
                 loadDataFromFirebase();
                 updateAdminSosialBadge();
-            }
-
-            // FIX BUG-1: Muat data (termasuk orders) untuk user biasa yang restore session
-            // Sebelumnya hanya admin yang memanggil loadDataFromFirebase() di sini!
-            if (!_isAdminRestore) {
-                loadDataFromFirebase();
             }
 
             // Refresh SGT dari Firestore dengan strategi multi-fallback (v3)
@@ -5434,7 +5409,7 @@ function handlePiAuthError(error, loginBtn, originalHTML) {
     // Reset state untuk memungkinkan retry
     isPiSDKReady = false;
     piInitPromise = null;
-    piInitAttempts = 0; // FIX BUG-3: selalu reset attempts agar retry bisa jalan dari awal
+    piInitAttempts = 0;
     
     if (msg.includes('consent') || msg.includes('cancel') || msg.includes('dibatalkan')) {
         showToast('Login dibatalkan', 'warning');
@@ -5541,9 +5516,6 @@ window.manualPiLogin = async function() {
         
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
         
-        // FIX BUG-4: set isPiAuthenticated agar guard payment tidak block user manual login
-        isPiAuthenticated = true;
-
         await loadSGTDataFixed();
         listenUserSGTBalanceFixed(targetUid);
         
