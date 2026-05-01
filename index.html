@@ -3610,23 +3610,13 @@ async function handleSSO() {
     // Ada token SSO - tampilkan loader sementara proses login
     if (loader) loader.style.display = 'flex';
 
-    // Safety net: paksa sembunyikan loader setelah 8 detik apapun yang terjadi
-    const ssoSafetyTimer = setTimeout(() => {
-        if (loader) { loader.classList.add('opacity-0'); setTimeout(() => { loader.style.display = 'none'; }, 500); }
-        logDebug('[SSO] Safety timer: loader dipaksa sembunyikan');
-    }, 8000);
-
     try {
-        await Promise.race([
-            signInWithCustomToken(auth, authToken),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('SSO timeout 10 detik')), 10000))
-        ]);
+        await signInWithCustomToken(auth, authToken);
         logDebug("SSO login berhasil");
         window.history.replaceState({}, document.title, window.location.pathname);
     } catch (error) {
         logDebug("SSO gagal: " + error.message);
     } finally {
-        clearTimeout(ssoSafetyTimer);
         if (loader) {
             loader.classList.add('opacity-0');
             setTimeout(() => { loader.style.display = 'none'; }, 500);
@@ -3691,6 +3681,22 @@ async function loadSGTData() {
 // ============================================
 // SGT LOAD FIXED - Multi-Strategy Fallback (v3)
 // ============================================
+// Helper: getDoc dengan timeout agar tidak hang di Pi Browser
+function getDocWithTimeout(docRef, ms = 8000) {
+    return Promise.race([
+        getDoc(docRef),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore getDoc timeout')), ms))
+    ]);
+}
+
+// Helper: getDocs dengan timeout
+function getDocsWithTimeout(q, ms = 8000) {
+    return Promise.race([
+        getDocs(q),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore getDocs timeout')), ms))
+    ]);
+}
+
 async function loadSGTDataFixed() {
     if (!currentUser) {
         logDebug('[SGT-v3] No currentUser');
@@ -3710,10 +3716,10 @@ async function loadSGTDataFixed() {
     } catch(e) {}
     
     try {
-        // Strategy 1: Baca dengan UID utama (PI UID)
+        // Strategy 1: Baca dengan UID utama (PI UID) — dengan timeout 8 detik
         if (db && uid) {
             const userRef = doc(db, 'users', uid);
-            const userSnap = await getDoc(userRef);
+            const userSnap = await getDocWithTimeout(userRef, 8000);
             
             if (userSnap.exists()) {
                 const data = userSnap.data();
@@ -3727,10 +3733,11 @@ async function loadSGTDataFixed() {
             }
         }
         
-        // Strategy 2: Cari by username
+        // Strategy 2: Cari by username — dengan timeout 8 detik
         if (db && username) {
-            const snap = await getDocs(
-                query(collection(db, 'users'), where('username', '==', username), limit(1))
+            const snap = await getDocsWithTimeout(
+                query(collection(db, 'users'), where('username', '==', username), limit(1)),
+                8000
             );
             if (!snap.empty) {
                 const data = snap.docs[0].data();
@@ -4777,15 +4784,6 @@ async function init() {
     // Tampilkan loading hanya jika belum ada user cache (first time load)
     if (!currentUser && loading) loading.style.display = 'flex';
 
-    // SAFETY NET GLOBAL: paksa sembunyikan loadingOverlay setelah 15 detik apapun yang terjadi
-    const globalLoadingSafety = setTimeout(() => {
-        const lo = document.getElementById('loadingOverlay');
-        if (lo && lo.style.display !== 'none') {
-            lo.style.display = 'none';
-            logDebug('[INIT] Safety timer: loadingOverlay dipaksa sembunyikan setelah 15 detik');
-        }
-    }, 15000);
-
     try {
         detectPiEnv();
 
@@ -4855,8 +4853,6 @@ async function init() {
     } catch (e) {
         logDebug("Init error: " + e.message);
         console.error("INIT ERROR:", e);
-        // Pastikan loading overlay selalu hilang saat error
-        if (loading) loading.style.display = 'none';
         if (loading) {
             loading.innerHTML = `
                 <div style="text-align:center; padding:20px;">
@@ -4870,7 +4866,6 @@ async function init() {
         }
     } finally {
         // SELALU sembunyikan loading overlay setelah init selesai
-        clearTimeout(globalLoadingSafety);
         if (loading) loading.style.display = 'none';
     }
 }
@@ -4879,7 +4874,7 @@ async function init() {
 async function verifyUserSession() {
     if (!currentUser?.uid || !db) return;
     try {
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        const userDoc = await getDocWithTimeout(doc(db, 'users', currentUser.uid), 8000);
         if (userDoc.exists()) {
             const data = userDoc.data();
             // Update data terbaru ke currentUser
@@ -4944,13 +4939,10 @@ async function initPiSDKRobust() {
                     continue;
                 }
 
-                await Promise.race([
-                    window.Pi.init({
-                        version: "2.0",
-                        sandbox: USE_SANDBOX
-                    }),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Pi.init timeout 8 detik')), 8000))
-                ]);
+                await window.Pi.init({
+                    version: "2.0",
+                    sandbox: USE_SANDBOX
+                });
 
                 isPiSDKReady = true;
                 isPiBrowser  = true;
@@ -5326,10 +5318,28 @@ async function withPiTimeout(promise, timeoutMs = 30000, operationName = 'Pi ope
 
 window.authenticatePi = async function() {
     logDebug("[AUTH-v3] authenticatePi dipanggil");
-
-    // Tampilkan loading state pada tombol LEBIH AWAL
+    
+    // Step 1: Inisialisasi Pi SDK dengan retry
+    const sdkReady = await initPiSDKRobust();
+    
+    if (!sdkReady) {
+        logDebug('[AUTH-v3] Pi SDK tidak tersedia, menampilkan fallback');
+        showToast('Pi Browser tidak terdeteksi. Gunakan login manual.', 'warning');
+        showManualLoginFallback();
+        return;
+    }
+    
+    // Step 2: Validasi environment
+    if (!isPiBrowser) {
+        showToast('Login Pi hanya tersedia di Pi Browser', 'warning');
+        showManualLoginFallback();
+        return;
+    }
+    
+    // Step 3: Tampilkan loading state pada tombol
     const loginBtn = document.querySelector('.login-option.pi');
     const originalBtnHTML = loginBtn ? loginBtn.innerHTML : null;
+    
     if (loginBtn) {
         loginBtn.innerHTML = `
             <div style="width:60px;height:60px;margin:0 auto 16px;">
@@ -5340,67 +5350,39 @@ window.authenticatePi = async function() {
         `;
         loginBtn.style.pointerEvents = 'none';
     }
-
-    // Safety: selalu restore tombol setelah 35 detik apapun yg terjadi
-    const btnSafetyTimer = setTimeout(() => {
-        if (loginBtn && originalBtnHTML) {
-            loginBtn.innerHTML = originalBtnHTML;
-            loginBtn.style.pointerEvents = 'auto';
-        }
-        logDebug('[AUTH-v3] Safety timer: tombol login di-restore');
-    }, 35000);
-
+    
     try {
-        // Step 1: Inisialisasi Pi SDK dengan retry
-        const sdkReady = await initPiSDKRobust();
-
-        if (!sdkReady) {
-            logDebug('[AUTH-v3] Pi SDK tidak tersedia, menampilkan fallback');
-            showToast('Pi Browser tidak terdeteksi. Gunakan login manual.', 'warning');
-            showManualLoginFallback();
-            return;
-        }
-
-        // Step 2: Validasi environment
-        if (!isPiBrowser) {
-            showToast('Login Pi hanya tersedia di Pi Browser', 'warning');
-            showManualLoginFallback();
-            return;
-        }
-
         showToast('Menghubungkan ke Pi Network...', 'info');
-
+        
         const scopes = ['username', 'payments'];
-
+        
         const onIncompletePaymentFound = async (payment) => {
             logDebug("[AUTH-v3] Incomplete payment: " + payment?.identifier);
-            try {
-                await handleIncompletePayment(payment);
+            try { 
+                await handleIncompletePayment(payment); 
             } catch (err) {
                 logDebug("[AUTH-v3] Handle incomplete error: " + err.message);
             }
         };
-
-        // Timeout 30 detik
+        
+        // PERBAIKAN: Timeout 30 detik (bukan 60) - user tidak sabar menunggu
         const authResult = await Promise.race([
             window.Pi.authenticate(scopes, onIncompletePaymentFound),
-            new Promise((_, reject) =>
+            new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('Timeout: Pi auth terlalu lama')), 30000)
             )
         ]);
-
+        
         if (!authResult?.user) {
             throw new Error('Auth result tidak valid - user object hilang');
         }
-
-        // Step 3: Proses hasil auth
+        
+        // Step 4: Proses hasil auth
         await processPiAuthSuccess(authResult);
         
     } catch (error) {
         logDebug("[AUTH-v3] ❌ Auth error: " + error.message);
         handlePiAuthError(error, loginBtn, originalBtnHTML);
-    } finally {
-        clearTimeout(btnSafetyTimer);
     }
 };
 
@@ -5648,14 +5630,15 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
     
     try {
         const userRef = doc(db, 'users', piUid);
-        const userSnap = await getDoc(userRef);
+        const userSnap = await getDocWithTimeout(userRef, 8000);
         
         if (!userSnap.exists()) {
             logDebug(`[SGT-v3] Dokumen baru: ${piUid}`);
             
             // Cari dokumen lama dengan username sama
-            const oldSnap = await getDocs(
-                query(collection(db, 'users'), where('username', '==', username), limit(10))
+            const oldSnap = await getDocsWithTimeout(
+                query(collection(db, 'users'), where('username', '==', username), limit(10)),
+                8000
             );
             
             let oldBalance = 0;
