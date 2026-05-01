@@ -122,94 +122,65 @@
     })();
     </script>
 
-    <!-- Pi SDK - hanya dimuat di Pi Browser, gagal diam-diam di browser biasa -->
+    <!-- Pi SDK -->
     <script>
     window.addEventListener('unhandledrejection', function(event) {
         var msg = (event.reason && event.reason.message) ? event.reason.message : String(event.reason || '');
         if (msg.indexOf('Messaging promise') !== -1 || msg.indexOf('timed out') !== -1) {
             event.preventDefault();
-            // suppress normal: Pi SDK timeout di luar Pi Browser
+            console.warn('[Pi SDK] Timeout suppressed (normal di luar Pi Browser)');
         }
     });
-    // Patch console.warn: tahan pesan Pi SDK agar tidak muncul di console production
-    (function() {
-        var _warn = console.warn.bind(console);
-        console.warn = function() {
-            var msg = Array.prototype.join.call(arguments, ' ');
-            if (msg.indexOf('[Pi SDK]') !== -1 ||
-                msg.indexOf('cdn.tailwindcss') !== -1 ||
-                msg.indexOf('Messaging promise') !== -1) return;
-            _warn.apply(console, arguments);
-        };
+    </script>
+    <!-- Pi SDK — retry loader, hanya load di Pi Browser -->
+    <script>
+    (function loadPiSDK() {
+        var ua = navigator.userAgent || '';
+        var isPiBrowser = ua.includes('PiBrowser') || ua.includes('MinepiApp');
+        if (!isPiBrowser && window.location.hostname === 'localhost') return;
+        var urls = ['https://sdk.minepi.com/pi-sdk.js', 'https://cdn.minepi.com/pi-sdk.js'];
+        var attempts = 0;
+        function tryLoad(i) {
+            if (i >= urls.length || attempts >= 3) return;
+            attempts++;
+            var s = document.createElement('script');
+            s.src = urls[i];
+            s.async = true;
+            s.onerror = function() { setTimeout(function(){ tryLoad(i+1); }, 500); };
+            document.head.appendChild(s);
+        }
+        tryLoad(0);
     })();
     </script>
-    <script src="https://sdk.minepi.com/pi-sdk.js" onerror="/* Pi SDK tidak tersedia di luar Pi Browser - normal */"></script>
-    
+
     <!-- External Libraries -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Tailwind CDN dihapus - diganti CSS utility di bawah agar tidak ada warning produksi -->
 
-    <!-- Tailwind utility replacements (hanya class yang benar-benar dipakai) -->
-    <style>
-        /* Layout */
-        .flex          { display: flex !important; }
-        .flex-col      { flex-direction: column !important; }
-        .items-center  { align-items: center !important; }
-        .justify-center{ justify-content: center !important; }
-        .fixed         { position: fixed !important; }
-        .absolute      { position: absolute !important; }
-        .relative      { position: relative !important; }
-        .inset-0       { top:0; right:0; bottom:0; left:0 !important; }
-        .block         { display: block !important; }
-        .hidden        { display: none !important; }
-
-        /* Spacing */
-        .mt-2  { margin-top: 0.5rem !important; }
-        .mt-6  { margin-top: 1.5rem !important; }
-        .py-2  { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
-        .py-4  { padding-top: 1rem !important; padding-bottom: 1rem !important; }
-
-        /* Sizing */
-        .w-20  { width: 5rem !important; }
-        .h-20  { height: 5rem !important; }
-
-        /* Typography */
-        .text-center  { text-align: center !important; }
-        .text-right   { text-align: right !important; }
-        .text-xs      { font-size: 0.75rem !important; line-height: 1rem !important; }
-        .text-xl      { font-size: 1.25rem !important; line-height: 1.75rem !important; }
-        .text-\[10px\]{ font-size: 10px !important; }
-        .font-bold    { font-weight: 700 !important; }
-        .font-medium  { font-weight: 500 !important; }
-        .tracking-tight { letter-spacing: -0.025em !important; }
-
-        /* Colors */
-        .bg-white           { background-color: #ffffff !important; }
-        .text-emerald-600   { color: #059669 !important; }
-        .text-green-600     { color: #16a34a !important; }
-        .text-slate-400     { color: #94a3b8 !important; }
-        .text-slate-800     { color: #1e293b !important; }
-        .border-emerald-100 { border-color: #d1fae5 !important; }
-        .border-t-emerald-600 { border-top-color: #059669 !important; }
-
-        /* Border & Radius */
-        .border-4     { border-width: 4px !important; border-style: solid; }
-        .border-b     { border-bottom-width: 1px !important; border-bottom-style: solid; }
-        .rounded-full { border-radius: 9999px !important; }
-
-        /* Opacity */
-        .opacity-0  { opacity: 0 !important; }
-        .opacity-80 { opacity: 0.8 !important; }
-
-        /* Z-index */
-        .z-\[9999\] { z-index: 9999 !important; }
-
-        /* Transition & Animation */
-        .transition-opacity { transition-property: opacity !important; transition-timing-function: cubic-bezier(0.4,0,0.2,1) !important; }
-        .duration-500       { transition-duration: 500ms !important; }
-        .animate-spin       { animation: spin 1s linear infinite !important; }
-    </style>
+    <!-- Tailwind CSS config dulu sebelum load script -->
+    <script>
+        window.tailwind = window.tailwind || {};
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        pi: {
+                            purple: '#8B5CF6',
+                            dark: '#7C3AED',
+                            light: '#A78BFA',
+                            accent: '#F59E0B'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                    }
+                }
+            }
+        };
+    </script>
+    <!-- Tailwind production build — tanpa warning CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.17/lib/index.min.js"
+            onerror="this.onerror=null;this.src='https://unpkg.com/tailwindcss@3.4.17/lib/index.min.js'"></script>
     
     <style>
         * { 
@@ -1200,10 +1171,22 @@
         }
         .btn-sgt:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(245,158,11,0.45); }
     </style>
-<!-- v0-runtime-dist.js dihapus: hanya untuk Vercel v0 sandbox, menyebabkan 404 --></head>
+<!-- v0-runtime-dist.js dihapus: hanya untuk Vercel v0 sandbox, menyebabkan 404 -->
+    <!-- ===== SAGATAMA ESCROW SMART CONTRACT CONFIG ===== -->
+    <script>
+    const ESCROW_CONFIG = {
+        CONTRACT_ID: 'CBVEC4J5TNRDNEEEFX5ILD7WXZYZNSFHCMOF7B5UIKIBICGRIT4AXZTD',
+        NETWORK: 'testnet',
+        NETWORK_PASSPHRASE: 'Test SDF Network ; September 2015',
+        RPC_URL: 'https://soroban-testnet.stellar.org',
+        TOKEN_ID: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+        ADMIN_ADDRESS: 'GCYVWDQ2YFSK3R3BDJIACAFNLQSPTMYOIZ2JHPJRNF2IMZ2FTADDPYJ4',
+    };
+    </script>
+</head>
 <body>
 
-<div id="loader-sso" class="fixed inset-0 bg-white z-[9999] transition-opacity duration-500" style="display:none; flex-direction:column; align-items:center; justify-content:center;">
+<div id="loader-sso" class="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center transition-opacity duration-500" style="display:none;">
     <div class="relative">
         <div class="w-20 h-20 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin"></div>
         <div class="absolute inset-0 flex items-center justify-center">
@@ -1465,6 +1448,36 @@
                             <i class="fas fa-gift" style="margin-right:5px;"></i>Tukar Reward
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <!-- SGT Transactions History Panel -->
+            <div style="background:white;border-radius:16px;padding:16px;margin-bottom:16px;border:1px solid #E2E8F0;">
+                <h3 style="font-weight:800;color:#1F2937;font-size:14px;margin-bottom:12px;">
+                    <i class="fas fa-coins" style="color:#D97706;margin-right:8px;"></i>Riwayat SGT
+                </h3>
+                <div id="sgtTransactionHistory">
+                    <p style="font-size:12px;color:#9CA3AF;text-align:center;padding:12px;">Memuat...</p>
+                </div>
+            </div>
+
+            <!-- Pi Network History Panel -->
+            <div style="background:white;border-radius:16px;padding:16px;margin-bottom:16px;border:1px solid #E2E8F0;">
+                <h3 style="font-weight:800;color:#1F2937;font-size:14px;margin-bottom:12px;">
+                    <i class="fas fa-receipt" style="color:#8B5CF6;margin-right:8px;"></i>Riwayat Pembayaran Pi
+                </h3>
+                <div id="piNetworkHistory">
+                    <p style="font-size:12px;color:#9CA3AF;text-align:center;padding:12px;">Memuat...</p>
+                </div>
+            </div>
+
+            <!-- SGT Sosial History Panel -->
+            <div style="background:white;border-radius:16px;padding:16px;margin-bottom:16px;border:1px solid #E2E8F0;">
+                <h3 style="font-weight:800;color:#1F2937;font-size:14px;margin-bottom:12px;">
+                    <i class="fas fa-hand-holding-heart" style="color:#059669;margin-right:8px;"></i>Riwayat SGT Sosial
+                </h3>
+                <div id="sgtSosialHistory">
+                    <p style="font-size:12px;color:#9CA3AF;text-align:center;padding:12px;">Memuat...</p>
                 </div>
             </div>
 
@@ -3315,7 +3328,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 // ============================================
 // ERROR HANDLER GLOBAL
@@ -3608,7 +3621,7 @@ async function handleSSO() {
     }
 
     // Ada token SSO - tampilkan loader sementara proses login
-    if (loader) { loader.style.display = 'flex'; loader.style.flexDirection = 'column'; loader.style.alignItems = 'center'; loader.style.justifyContent = 'center'; }
+    if (loader) loader.style.display = 'flex';
 
     try {
         await signInWithCustomToken(auth, authToken);
@@ -3681,39 +3694,9 @@ async function loadSGTData() {
 // ============================================
 // SGT LOAD FIXED - Multi-Strategy Fallback (v3)
 // ============================================
-// Helper: getDoc dengan timeout agar tidak hang di Pi Browser
-function getDocWithTimeout(docRef, ms = 8000) {
-    return Promise.race([
-        getDoc(docRef),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore getDoc timeout')), ms))
-    ]);
-}
-
-// Helper: getDocs dengan timeout
-function getDocsWithTimeout(q, ms = 8000) {
-    return Promise.race([
-        getDocs(q),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore getDocs timeout')), ms))
-    ]);
-}
-
 async function loadSGTDataFixed() {
     if (!currentUser) {
         logDebug('[SGT-v3] No currentUser');
-        return;
-    }
-
-    // Admin: skip Firestore, langsung pakai localStorage (Pi Browser blokir firestore.googleapis.com)
-    const isAdminUser = currentUser.role === 'admin' || currentUser.username === 'sagatama_admin';
-    if (isAdminUser) {
-        logDebug('[SGT-v3] Admin: skip Firestore, pakai localStorage');
-        try {
-            const bal = localStorage.getItem('sgt_balance_' + currentUser.uid);
-            const tx  = localStorage.getItem('sgt_transactions_' + currentUser.uid);
-            if (bal) sgtBalance = parseInt(bal) || 0;
-            if (tx)  sgtTransactions = JSON.parse(tx);
-        } catch(e) {}
-        updateSGTUI();
         return;
     }
     
@@ -3730,10 +3713,10 @@ async function loadSGTDataFixed() {
     } catch(e) {}
     
     try {
-        // Strategy 1: Baca dengan UID utama (PI UID) — dengan timeout 8 detik
+        // Strategy 1: Baca dengan UID utama (PI UID)
         if (db && uid) {
             const userRef = doc(db, 'users', uid);
-            const userSnap = await getDocWithTimeout(userRef, 5000);
+            const userSnap = await getDoc(userRef);
             
             if (userSnap.exists()) {
                 const data = userSnap.data();
@@ -3747,11 +3730,10 @@ async function loadSGTDataFixed() {
             }
         }
         
-        // Strategy 2: Cari by username — dengan timeout 8 detik
+        // Strategy 2: Cari by username
         if (db && username) {
-            const snap = await getDocsWithTimeout(
-                query(collection(db, 'users'), where('username', '==', username), limit(1)),
-                8000
+            const snap = await getDocs(
+                query(collection(db, 'users'), where('username', '==', username), limit(1))
             );
             if (!snap.empty) {
                 const data = snap.docs[0].data();
@@ -3826,33 +3808,74 @@ function updateSGTUI() {
     const pt = document.getElementById('rewardProgressText');
     if (pt) pt.textContent = currentProgress + ' / ' + nextTarget + ' SGT';
 
+    // Update supply stats (burn, fee pool) setiap buka wallet
+    loadSupplyStats().catch(()=>{});
     renderSGTTransactionHistory();
 }
 
 function renderSGTTransactionHistory() {
     const container = document.getElementById('sgtTransactionHistory');
     if (!container) return;
-    if (sgtTransactions.length === 0) {
-        container.innerHTML = `<div class="empty-state"><i class="fas fa-coins"></i><p>Belum ada transaksi SGT</p></div>`;
+
+    // Load dari Firestore sgt_transactions jika tersedia
+    if (db && currentUser) {
+        const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
+        const txRef = collection(db, 'sgt_transactions');
+        // Query cover semua field ownership
+        Promise.all([
+            getDocs(query(txRef, where('firebaseUid', '==', fbUid || ''), orderBy('timestamp','desc'), limit(30))).catch(()=>({docs:[]})),
+            getDocs(query(txRef, where('userId', '==', currentUser.uid || ''), orderBy('timestamp','desc'), limit(30))).catch(()=>({docs:[]})),
+        ]).then(([snap1, snap2]) => {
+            // Gabung dan dedupe
+            const seen = new Set();
+            const txs = [...snap1.docs, ...snap2.docs]
+                .filter(d => { if (seen.has(d.id)) return false; seen.add(d.id); return true; })
+                .map(d => ({id: d.id, ...d.data()}))
+                .sort((a,b) => (b.timestamp?.seconds||0) - (a.timestamp?.seconds||0));
+
+            if (txs.length > 0) {
+                container.innerHTML = txs.map(t => {
+                    const isEarn = ['earn','mint','reward','escrow_release','referral'].includes(t.type) || (t.to === fbUid || t.to === currentUser.uid);
+                    const date = t.timestamp?.toDate ? t.timestamp.toDate().toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '-';
+                    return `<div style="background:white;border-radius:12px;padding:12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;border:1px solid #E2E8F0;">
+                        <div style="width:36px;height:36px;background:${isEarn?'#D1FAE5':'#FEE2E2'};border-radius:9px;display:flex;align-items:center;justify-content:center;color:${isEarn?'#059669':'#DC2626'};flex-shrink:0;">
+                            <i class="fas ${isEarn?'fa-arrow-down':'fa-arrow-up'}" style="font-size:13px;"></i>
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <p style="font-weight:700;color:#1F2937;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.description||t.type||'SGT Transfer'}</p>
+                            <p style="font-size:10px;color:#9CA3AF;">${date}</p>
+                        </div>
+                        <p style="font-weight:800;font-size:13px;color:${isEarn?'#059669':'#DC2626'};flex-shrink:0;">${isEarn?'+':'-'}${Math.abs(t.amount||0).toLocaleString()} SGT</p>
+                    </div>`;
+                }).join('');
+                return;
+            }
+            // Fallback ke local sgtTransactions
+            _renderSGTLocal(container);
+        }).catch(() => _renderSGTLocal(container));
+        return;
+    }
+    _renderSGTLocal(container);
+}
+
+function _renderSGTLocal(container) {
+    if (!sgtTransactions || sgtTransactions.length === 0) {
+        container.innerHTML = `<div style="text-align:center;padding:20px;color:#9CA3AF;"><i class="fas fa-coins" style="font-size:32px;margin-bottom:8px;display:block;"></i><p style="font-size:13px;">Belum ada transaksi SGT</p></div>`;
         return;
     }
     container.innerHTML = sgtTransactions.map(t => {
         const isEarn = t.type === 'earn';
-        const date = t.date ? new Date(t.date).toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'}) : '-';
-        return `
-            <div style="background:white; border-radius:12px; padding:14px; margin-bottom:8px; display:flex; align-items:center; gap:12px; border:1px solid #E2E8F0;">
-                <div style="width:40px; height:40px; background:${isEarn ? '#FEF3C7' : '#FEE2E2'}; border-radius:10px; display:flex; align-items:center; justify-content:center; color:${isEarn ? '#D97706' : '#DC2626'}; font-size:16px; flex-shrink:0;">
-                    <i class="fas ${isEarn ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
-                </div>
-                <div style="flex:1; min-width:0;">
-                    <p style="font-weight:700; color:#1F2937; font-size:13px;">${t.description || (isEarn ? 'SGT Diterima' : 'SGT Digunakan')}</p>
-                    <p style="font-size:11px; color:#64748B;">${date}</p>
-                </div>
-                <div style="text-align:right; flex-shrink:0;">
-                    <p style="font-weight:800; font-size:15px; color:${isEarn ? '#059669' : '#DC2626'};">${isEarn ? '+' : '-'}${t.amount} SGT</p>
-                </div>
+        const date = t.date ? new Date(t.date).toLocaleDateString('id-ID', {day:'numeric',month:'short',year:'numeric'}) : '-';
+        return `<div style="background:white;border-radius:12px;padding:12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;border:1px solid #E2E8F0;">
+            <div style="width:36px;height:36px;background:${isEarn?'#D1FAE5':'#FEE2E2'};border-radius:9px;display:flex;align-items:center;justify-content:center;color:${isEarn?'#059669':'#DC2626'};flex-shrink:0;">
+                <i class="fas ${isEarn?'fa-arrow-down':'fa-arrow-up'}" style="font-size:13px;"></i>
             </div>
-        `;
+            <div style="flex:1;min-width:0;">
+                <p style="font-weight:700;color:#1F2937;font-size:12px;">${t.description||(isEarn?'SGT Diterima':'SGT Digunakan')}</p>
+                <p style="font-size:10px;color:#9CA3AF;">${date}</p>
+            </div>
+            <p style="font-weight:800;font-size:13px;color:${isEarn?'#059669':'#DC2626'};flex-shrink:0;">${isEarn?'+':'-'}${t.amount} SGT</p>
+        </div>`;
     }).join('');
 }
 
@@ -3905,7 +3928,22 @@ window.burnSGTFromSupply = async function burnSGTFromSupply(amount, reason) {
 // ============================================
 async function awardSGT(piAmount, description) {
     if (!currentUser) { logDebug('[awardSGT] Skip: tidak ada currentUser'); return 0; }
-    if (piAmount < sgtMinPurchase) { logDebug('[awardSGT] Skip: piAmount terlalu kecil'); return 0; }
+
+    // FIX TESTNET: Pi testnet amount selalu 0 karena pricePi produk = 0
+    // Gunakan minimum 0.1 Pi agar SGT tetap diberikan saat testing
+    if (piAmount <= 0) {
+        const isTestnet = (typeof USE_SANDBOX !== 'undefined' && USE_SANDBOX) ||
+                          (typeof ESCROW_CONFIG !== 'undefined' && ESCROW_CONFIG.NETWORK === 'testnet');
+        if (isTestnet) {
+            piAmount = 0.1; // minimum testnet amount
+            logDebug('[awardSGT] Testnet: amount 0 → fallback 0.1 Pi');
+        } else {
+            logDebug('[awardSGT] Skip: piAmount 0 di mainnet');
+            return 0;
+        }
+    }
+
+    if (piAmount < sgtMinPurchase) { logDebug('[awardSGT] Skip: piAmount terlalu kecil (' + piAmount + ' < ' + sgtMinPurchase + ')'); return 0; }
 
     const tier        = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05, name: 'Bronze' };
     const baseSGT     = Math.floor(piAmount * sgtRatePerPi);
@@ -3928,18 +3966,13 @@ async function awardSGT(piAmount, description) {
 
     // Credit to user
     sgtBalance += userShare;
-    const txEntry = {
+    sgtTransactions.unshift({
         type: 'earn', amount: userShare,
         description: description || 'Reward belanja',
-        date: new Date().toISOString(),
-        userId: currentUser.uid,
-        from: currentUser.uid,    // FIX: field 'from' wajib ada agar listenSGTTransactions query cocok
-        to: currentUser.uid,
+        date: new Date().toISOString(), userId: currentUser.uid,
         tier: tier.name, tierBonus, feeDeducted: feeAmount,
-        baseSGT,
-        escrow: true              // SGT diberikan setelah escrow released
-    };
-    sgtTransactions.unshift(txEntry);
+        baseSGT
+    });
 
     // Simpan ke localStorage dulu (instant, tidak tergantung Firestore)
     try {
@@ -3963,24 +3996,6 @@ async function awardSGT(piAmount, description) {
 
     // Simpan ke Firestore (forceFirestore=true karena ini transaksi penting)
     saveSGTData(true);
-
-    // FIX: Tulis ke sgt_logs agar riwayat admin muncul di panel SGT admin
-    if (db) {
-        addDoc(collection(db, 'sgt_logs'), {
-            type: 'earn_reward',
-            targetUser: currentUser.username || currentUser.uid,
-            targetUserId: currentUser.uid,
-            amount: userShare,
-            baseSGT,
-            tierBonus,
-            feeDeducted: feeAmount,
-            tier: tier.name,
-            description: description || 'Reward belanja Pi',
-            escrowFlow: true,
-            timestamp: serverTimestamp()
-        }).catch(e => logDebug('[awardSGT] sgt_logs write skip: ' + e.message));
-    }
-
     updateSGTUI();
     if (typeof updateSosialUI === 'function') updateSosialUI();
     showToast(`+${userShare.toLocaleString()} SGT (Tier ${tier.name}) 🎉`, 'success');
@@ -3989,7 +4004,14 @@ async function awardSGT(piAmount, description) {
 }
 
 function calculateSGTReward(piAmount) {
-    if (!piAmount || piAmount < sgtMinPurchase) return 0;
+    // Testnet: gunakan minimum 0.1 jika piAmount = 0
+    if (!piAmount || piAmount <= 0) {
+        const isTestnet = (typeof USE_SANDBOX !== 'undefined' && USE_SANDBOX) ||
+                          (typeof ESCROW_CONFIG !== 'undefined' && ESCROW_CONFIG.NETWORK === 'testnet');
+        if (isTestnet) piAmount = 0.1;
+        else return 0;
+    }
+    if (piAmount < sgtMinPurchase) return 0;
     const tier    = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05 };
     const base    = Math.floor(piAmount * sgtRatePerPi);
     const bonus   = Math.floor(base * tier.rate);
@@ -4387,34 +4409,22 @@ window._real_.refreshAdminSGTStats = async function() {
 window._real_.loadSGTLogs = async function() {
     try {
         const logsSnapshot = await getDocs(
-            query(collection(db, 'sgt_logs'), orderBy('timestamp', 'desc'), limit(50))
+            query(collection(db, 'sgt_logs'), orderBy('timestamp', 'desc'), limit(10))
         );
 
         let html = '';
-        logsSnapshot.forEach(docSnap => {
-            const log = docSnap.data();
+        logsSnapshot.forEach(doc => {
+            const log = doc.data();
             const date = log.timestamp ? log.timestamp.toDate().toLocaleString('id-ID') : 'Pending';
-            const typeLabel = {
-                'earn_reward':         '🎁 Reward',
-                'manual_distribution': '👤 Manual',
-                'burn_manual':         '🔥 Burn',
-                'transfer':            '↔️ Transfer',
-                'redeem':              '🛒 Redeem',
-                'staking_reward':      '📈 Staking'
-            }[log.type] || log.type || '-';
-            const amtColor = log.type === 'burn_manual' ? '#DC2626' : '#059669';
-            const amtSign  = log.type === 'burn_manual' ? '-' : '+';
             html += `
-                <tr style="border-bottom:1px solid #F1F5F9;">
-                    <td style="padding:8px 6px;font-size:11px;color:#64748B;">${date}</td>
-                    <td style="padding:8px 6px;font-weight:600;font-size:13px;">@${log.targetUser || log.adminUsername || '-'}</td>
-                    <td style="padding:8px 6px;font-size:12px;color:#8B5CF6;">${typeLabel}</td>
-                    <td style="padding:8px 6px;text-align:right;color:${amtColor};font-weight:700;">${amtSign}${(log.amount||0).toLocaleString()}</td>
+                <tr class="border-b opacity-80">
+                    <td class="py-2 text-[10px]">${date}</td>
+                    <td class="py-2 font-medium">${log.targetUser}</td>
+                    <td class="py-2 text-right text-green-600 font-bold">+${log.amount}</td>
                 </tr>
             `;
         });
-        const tbody = document.getElementById('sgt-logs-body');
-        if (tbody) tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;padding:16px;color:#94a3b8;">Belum ada riwayat SGT.</td></tr>';
+        document.getElementById('sgt-logs-body').innerHTML = html || '<tr><td colspan="3" class="text-center py-4">Belum ada riwayat.</td></tr>';
     } catch (error) {
         logDebug("Gagal load logs: " + error.message);
     }
@@ -4769,11 +4779,6 @@ async function init() {
             currentUser = JSON.parse(savedUser);
             userRole = currentUser.role || 'user';
             logDebug("Restored user session: " + currentUser.username);
-            // FIX BUG-2: Restore flag isPiAuthenticated agar guard payment tidak block user
-            // yang sudah pernah login Pi sebelumnya (session masih ada di localStorage)
-            if (currentUser.authType === 'pi' || currentUser.authType === 'pi_manual') {
-                isPiAuthenticated = true;
-            }
             // Langsung update UI dengan data cache - tidak perlu tunggu network
             updateUI();
             updateCartUI();
@@ -4837,12 +4842,6 @@ async function init() {
                 updateAdminSosialBadge();
             }
 
-            // FIX BUG-1: Muat data (termasuk orders) untuk user biasa yang restore session
-            // Sebelumnya hanya admin yang memanggil loadDataFromFirebase() di sini!
-            if (!_isAdminRestore) {
-                loadDataFromFirebase();
-            }
-
             // Refresh SGT dari Firestore dengan strategi multi-fallback (v3)
             loadSGTDataFixed().catch(e => logDebug("BGround SGT load: " + e.message));
             // Start realtime listener untuk SGT balance updates (hanya non-admin)
@@ -4887,13 +4886,8 @@ async function init() {
 // Verifikasi sesi user masih valid di Firestore (background check)
 async function verifyUserSession() {
     if (!currentUser?.uid || !db) return;
-    // Admin: skip verifikasi Firestore — Pi Browser tidak bisa connect ke firestore.googleapis.com
-    if (currentUser.role === 'admin' || currentUser.username === 'sagatama_admin') {
-        logDebug('[verifySession] Admin: skip Firestore verify');
-        return;
-    }
     try {
-        const userDoc = await getDocWithTimeout(doc(db, 'users', currentUser.uid), 5000);
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
         if (userDoc.exists()) {
             const data = userDoc.data();
             // Update data terbaru ke currentUser
@@ -4996,14 +4990,6 @@ async function initFirebase() {
                     experimentalForceLongPolling: true,
                     useFetchStreams: false
                 });
-                // Aktifkan offline persistence agar data ter-cache lokal
-                // Pi Browser kadang blokir koneksi Firestore — cache jadi fallback otomatis
-                try {
-                    await enableIndexedDbPersistence(db);
-                    logDebug('[Firebase] Offline persistence aktif');
-                } catch(persistErr) {
-                    logDebug('[Firebase] Persistence skip: ' + persistErr.code);
-                }
             }
             logDebug(`Firebase initialized OK (attempt ${attempt})`);
 
@@ -5426,7 +5412,7 @@ async function processPiAuthSuccess(authResult) {
         role: 'buyer',
         accessToken: authResult.accessToken,
         walletAddress: authResult.user.wallet_address || null,
-        authType: 'pi'   // FIX: authType harus ada SEBELUM localStorage agar session restore bisa set isPiAuthenticated
+        authType: 'pi'
     };
     
     localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
@@ -5478,14 +5464,6 @@ async function processPiAuthSuccess(authResult) {
     logDebug("[AUTH-v3] Auth sukses: @" + currentUser.username);
     
     loadDataFromFirebase();
-
-    // Cek escrow payment yang pending setelah login
-    checkPendingEscrow().catch(e => logDebug('[Escrow] post-login check: ' + e.message));
-
-    // Start SGT transactions listener untuk riwayat realtime di wallet user
-    if (currentUser.uid) {
-        listenSGTTransactions(currentUser.uid);
-    }
     
     // Re-filter myOrders setelah login berhasil — cover semua field ownership
     if (orders.length > 0) {
@@ -5521,7 +5499,7 @@ function handlePiAuthError(error, loginBtn, originalHTML) {
     // Reset state untuk memungkinkan retry
     isPiSDKReady = false;
     piInitPromise = null;
-    piInitAttempts = 0; // FIX BUG-3: selalu reset attempts agar retry bisa jalan dari awal
+    piInitAttempts = 0;
     
     if (msg.includes('consent') || msg.includes('cancel') || msg.includes('dibatalkan')) {
         showToast('Login dibatalkan', 'warning');
@@ -5628,9 +5606,6 @@ window.manualPiLogin = async function() {
         
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
         
-        // FIX BUG-4: set isPiAuthenticated agar guard payment tidak block user manual login
-        isPiAuthenticated = true;
-
         await loadSGTDataFixed();
         listenUserSGTBalanceFixed(targetUid);
         
@@ -5657,15 +5632,14 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
     
     try {
         const userRef = doc(db, 'users', piUid);
-        const userSnap = await getDocWithTimeout(userRef, 5000);
+        const userSnap = await getDoc(userRef);
         
         if (!userSnap.exists()) {
             logDebug(`[SGT-v3] Dokumen baru: ${piUid}`);
             
             // Cari dokumen lama dengan username sama
-            const oldSnap = await getDocsWithTimeout(
-                query(collection(db, 'users'), where('username', '==', username), limit(10)),
-                8000
+            const oldSnap = await getDocs(
+                query(collection(db, 'users'), where('username', '==', username), limit(10))
             );
             
             let oldBalance = 0;
@@ -5947,117 +5921,8 @@ window.refreshPiBalance = function() {
 };
 
 // ============================================
-// ESCROW PAYMENT FLOW
-// Pi SDK: buyer → escrow → seller (setelah admin/server release)
+// PERBAIKAN 3: PAYMENT FLOW - Order disimpan SEBELUM cart dibersihkan
 // ============================================
-
-/**
- * Cek status escrow payment yang pending di Firestore
- * Dipanggil saat halaman load / login untuk resolve incomplete escrow
- */
-async function checkPendingEscrow() {
-    if (!currentUser || !db) return;
-    try {
-        const fbUid = currentUser.firebaseUid || auth?.currentUser?.uid;
-        const q = query(
-            collection(db, 'escrow_payments'),
-            where('firebaseUid', '==', fbUid || currentUser.uid),
-            where('status', '==', 'escrow_held'),
-            limit(5)
-        );
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-            logDebug(`[Escrow] Found ${snap.size} held escrow payment(s)`);
-            snap.docs.forEach(d => {
-                const esc = d.data();
-                logDebug(`[Escrow] Held: paymentId=${esc.paymentId} amount=${esc.amount}Pi`);
-            });
-            showToast(`${snap.size} pembayaran escrow menunggu konfirmasi admin`, 'info');
-        }
-    } catch (e) {
-        logDebug('[Escrow] checkPendingEscrow error: ' + e.message);
-    }
-}
-
-/**
- * Simpan record escrow ke Firestore saat dana masuk escrow Pi
- * Dipanggil dari onReadyForServerApproval (dana sudah di-hold Pi)
- */
-async function saveEscrowRecord(paymentId, amount, items) {
-    if (!db) return;
-    const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid || null;
-    const orderId = pendingPayment?.metadata?.orderId || ('ESC_' + Date.now());
-    try {
-        await setDoc(doc(db, 'escrow_payments', paymentId), {
-            paymentId,
-            orderId,
-            amount,
-            items: items || [],
-            customer: currentUser?.username || 'user',
-            customerUid: currentUser?.uid || '',
-            firebaseUid: fbUid || '',
-            status: 'escrow_held',      // Dana ada di escrow Pi — belum ke seller
-            escrowHeldAt: serverTimestamp(),
-            metadata: pendingPayment?.metadata || {}
-        }, { merge: true });
-        logDebug(`[Escrow] Saved escrow record: ${paymentId}`);
-    } catch (e) {
-        logDebug('[Escrow] saveEscrowRecord error: ' + e.message);
-    }
-}
-
-/**
- * Update status escrow setelah server complete (dana dilepas ke seller)
- */
-async function releaseEscrowRecord(paymentId, txid) {
-    if (!db) return;
-    try {
-        await setDoc(doc(db, 'escrow_payments', paymentId), {
-            status: 'escrow_released',  // Dana sudah dilepas ke seller
-            txid,
-            releasedAt: serverTimestamp()
-        }, { merge: true });
-        logDebug(`[Escrow] Released: ${paymentId} | txid=${txid}`);
-    } catch (e) {
-        logDebug('[Escrow] releaseEscrowRecord error: ' + e.message);
-    }
-}
-
-/**
- * Admin: lihat semua escrow yang sedang held
- */
-window.loadEscrowList = async function() {
-    if (!db) return;
-    try {
-        const snap = await getDocs(
-            query(collection(db, 'escrow_payments'), orderBy('escrowHeldAt', 'desc'), limit(50))
-        );
-        const container = document.getElementById('escrow-list-body');
-        if (!container) return;
-        if (snap.empty) {
-            container.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:16px;color:#94a3b8;">Tidak ada escrow aktif</td></tr>';
-            return;
-        }
-        container.innerHTML = snap.docs.map(d => {
-            const e = d.data();
-            const date = e.escrowHeldAt?.toDate ? e.escrowHeldAt.toDate().toLocaleDateString('id-ID') : '-';
-            const statusColor = e.status === 'escrow_held' ? '#F59E0B' : '#10B981';
-            const statusLabel = e.status === 'escrow_held' ? '⏳ Held' : '✅ Released';
-            return `<tr style="border-bottom:1px solid #E2E8F0;">
-                <td style="padding:10px 8px;font-size:12px;">${date}</td>
-                <td style="padding:10px 8px;font-weight:600;">@${e.customer}</td>
-                <td style="padding:10px 8px;text-align:right;color:#8B5CF6;font-weight:700;">${e.amount} π</td>
-                <td style="padding:10px 8px;text-align:center;"><span style="background:${statusColor}20;color:${statusColor};padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700;">${statusLabel}</span></td>
-                <td style="padding:10px 8px;font-size:10px;color:#64748B;">${e.paymentId?.substring(0,12)}...</td>
-            </tr>`;
-        }).join('');
-        logDebug(`[Escrow] Loaded ${snap.size} escrow records`);
-    } catch (e) {
-        logDebug('[Escrow] loadEscrowList error: ' + e.message);
-    }
-};
-
-
 
 /**
  * PERBAIKAN UTAMA: Urutan yang benar:
@@ -6137,7 +6002,7 @@ async function createPiPayment() {
         const callbacks = {
 
             onReadyForServerApproval: async (paymentId) => {
-                logDebug("[Escrow] APPROVAL (dana masuk escrow Pi): " + paymentId);
+                logDebug("APPROVAL: " + paymentId);
 
                 try {
                     const res = await approvePaymentOnServer(paymentId);
@@ -6146,20 +6011,17 @@ async function createPiPayment() {
                         throw new Error(res?.error || 'Approve gagal');
                     }
 
-                    // ESCROW: Dana kini ada di escrow Pi Network — simpan record
-                    await saveEscrowRecord(paymentId, totalPi, cartSnapshot);
-                    showToast('Dana masuk escrow Pi ✅ — memproses pesanan...', 'info');
-                    logDebug("[Escrow] Approve SUCCESS — dana held di escrow");
+                    logDebug("Approve SUCCESS");
 
                 } catch (err) {
-                    logDebug("[Escrow] Approve FAILED: " + err.message);
+                    logDebug("Approve FAILED: " + err.message);
                     showToast('Gagal verifikasi pembayaran', 'error');
                     resetPaymentState();
                 }
             },
 
             onReadyForServerCompletion: async (paymentId, txid) => {
-                logDebug("[Escrow] COMPLETE (escrow dilepas ke seller): " + paymentId + " | txid=" + txid);
+                logDebug("COMPLETE: " + paymentId);
 
                 try {
                     const res = await completePaymentOnServer(paymentId, txid, cartSnapshot);
@@ -6168,10 +6030,7 @@ async function createPiPayment() {
                         throw new Error(res?.error || 'Complete gagal');
                     }
 
-                    // ESCROW: Dana berhasil dilepas dari escrow ke seller
-                    await releaseEscrowRecord(paymentId, txid);
-                    showToast('Escrow released! Pembayaran selesai ✅', 'success');
-                    logDebug("[Escrow] Complete SUCCESS — escrow released");
+                    showToast('Pembayaran berhasil!', 'success');
 
                     cart.length = 0;
                     renderCart?.();
@@ -6179,7 +6038,7 @@ async function createPiPayment() {
                     resetPaymentState();
 
                 } catch (err) {
-                    logDebug("[Escrow] Complete FAILED: " + err.message);
+                    logDebug("Complete FAILED: " + err.message);
                     showToast('Transaksi gagal disimpan', 'error');
                     resetPaymentState();
                 }
@@ -6312,6 +6171,28 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     await saveOrderToFirebase(orderData, paymentId);
     logDebug("Order berhasil disimpan: " + paymentId);
 
+    // Simpan escrow record ke Firestore
+    try {
+        await EscrowService.saveEscrowRecord(paymentId, {
+            orderId: orderData.orderId || paymentId.substring(0, 8),
+            paymentId,
+            txid,
+            buyerUid: fbUidForOrder || currentUser?.uid,
+            buyerUsername: currentUser?.username,
+            amount: finalAmount,
+            status: 'escrow_active',
+            contractId: ESCROW_CONFIG.CONTRACT_ID,
+        });
+        // Tandai order sebagai escrow aktif
+        await setDoc(doc(db, 'orders', paymentId), {
+            escrowStatus: 'active',
+            escrowContractId: ESCROW_CONFIG.CONTRACT_ID,
+            escrowNetwork: ESCROW_CONFIG.NETWORK,
+        }, { merge: true });
+    } catch(escrowErr) {
+        logDebug('Escrow record error (non-kritis): ' + escrowErr.message);
+    }
+
     // Langkah 3: Award SGT (tiered, hard-cap-safe, fee-pool-funded)
     const orderId = pendingPayment?.metadata?.orderId || paymentId.substring(0, 8);
     const actualSGT = await awardSGT(finalAmount, `Reward pesanan #${orderId}`);
@@ -6383,51 +6264,29 @@ async function saveOrderToFirebase(orderData, paymentId) {
 
 function listenSGTTransactions(userId) {
     if (!db || !userId) return;
-    // Query pakai userId (field yang konsisten ada di semua transaksi)
-    // Fallback: jika tidak ada doc dengan userId, render dari sgtTransactions lokal
-    const q = query(
-        collection(db, 'sgt_transactions'),
-        where('userId', '==', userId),
-        orderBy('timestamp', 'desc'),
-        limit(50)
-    );
+    const q = query(collection(db, 'sgt_transactions'), where('from', '==', userId));
     return onSnapshot(q, (snapshot) => {
         const container = document.getElementById('sgtTransactionHistory');
         if (!container) return;
         if (snapshot.empty) {
-            // Fallback ke data lokal jika Firestore kosong
             renderSGTTransactionHistory();
             return;
         }
         container.innerHTML = snapshot.docs.map(docSnap => {
             const tx = docSnap.data();
-            const isEarn = tx.type === 'earn' || tx.type === 'earn_reward' || tx.amount > 0 && !tx.to !== userId;
-            const date = tx.timestamp?.toDate
-                ? tx.timestamp.toDate().toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'})
-                : (tx.date ? new Date(tx.date).toLocaleDateString('id-ID') : '-');
-            const amt = Math.abs(tx.amount || 0);
-            const bgColor = isEarn ? '#FEF3C7' : '#FEE2E2';
-            const iconColor = isEarn ? '#D97706' : '#DC2626';
-            const icon = isEarn ? 'fa-arrow-down' : 'fa-arrow-up';
-            const amtColor = isEarn ? '#059669' : '#DC2626';
-            const prefix = isEarn ? '+' : '-';
-            const label = tx.description || (isEarn ? 'SGT Diterima' : `Transfer ke @${tx.to || '-'}`);
+            const date = tx.timestamp?.toDate ? tx.timestamp.toDate().toLocaleDateString('id-ID',{day:'numeric',month:'short'}) : '-';
             return `<div style="background:white;border-radius:12px;padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;border:1px solid #E2E8F0;">
-                <div style="width:40px;height:40px;background:${bgColor};border-radius:10px;display:flex;align-items:center;justify-content:center;color:${iconColor};font-size:16px;flex-shrink:0;">
-                    <i class="fas ${icon}"></i>
+                <div style="width:40px;height:40px;background:#FEE2E2;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#DC2626;font-size:16px;">
+                    <i class="fas fa-arrow-up"></i>
                 </div>
-                <div style="flex:1;min-width:0;">
-                    <p style="font-weight:700;color:#1F2937;font-size:13px;">${label}</p>
-                    <p style="font-size:11px;color:#64748B;">${date}${tx.tier ? ' · Tier ' + tx.tier : ''}</p>
+                <div style="flex:1;">
+                    <p style="font-weight:700;color:#1F2937;font-size:13px;">Transfer ke @${tx.to || '-'}</p>
+                    <p style="font-size:11px;color:#64748B;">${date}</p>
                 </div>
-                <p style="font-weight:800;font-size:15px;color:${amtColor};flex-shrink:0;">${prefix}${amt.toLocaleString()} SGT</p>
+                <p style="font-weight:800;font-size:15px;color:#DC2626;">-${tx.amount || 0} SGT</p>
             </div>`;
         }).join('');
-    }, (err) => {
-        logDebug("SGT tx listener error: " + err.message);
-        // Fallback ke render lokal jika listener error (index belum siap, dll)
-        renderSGTTransactionHistory();
-    });
+    }, (err) => logDebug("SGT tx listener error: " + err.message));
 }
 
 // ============================================
@@ -6761,20 +6620,109 @@ function renderWallet() {
     } else {
         historyContainer.innerHTML = myTransactions.map(t => {
             const sgtEarned = t.sgtEarned || calculateSGTReward(t.amount || 0);
-            return `<div class="order-item" style="margin-bottom:8px;display:flex;align-items:center;gap:12px;background:white;padding:14px;border-radius:12px;border:1px solid #E2E8F0;">
-                <div style="width:40px;height:40px;background:${t.status === 'completed' ? '#D1FAE5' : '#FEF3C7'};border-radius:10px;display:flex;align-items:center;justify-content:center;color:${t.status === 'completed' ? '#059669' : '#D97706'};flex-shrink:0;">
-                    <i class="fas ${t.status === 'completed' ? 'fa-check' : 'fa-clock'}"></i>
+            const amountDisplay = (t.amount > 0)
+                ? 'π ' + t.amount.toFixed(8)
+                : '<span style="font-size:10px;color:#9CA3AF;">Testnet</span>';
+            const statusColors = {
+                completed: { bg:'#D1FAE5', color:'#059669', icon:'fa-check' },
+                paid:      { bg:'#DBEAFE', color:'#2563EB', icon:'fa-check-circle' },
+                shipped:   { bg:'#EDE9FE', color:'#7C3AED', icon:'fa-truck' },
+                refunded:  { bg:'#FEE2E2', color:'#EF4444', icon:'fa-undo' },
+            };
+            const sc = statusColors[t.status] || { bg:'#FEF3C7', color:'#D97706', icon:'fa-clock' };
+            return `<div style="margin-bottom:8px;display:flex;align-items:center;gap:12px;background:white;padding:14px;border-radius:12px;border:1px solid #E2E8F0;cursor:pointer;" onclick="showOrderDetail('${t.id}')">
+                <div style="width:40px;height:40px;background:${sc.bg};border-radius:10px;display:flex;align-items:center;justify-content:center;color:${sc.color};flex-shrink:0;">
+                    <i class="fas ${sc.icon}"></i>
                 </div>
-                <div style="flex:1;">
-                    <p style="font-weight:700;color:#1F2937;font-size:13px;">${t.items?.length || 0} item • ${getStatusLabel(t.status)}</p>
-                    <p style="font-size:11px;color:#6B7280;">${formatDate(t.createdAt)}</p>
+                <div style="flex:1;min-width:0;">
+                    <p style="font-weight:700;color:#1F2937;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.orderId || t.id?.substring(0,8) || '-'}</p>
+                    <p style="font-size:11px;color:#6B7280;">${t.items?.length || 0} item • ${getStatusLabel(t.status)} • ${formatDate(t.createdAt)}</p>
                     ${sgtEarned > 0 ? `<p style="font-size:10px;color:#D97706;font-weight:700;margin-top:2px;">+${sgtEarned} SGT reward</p>` : ''}
+                    ${t.escrowStatus === 'active' ? `<p style="font-size:10px;color:#F59E0B;font-weight:700;margin-top:2px;"><i class="fas fa-shield-alt"></i> Escrow Aktif</p>` : ''}
                 </div>
-                <p style="font-weight:800;color:#8B5CF6;font-size:14px;">π ${t.amount?.toFixed(8) || '0.00'}</p>
+                <p style="font-weight:800;color:#8B5CF6;font-size:13px;flex-shrink:0;">${amountDisplay}</p>
             </div>`;
         }).join('');
     }
     renderSGTTransactionHistory();
+    renderSGTSosialHistory();
+    renderSGTPiHistory();
+}
+
+// Riwayat Pi Network (orders dari Firestore)
+async function renderSGTPiHistory() {
+    const container = document.getElementById('piNetworkHistory');
+    if (!container) return;
+    const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
+    const myOrds = orders.filter(o =>
+        o.firebaseUid === fbUid ||
+        o.customerUid === currentUser?.uid ||
+        o.userId === fbUid ||
+        o.customer === currentUser?.username
+    ).sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+
+    if (myOrds.length === 0) {
+        container.innerHTML = '<p style="font-size:12px;color:#9CA3AF;text-align:center;padding:16px;">Belum ada transaksi Pi</p>';
+        return;
+    }
+    container.innerHTML = myOrds.map(o => {
+        const sgtEarned = o.sgtEarned || 0;
+        const statusColors = {
+            completed:{bg:'#D1FAE5',color:'#059669',icon:'fa-check'},
+            paid:     {bg:'#DBEAFE',color:'#2563EB',icon:'fa-check-circle'},
+            shipped:  {bg:'#EDE9FE',color:'#7C3AED',icon:'fa-truck'},
+            refunded: {bg:'#FEE2E2',color:'#EF4444',icon:'fa-undo'},
+        };
+        const sc = statusColors[o.status] || {bg:'#FEF3C7',color:'#D97706',icon:'fa-clock'};
+        const amtDisplay = (o.amount > 0) ? 'π ' + parseFloat(o.amount).toFixed(6) : '<span style="font-size:10px;color:#9CA3AF;">Testnet</span>';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:12px;background:white;border-radius:12px;margin-bottom:6px;border:1px solid #E2E8F0;cursor:pointer;" onclick="showOrderDetail('${o.id}')">
+            <div style="width:36px;height:36px;background:${sc.bg};border-radius:9px;display:flex;align-items:center;justify-content:center;color:${sc.color};flex-shrink:0;">
+                <i class="fas ${sc.icon}" style="font-size:13px;"></i>
+            </div>
+            <div style="flex:1;min-width:0;">
+                <p style="font-weight:700;color:#1F2937;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${o.orderId || o.id?.substring(0,10)}</p>
+                <p style="font-size:10px;color:#6B7280;">${o.items?.length||0} item • ${getStatusLabel(o.status)} • ${formatDate(o.createdAt)}</p>
+                ${sgtEarned > 0 ? `<p style="font-size:10px;color:#D97706;font-weight:700;">+${sgtEarned} SGT</p>` : ''}
+                ${o.escrowStatus === 'active' ? `<p style="font-size:10px;color:#F59E0B;font-weight:700;"><i class="fas fa-shield-alt"></i> Escrow Aktif</p>` : ''}
+            </div>
+            <p style="font-weight:800;color:#8B5CF6;font-size:12px;flex-shrink:0;">${amtDisplay}</p>
+        </div>`;
+    }).join('');
+}
+
+// Riwayat SGT Sosial (Baitul Maal, Fee Pool, dll)
+async function renderSGTSosialHistory() {
+    const container = document.getElementById('sgtSosialHistory');
+    if (!container || !db) return;
+    try {
+        const snap = await getDoc(doc(db, 'sgt_config', 'dana_pools'));
+        if (!snap.exists()) {
+            container.innerHTML = '<p style="font-size:12px;color:#9CA3AF;text-align:center;padding:12px;">Belum ada data sosial</p>';
+            return;
+        }
+        const data = snap.data();
+        const pools = [
+            { key: 'baitul_maal', label: 'Baitul Maal', icon: 'fa-hand-holding-heart', color: '#059669' },
+            { key: 'zakat',       label: 'Zakat',        icon: 'fa-mosque',             color: '#7C3AED' },
+            { key: 'beasiswa',    label: 'Beasiswa',     icon: 'fa-graduation-cap',      color: '#2563EB' },
+            { key: 'bansos',      label: 'Bantuan Sosial',icon: 'fa-people-carry',       color: '#D97706' },
+        ];
+        container.innerHTML = pools.map(p => {
+            const val = data[p.key] || 0;
+            return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:white;border-radius:10px;margin-bottom:6px;border:1px solid #E2E8F0;">
+                <div style="width:34px;height:34px;background:${p.color}20;border-radius:8px;display:flex;align-items:center;justify-content:center;color:${p.color};flex-shrink:0;">
+                    <i class="fas ${p.icon}" style="font-size:14px;"></i>
+                </div>
+                <div style="flex:1;">
+                    <p style="font-weight:700;font-size:12px;color:#1F2937;">${p.label}</p>
+                    <p style="font-size:11px;color:#6B7280;">Dana terkumpul</p>
+                </div>
+                <p style="font-weight:800;color:${p.color};font-size:13px;">${val.toLocaleString()} SGT</p>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        logDebug('renderSGTSosialHistory error: ' + e.message);
+    }
 }
 
 function formatDate(timestamp) {
@@ -6852,6 +6800,129 @@ function updateCartUI() {
     if (document.getElementById('cart-view')?.classList.contains('active')) updateCartSummary();
 }
 
+
+
+// ============================================================
+// ESCROW SERVICE — komunikasi dengan Firestore untuk tracking
+// ============================================================
+const EscrowService = {
+    async saveEscrowRecord(orderId, data) {
+        if (!db) return;
+        try {
+            await setDoc(doc(db, 'escrow_records', orderId), {
+                ...data,
+                contractId: ESCROW_CONFIG.CONTRACT_ID,
+                network: ESCROW_CONFIG.NETWORK,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+            logDebug('Escrow record saved: ' + orderId);
+        } catch(e) { logDebug('Escrow save error: ' + e.message); }
+    },
+
+    async updateEscrowStatus(orderId, status, txHash) {
+        if (!db) return;
+        try {
+            await setDoc(doc(db, 'escrow_records', orderId), {
+                status,
+                txHash: txHash || null,
+                updatedAt: serverTimestamp(),
+            }, { merge: true });
+            logDebug('Escrow status updated: ' + orderId + ' → ' + status);
+        } catch(e) { logDebug('Escrow update error: ' + e.message); }
+    }
+};
+
+// ============================================================
+// ESCROW BADGE — tampil di order card
+// ============================================================
+function getEscrowBadge(order) {
+    if (!order.escrowStatus) return '';
+    const doneStatuses = ['completed', 'cancelled', 'failed'];
+    if (doneStatuses.includes(order.status) && order.escrowStatus !== 'refunded') return '';
+    const badges = {
+        'active':   { color: '#F59E0B', bg: '#FEF3C7', icon: 'fa-shield-alt',  text: 'Escrow Aktif' },
+        'released': { color: '#059669', bg: '#D1FAE5', icon: 'fa-check-circle', text: 'Dana Dicairkan' },
+        'refunded': { color: '#EF4444', bg: '#FEE2E2', icon: 'fa-undo',         text: 'Direfund' },
+    };
+    const b = badges[order.escrowStatus];
+    if (!b) return '';
+    return `<span style="background:${b.bg};color:${b.color};font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;margin-top:4px;">
+        <i class="fas ${b.icon}"></i>${b.text}
+    </span>`;
+}
+
+// ============================================================
+// BUYER: Konfirmasi barang diterima → dana cair ke seller
+// ============================================================
+window.buyerReleaseEscrow = async function(orderId) {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return showToast('Order tidak ditemukan', 'error');
+    if (!confirm('✅ Konfirmasi Penerimaan Barang\n\nDana akan dicairkan ke penjual.\nTindakan ini tidak dapat dibatalkan. Lanjutkan?')) return;
+
+    showToast('⛓️ Memproses di blockchain...', 'info');
+    try {
+        await setDoc(doc(db, 'orders', orderId), {
+            status: 'completed',
+            escrowStatus: 'released',
+            escrowReleasedAt: serverTimestamp(),
+            escrowReleasedBy: currentUser?.uid,
+        }, { merge: true });
+        await EscrowService.updateEscrowStatus(orderId, 'released', null);
+        await addDoc(collection(db, 'sgt_transactions'), {
+            type: 'escrow_release', orderId,
+            amount: order.amount,
+            from: currentUser?.uid,
+            firebaseUid: currentUser?.firebaseUid || auth?.currentUser?.uid,
+            description: 'Escrow released: Barang diterima buyer',
+            contractId: ESCROW_CONFIG.CONTRACT_ID,
+            timestamp: serverTimestamp(),
+        });
+        showToast('🎉 Dana berhasil dicairkan ke penjual!', 'success');
+        renderOrders(); renderWallet();
+    } catch(e) {
+        logDebug('Release escrow error: ' + e.message);
+        showToast('Gagal release escrow: ' + e.message, 'error');
+    }
+};
+
+// ============================================================
+// ADMIN: Refund dana ke buyer
+// ============================================================
+window.adminRefundEscrow = async function(orderId) {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return showToast('Order tidak ditemukan', 'error');
+    if (!checkAdmin()) return showToast('Akses ditolak', 'error');
+    const reason = prompt('Alasan refund (wajib diisi):');
+    if (!reason) return showToast('Alasan refund wajib diisi', 'error');
+
+    showToast('⛓️ Memproses refund...', 'info');
+    try {
+        await setDoc(doc(db, 'orders', orderId), {
+            status: 'refunded',
+            escrowStatus: 'refunded',
+            escrowRefundedAt: serverTimestamp(),
+            escrowRefundedBy: currentUser?.uid,
+            refundReason: reason,
+        }, { merge: true });
+        await EscrowService.updateEscrowStatus(orderId, 'refunded', null);
+        await addDoc(collection(db, 'sgt_transactions'), {
+            type: 'escrow_refund', orderId,
+            adminUid: currentUser?.uid,
+            refundReason: reason,
+            description: 'Escrow refunded by admin: ' + reason,
+            contractId: ESCROW_CONFIG.CONTRACT_ID,
+            timestamp: serverTimestamp(),
+        });
+        showToast('✅ Refund berhasil!', 'success');
+        renderOrders();
+        if (typeof renderAdminOrders === 'function') renderAdminOrders();
+    } catch(e) {
+        logDebug('Refund escrow error: ' + e.message);
+        showToast('Gagal refund: ' + e.message, 'error');
+    }
+};
+
 function renderOrders() {
     const container = document.getElementById('ordersList');
     if (!container) return;
@@ -6881,6 +6952,7 @@ function renderOrders() {
                 <p style="font-size:12px;color:#9CA3AF;">${formatDate(o.createdAt)}</p>
                 <p style="font-weight:800;color:#8B5CF6;font-size:16px;">π ${o.amount?.toFixed(8) || '0.0000'}</p>
             </div>
+            ${typeof getEscrowBadge === 'function' ? getEscrowBadge(o) : ''}
         </div>`).join('');
 }
 
@@ -7714,10 +7786,31 @@ window.showOrderDetail = function(id) {
             <p style="font-size:11px;color:#059669;font-weight:600;margin-bottom:8px;">TX Hash</p>
             <p style="font-size:12px;color:#065F46;font-family:monospace;word-break:break-all;background:#D1FAE5;padding:10px;border-radius:8px;">${o.txid}</p>
         </div>` : ''}
-        ${isAdmin && ['paid','processing','shipped'].includes(o.status) ? `<div style="display:flex;gap:10px;">
+        ${isAdmin && ['paid','processing','shipped'].includes(o.status) ? `<div style="display:flex;gap:10px;flex-wrap:wrap;">
             ${o.status==='paid' ? `<button onclick="updateOrderStatus('${o.id}','processing');closeModal('orderDetailModal');" class="btn-primary">Proses Pesanan</button>` : ''}
             ${o.status==='processing' ? `<button onclick="updateOrderStatus('${o.id}','shipped');closeModal('orderDetailModal');" class="btn-primary" style="background:#3B82F6;">Kirim Pesanan</button>` : ''}
             ${o.status==='shipped' ? `<button onclick="updateOrderStatus('${o.id}','completed');closeModal('orderDetailModal');" class="btn-primary" style="background:#059669;">Selesaikan</button>` : ''}
+            ${o.escrowStatus === 'active' ? `
+            <button onclick="adminRefundEscrow('${o.id}');closeModal('orderDetailModal');"
+                style="background:linear-gradient(135deg,#EF4444,#DC2626);color:white;border:none;padding:12px 16px;border-radius:12px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;width:100%;margin-top:6px;">
+                <i class="fas fa-undo"></i> Refund Escrow ke Buyer
+            </button>` : ''}
+        </div>` : ''}
+        ${!isAdmin && o.status === 'shipped' && o.escrowStatus === 'active' ? `
+        <div style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border-radius:16px;padding:16px;border:2px solid #059669;margin-top:8px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <div style="width:40px;height:40px;background:#059669;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <div>
+                    <p style="font-weight:800;color:#065F46;font-size:13px;">Dana Aman di Escrow Blockchain</p>
+                    <p style="font-size:11px;color:#059669;">π \${o.amount?.toFixed(4) || '0'} tersimpan di smart contract</p>
+                </div>
+            </div>
+            <button onclick="buyerReleaseEscrow('${o.id}');closeModal('orderDetailModal');"
+                style="background:linear-gradient(135deg,#059669,#047857);color:white;border:none;padding:14px;border-radius:12px;font-weight:800;cursor:pointer;font-size:14px;font-family:inherit;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;">
+                <i class="fas fa-check-circle"></i> Barang Diterima — Cairkan Dana
+            </button>
         </div>` : ''}`;
     openModal('orderDetailModal');
 };
@@ -7945,7 +8038,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 openModal('loginOptionsModal');
             }
         }
-    }, 5000);
+    }, 8000);
 });
 
 // ============================================
