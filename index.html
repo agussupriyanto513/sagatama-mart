@@ -122,60 +122,25 @@
     })();
     </script>
 
-    <!-- Pi SDK — dengan retry loader -->
+    <!-- Pi SDK -->
     <script>
-    // Suppress unhandled rejection dari Pi SDK (normal di luar Pi Browser)
     window.addEventListener('unhandledrejection', function(event) {
         var msg = (event.reason && event.reason.message) ? event.reason.message : String(event.reason || '');
-        if (msg.indexOf('Messaging promise') !== -1 ||
-            msg.indexOf('timed out') !== -1 ||
-            msg.indexOf('Pi SDK') !== -1) {
+        if (msg.indexOf('Messaging promise') !== -1 || msg.indexOf('timed out') !== -1) {
             event.preventDefault();
+            console.warn('[Pi SDK] Timeout suppressed (normal di luar Pi Browser)');
         }
     });
-
-    // Pi SDK loader dengan retry otomatis
-    (function loadPiSDK() {
-        var attempts = 0;
-        var maxAttempts = 3;
-        var urls = [
-            'https://sdk.minepi.com/pi-sdk.js',
-            'https://cdn.minepi.com/pi-sdk.js'  // fallback URL
-        ];
-
-        function tryLoad(urlIndex) {
-            if (urlIndex >= urls.length || attempts >= maxAttempts) {
-                // Gagal semua — set window.Pi = null agar app tahu SDK tidak ada
-                if (!window.Pi) window._piSDKFailed = true;
-                return;
-            }
-            attempts++;
-            var s = document.createElement('script');
-            s.src = urls[urlIndex];
-            s.async = true;
-            s.onload = function() { /* Pi SDK loaded OK */ };
-            s.onerror = function() {
-                // Coba URL berikutnya setelah 500ms
-                setTimeout(function() { tryLoad(urlIndex + 1); }, 500);
-            };
-            document.head.appendChild(s);
-        }
-
-        // Hanya load jika sepertinya Pi Browser (hemat bandwidth di browser biasa)
-        var ua = navigator.userAgent || '';
-        if (ua.includes('PiBrowser') || ua.includes('MinepiApp') || window.location.hostname !== 'localhost') {
-            tryLoad(0);
-        }
-    })();
     </script>
+    <script src="https://sdk.minepi.com/pi-sdk.js" onerror="console.warn('[Pi SDK] Gagal dimuat');"></script>
     
     <!-- External Libraries -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Tailwind CSS — versi production (tidak ada warning CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Tailwind Config -->
     <script>
-        // Config harus didefinisikan SEBELUM Tailwind dimuat
-        window.tailwind = window.tailwind || {};
         tailwind.config = {
             theme: {
                 extend: {
@@ -192,10 +157,8 @@
                     }
                 }
             }
-        };
+        }
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.17/lib/index.min.js" 
-            onerror="this.onerror=null;this.src='https://unpkg.com/tailwindcss@3.4.17/lib/index.min.js'"></script>
     
     <style>
         * { 
@@ -5091,7 +5054,9 @@ function loadDataFromFirebase() {
 
     // Helper: snapshot handler yang sama untuk semua query variant
     function _handleOrdersSnapshot(snapshot) {
-        const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Sort di client side — antisipasi jika index belum siap
+        const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
         if (checkAdmin()) {
             orders = docs;
             myOrders = docs;
@@ -5636,11 +5601,22 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
             }
             
         } else {
-            await setDoc(userRef, {
-                lastLogin: serverTimestamp(),
-                firebaseUid: firebaseUid || null
-            }, { merge: true });
-            logDebug(`[SGT-v3] Dokumen exists, updated: ${piUid}`);
+            // FIX: update pakai merge — jika gagal isOwner, coba pakai firebaseUid
+            try {
+                await setDoc(userRef, {
+                    lastLogin: serverTimestamp(),
+                    firebaseUid: firebaseUid || null,
+                    uid: piUid,
+                    username: username
+                }, { merge: true });
+                logDebug(`[SGT-v3] Dokumen exists, updated: ${piUid}`);
+            } catch(updateErr) {
+                // Jika permission denied, simpan minimal ke localStorage
+                logDebug(`[SGT-v3] Update skip (non-kritis): ${updateErr.message}`);
+                try {
+                    localStorage.setItem('sagatama_firebaseUid_' + piUid, firebaseUid || '');
+                } catch(le) {}
+            }
         }
         
     } catch (e) {
@@ -6483,7 +6459,8 @@ function renderHomeCategories() {
 }
 
 function renderWallet() {
-    if (currentUser) loadSGTDataFixed();
+    // FIX: JANGAN panggil loadSGTDataFixed di sini — menyebabkan loop berulang
+    // SGT sudah di-load oleh listener realtime (listenUserSGTBalanceFixed)
     const historyContainer = document.getElementById('transactionHistory');
     if (!historyContainer) return;
 
