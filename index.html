@@ -6374,6 +6374,14 @@ window.switchView = function(view) {
         v.style.display = 'none';
     });
 
+    // Reset semua sosial-tab saat pindah view, agar tidak bocor ke view lain
+    if (view !== 'sgt-sosial') {
+        ['rewards','beasiswa','bansos','staking','zakat','referral','voting','badges'].forEach(t => {
+            const el = document.getElementById('sosial-tab-'+t);
+            if (el) el.style.display = 'none';
+        });
+    }
+
     const target = document.getElementById(view + '-view');
     if (!target) { logDebug("View tidak ditemukan: " + view); return; }
 
@@ -8144,6 +8152,12 @@ window.switchSosialTab = function(tab, btn) {
     }
     if (tab==='zakat') {
         setTimeout(() => {
+            // Guard: pastikan sosial-tab-zakat masih visible sebelum jalan
+            const zakatTab = document.getElementById('sosial-tab-zakat');
+            if (!zakatTab || zakatTab.style.display === 'none') return;
+            // Guard: pastikan sgt-sosial-view masih active
+            const sosialView = document.getElementById('sgt-sosial-view');
+            if (!sosialView || !sosialView.classList.contains('active')) return;
             if (typeof updateNisabUI === 'function') updateNisabUI();
             if (typeof switchZakatTab === 'function') switchZakatTab('mal', document.getElementById('ztab-mal'));
             if (typeof loadBaitulMaalDashboard === 'function') loadBaitulMaalDashboard();
@@ -8915,6 +8929,11 @@ function updateHaulUI(haulStart) {
 // ── UPDATE NISAB UI (extended) ───────────────────────────────
 window.updateNisabUI = function() {
     if (!document.getElementById('zakatSaldoLabel')) return;
+    // Guard: jangan jalankan kalau tab zakat atau view sosial tidak aktif
+    const zakatTabEl = document.getElementById('sosial-tab-zakat');
+    const sosialViewEl = document.getElementById('sgt-sosial-view');
+    if (!zakatTabEl || zakatTabEl.style.display === 'none') return;
+    if (!sosialViewEl || !sosialViewEl.classList.contains('active')) return;
     const el = id => document.getElementById(id);
     const nisab = currentNisab;
     const bal   = sgtBalance;
