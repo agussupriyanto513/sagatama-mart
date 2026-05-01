@@ -3315,7 +3315,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 // ============================================
 // ERROR HANDLER GLOBAL
@@ -3719,7 +3719,7 @@ async function loadSGTDataFixed() {
         // Strategy 1: Baca dengan UID utama (PI UID) — dengan timeout 8 detik
         if (db && uid) {
             const userRef = doc(db, 'users', uid);
-            const userSnap = await getDocWithTimeout(userRef, 8000);
+            const userSnap = await getDocWithTimeout(userRef, 5000);
             
             if (userSnap.exists()) {
                 const data = userSnap.data();
@@ -4874,7 +4874,7 @@ async function init() {
 async function verifyUserSession() {
     if (!currentUser?.uid || !db) return;
     try {
-        const userDoc = await getDocWithTimeout(doc(db, 'users', currentUser.uid), 8000);
+        const userDoc = await getDocWithTimeout(doc(db, 'users', currentUser.uid), 5000);
         if (userDoc.exists()) {
             const data = userDoc.data();
             // Update data terbaru ke currentUser
@@ -4977,6 +4977,14 @@ async function initFirebase() {
                     experimentalForceLongPolling: true,
                     useFetchStreams: false
                 });
+                // Aktifkan offline persistence agar data ter-cache lokal
+                // Pi Browser kadang blokir koneksi Firestore — cache jadi fallback otomatis
+                try {
+                    await enableIndexedDbPersistence(db);
+                    logDebug('[Firebase] Offline persistence aktif');
+                } catch(persistErr) {
+                    logDebug('[Firebase] Persistence skip: ' + persistErr.code);
+                }
             }
             logDebug(`Firebase initialized OK (attempt ${attempt})`);
 
@@ -5630,7 +5638,7 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
     
     try {
         const userRef = doc(db, 'users', piUid);
-        const userSnap = await getDocWithTimeout(userRef, 8000);
+        const userSnap = await getDocWithTimeout(userRef, 5000);
         
         if (!userSnap.exists()) {
             logDebug(`[SGT-v3] Dokumen baru: ${piUid}`);
@@ -7918,7 +7926,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 openModal('loginOptionsModal');
             }
         }
-    }, 8000);
+    }, 5000);
 });
 
 // ============================================
