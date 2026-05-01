@@ -9074,7 +9074,9 @@ async function loadZakatHistory() {
                 <p style="font-weight:800;color:#059669;">-${s.amount?.toLocaleString()} SGT</p>
             </div>`;
         });
-    } catch(e) {}
+} catch(e) { 
+    logDebug('loadZakatHistory err: ' + e.message); 
+    console.error('loadZakatHistory:', e);
 }
 
 
