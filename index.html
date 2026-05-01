@@ -1203,7 +1203,7 @@
 <!-- v0-runtime-dist.js dihapus: hanya untuk Vercel v0 sandbox, menyebabkan 404 --></head>
 <body>
 
-<div id="loader-sso" class="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center transition-opacity duration-500" style="display:none;">
+<div id="loader-sso" class="fixed inset-0 bg-white z-[9999] transition-opacity duration-500" style="display:none; flex-direction:column; align-items:center; justify-content:center;">
     <div class="relative">
         <div class="w-20 h-20 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin"></div>
         <div class="absolute inset-0 flex items-center justify-center">
@@ -3608,7 +3608,7 @@ async function handleSSO() {
     }
 
     // Ada token SSO - tampilkan loader sementara proses login
-    if (loader) loader.style.display = 'flex';
+    if (loader) { loader.style.display = 'flex'; loader.style.flexDirection = 'column'; loader.style.alignItems = 'center'; loader.style.justifyContent = 'center'; }
 
     try {
         await signInWithCustomToken(auth, authToken);
