@@ -29,7 +29,7 @@
             'processSGTTransfer','redeemSGT','saveSGTSettings','distributeSGTManual',
             'burnSGT','filterAdminProducts','filterAdminOrders','updateAdminStatus',
             'refreshPiBalance','deleteProduct','openEditProduct','saveUserAddress',
-            'openExchangeRateModal','updateAdminCalculator','closeAndRemoveModal',
+            'openExchangeRateModal','updateAdminCalculator','switchCalcMode','closeAndRemoveModal',
             'handleStartShopping','adminLogin','loginAdmin','continueAsGuest',
             'togglePasswordVisibility','filterByCategory','filterOrders',
             'openProductModal','previewProductImage','saveProduct','searchProducts','showToast','updateSGTAdminStats',
@@ -4683,54 +4683,183 @@ window.openExchangeRateModal = function() {
     const existingModal = document.getElementById('exchangeRateModal');
     if (existingModal) existingModal.remove();
 
+    const currentSgtRate = (typeof sgtRatePerPi !== 'undefined') ? sgtRatePerPi : 100;
+
     const modal = document.createElement('div');
     modal.id = 'exchangeRateModal';
     modal.className = 'modal active';
     modal.innerHTML = `
         <div class="modal-content">
-            <h3 style="font-size:20px; font-weight:800; margin-bottom:20px; color:#1F2937;">
+            <h3 style="font-size:20px; font-weight:800; margin-bottom:4px; color:#1F2937;">
                 <i class="fas fa-calculator" style="color:#8B5CF6; margin-right:8px;"></i>Kalkulator Pi (Admin)
             </h3>
-            <div style="background:#F5F3FF; border-radius:12px; padding:16px; margin-bottom:20px;">
-                <p style="font-size:12px; color:#6B7280; margin-bottom:8px;">Rate Referensi (1 Pi = Rp)</p>
-                <input type="number" id="adminRateInput" class="form-input" value="${adminExchangeRate}" min="1" step="1000" oninput="updateAdminCalculator()">
-                <p style="font-size:11px; color:#9CA3AF; margin-top:6px;">
-                    <i class="fas fa-info-circle" style="margin-right:4px;"></i>
-                    Rate ini hanya untuk referensi admin, tidak mempengaruhi harga produk
-                </p>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Jumlah Pi</label>
-                <input type="number" id="adminCalcPi" class="form-input" placeholder="0.0000" step="0.0001" oninput="updateAdminCalculator()">
-            </div>
-            <div style="text-align:center; margin:16px 0;">
-                <i class="fas fa-arrow-down" style="color:#8B5CF6; font-size:24px;"></i>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Hasil IDR (Referensi)</label>
-                <div style="background:#F3F4F6; padding:16px; border-radius:12px; font-size:24px; font-weight:800; color:#1F2937; text-align:center;">
-                    Rp <span id="adminCalcResult">0</span>
+            <p style="font-size:12px; color:#9CA3AF; margin-bottom:16px;">Konversi mata uang & token referensi admin</p>
+
+            <!-- Rate Config -->
+            <div style="background:#F5F3FF; border-radius:12px; padding:14px; margin-bottom:16px; display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+                <div style="flex:1; min-width:130px;">
+                    <p style="font-size:11px; color:#7C3AED; font-weight:700; margin-bottom:5px;"><i class="fas fa-coins" style="margin-right:4px;"></i>1 Pi = Rp</p>
+                    <input type="number" id="adminRateInput" class="form-input" value="${adminExchangeRate}" min="1" step="1000"
+                        style="font-weight:700; font-size:14px;" oninput="updateAdminCalculator()">
+                </div>
+                <div style="flex:1; min-width:130px;">
+                    <p style="font-size:11px; color:#D97706; font-weight:700; margin-bottom:5px;"><i class="fas fa-fire" style="margin-right:4px;"></i>1 Pi = SGT</p>
+                    <input type="number" id="adminSgtRateInput" class="form-input" value="${currentSgtRate}" min="1" step="1"
+                        style="font-weight:700; font-size:14px;" oninput="updateAdminCalculator()">
                 </div>
             </div>
-            <div style="background:#FEF3C7; border:1px solid #FCD34D; border-radius:12px; padding:12px; margin-bottom:20px;">
-                <p style="font-size:12px; color:#92400E;">
-                    <i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>
-                    <strong>Catatan:</strong> Kalkulator ini hanya untuk referensi admin. User hanya melihat harga dalam Pi.
+
+            <!-- Mode Tabs -->
+            <div style="display:flex; gap:6px; margin-bottom:16px;">
+                <button id="calcTab_pi_to_idr" onclick="switchCalcMode('pi_to_idr')"
+                    style="flex:1; padding:9px 4px; border-radius:10px; border:none; cursor:pointer; font-size:11px; font-weight:700; background:linear-gradient(135deg,#8B5CF6,#7C3AED); color:white; transition:all 0.2s;">
+                    <i class="fas fa-arrow-right" style="margin-right:3px;"></i>Pi→Rp
+                </button>
+                <button id="calcTab_idr_to_pi" onclick="switchCalcMode('idr_to_pi')"
+                    style="flex:1; padding:9px 4px; border-radius:10px; border:none; cursor:pointer; font-size:11px; font-weight:700; background:#F3F4F6; color:#6B7280; transition:all 0.2s;">
+                    <i class="fas fa-arrow-left" style="margin-right:3px;"></i>Rp→Pi
+                </button>
+                <button id="calcTab_sgt_to_idr" onclick="switchCalcMode('sgt_to_idr')"
+                    style="flex:1; padding:9px 4px; border-radius:10px; border:none; cursor:pointer; font-size:11px; font-weight:700; background:#F3F4F6; color:#6B7280; transition:all 0.2s;">
+                    <i class="fas fa-fire" style="margin-right:3px;"></i>SGT→Rp
+                </button>
+            </div>
+
+            <!-- Input Panel -->
+            <div id="calcInputPanel">
+                <!-- Pi to IDR -->
+                <div id="panel_pi_to_idr">
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-circle" style="color:#8B5CF6; margin-right:6px; font-size:10px;"></i>Jumlah Pi</label>
+                        <input type="number" id="adminCalcPi" class="form-input" placeholder="Masukkan jumlah Pi" step="0.0001" min="0"
+                            style="font-size:18px; font-weight:700;" oninput="updateAdminCalculator()">
+                    </div>
+                    <div style="text-align:center; margin:10px 0;">
+                        <div style="width:36px; height:36px; background:linear-gradient(135deg,#8B5CF6,#7C3AED); border-radius:50%; display:inline-flex; align-items:center; justify-content:center;">
+                            <i class="fas fa-arrow-down" style="color:white; font-size:14px;"></i>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label class="form-label">Hasil (Rupiah)</label>
+                        <div style="background:linear-gradient(135deg,#F0FDF4,#DCFCE7); border:2px solid #86EFAC; padding:16px; border-radius:12px; text-align:center;">
+                            <p style="font-size:11px; color:#166534; font-weight:600; margin-bottom:4px;">IDR</p>
+                            <p style="font-size:26px; font-weight:900; color:#15803D;">Rp <span id="adminCalcResult">0</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- IDR to Pi -->
+                <div id="panel_idr_to_pi" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-money-bill-wave" style="color:#059669; margin-right:6px; font-size:10px;"></i>Jumlah Rupiah (Rp)</label>
+                        <input type="number" id="adminCalcIdr" class="form-input" placeholder="Masukkan jumlah Rupiah" step="1000" min="0"
+                            style="font-size:18px; font-weight:700;" oninput="updateAdminCalculator()">
+                    </div>
+                    <div style="text-align:center; margin:10px 0;">
+                        <div style="width:36px; height:36px; background:linear-gradient(135deg,#059669,#047857); border-radius:50%; display:inline-flex; align-items:center; justify-content:center;">
+                            <i class="fas fa-arrow-down" style="color:white; font-size:14px;"></i>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label class="form-label">Hasil (Pi)</label>
+                        <div style="background:linear-gradient(135deg,#F5F3FF,#EDE9FE); border:2px solid #C4B5FD; padding:16px; border-radius:12px; text-align:center;">
+                            <p style="font-size:11px; color:#7C3AED; font-weight:600; margin-bottom:4px;">PI</p>
+                            <p style="font-size:26px; font-weight:900; color:#7C3AED;"><i class="fas fa-circle" style="font-size:14px; margin-right:4px;"></i><span id="adminCalcResultPi">0</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SGT to IDR -->
+                <div id="panel_sgt_to_idr" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-fire" style="color:#D97706; margin-right:6px; font-size:10px;"></i>Jumlah SGT</label>
+                        <input type="number" id="adminCalcSgt" class="form-input" placeholder="Masukkan jumlah SGT" step="1" min="0"
+                            style="font-size:18px; font-weight:700;" oninput="updateAdminCalculator()">
+                    </div>
+                    <div style="text-align:center; margin:10px 0;">
+                        <div style="width:36px; height:36px; background:linear-gradient(135deg,#F59E0B,#D97706); border-radius:50%; display:inline-flex; align-items:center; justify-content:center;">
+                            <i class="fas fa-arrow-down" style="color:white; font-size:14px;"></i>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label class="form-label">Hasil (Rupiah)</label>
+                        <div style="background:linear-gradient(135deg,#FFFBEB,#FEF3C7); border:2px solid #FCD34D; padding:16px; border-radius:12px; text-align:center;">
+                            <p style="font-size:11px; color:#92400E; font-weight:600; margin-bottom:4px;">IDR (via Pi)</p>
+                            <p style="font-size:26px; font-weight:900; color:#B45309;">Rp <span id="adminCalcResultSgt">0</span></p>
+                            <p id="adminCalcSgtPiEq" style="font-size:11px; color:#92400E; margin-top:6px; font-weight:600;"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info -->
+            <div style="background:#FEF3C7; border:1px solid #FCD34D; border-radius:10px; padding:10px; margin-top:16px; margin-bottom:16px;">
+                <p style="font-size:11px; color:#92400E;">
+                    <i class="fas fa-info-circle" style="margin-right:5px;"></i>
+                    Kalkulator ini hanya untuk referensi admin. Harga produk tetap tampil dalam Pi untuk user.
                 </p>
             </div>
             <button onclick="closeAndRemoveModal('exchangeRateModal')" class="btn-primary">Tutup</button>
         </div>
     `;
     document.body.appendChild(modal);
+    window._calcMode = 'pi_to_idr';
+};
+
+window.switchCalcMode = function(mode) {
+    window._calcMode = mode;
+    const modes = ['pi_to_idr', 'idr_to_pi', 'sgt_to_idr'];
+    modes.forEach(function(m) {
+        const tab = document.getElementById('calcTab_' + m);
+        const panel = document.getElementById('panel_' + m);
+        if (tab) {
+            if (m === mode) {
+                tab.style.background = 'linear-gradient(135deg,#8B5CF6,#7C3AED)';
+                tab.style.color = 'white';
+            } else {
+                tab.style.background = '#F3F4F6';
+                tab.style.color = '#6B7280';
+            }
+        }
+        if (panel) panel.style.display = (m === mode) ? 'block' : 'none';
+    });
+    updateAdminCalculator();
 };
 
 window.updateAdminCalculator = function() {
     const rate = parseInt(document.getElementById('adminRateInput')?.value || 15000);
-    const piAmount = parseFloat(document.getElementById('adminCalcPi')?.value || 0);
-    const resultEl = document.getElementById('adminCalcResult');
+    const sgtPerPi = parseInt(document.getElementById('adminSgtRateInput')?.value || 100);
     adminExchangeRate = rate;
-    if (resultEl) {
-        resultEl.innerText = Math.round(piAmount * rate).toLocaleString('id-ID');
+    if (typeof sgtRatePerPi !== 'undefined') sgtRatePerPi = sgtPerPi;
+
+    const mode = window._calcMode || 'pi_to_idr';
+
+    if (mode === 'pi_to_idr') {
+        const piAmount = parseFloat(document.getElementById('adminCalcPi')?.value || 0);
+        const resultEl = document.getElementById('adminCalcResult');
+        if (resultEl) resultEl.innerText = Math.round(piAmount * rate).toLocaleString('id-ID');
+
+    } else if (mode === 'idr_to_pi') {
+        const idrAmount = parseFloat(document.getElementById('adminCalcIdr')?.value || 0);
+        const resultEl = document.getElementById('adminCalcResultPi');
+        if (resultEl) {
+            const piResult = rate > 0 ? (idrAmount / rate) : 0;
+            resultEl.innerText = piResult.toFixed(6);
+        }
+
+    } else if (mode === 'sgt_to_idr') {
+        const sgtAmount = parseFloat(document.getElementById('adminCalcSgt')?.value || 0);
+        const resultEl = document.getElementById('adminCalcResultSgt');
+        const piEqEl = document.getElementById('adminCalcSgtPiEq');
+        if (resultEl && sgtPerPi > 0 && rate > 0) {
+            const piEq = sgtAmount / sgtPerPi;
+            const idrResult = piEq * rate;
+            resultEl.innerText = Math.round(idrResult).toLocaleString('id-ID');
+            if (piEqEl) piEqEl.innerText = '≈ ' + piEq.toFixed(6) + ' Pi';
+        } else if (resultEl) {
+            resultEl.innerText = '0';
+            if (piEqEl) piEqEl.innerText = '';
+        }
     }
 };
 
@@ -9507,7 +9636,7 @@ if (typeof window._registerReal === 'function') {
         filterAdminProducts: window.filterAdminProducts, filterAdminOrders: window.filterAdminOrders,
         refreshPiBalance: window.refreshPiBalance, deleteProduct: window.deleteProduct,
         saveUserAddress: window.saveUserAddress, openExchangeRateModal: window.openExchangeRateModal,
-        updateAdminCalculator: window.updateAdminCalculator, closeAndRemoveModal: window.closeAndRemoveModal,
+        updateAdminCalculator: window.updateAdminCalculator, switchCalcMode: window.switchCalcMode, closeAndRemoveModal: window.closeAndRemoveModal,
         handleStartShopping: window.handleStartShopping, loginAdmin: window.loginAdmin,
         continueAsGuest: window.continueAsGuest, filterByCategory: window.filterByCategory,
         filterOrders: window.filterOrders, openProductModal: window.openProductModal,
