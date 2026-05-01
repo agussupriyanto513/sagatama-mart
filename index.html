@@ -3702,6 +3702,20 @@ async function loadSGTDataFixed() {
         logDebug('[SGT-v3] No currentUser');
         return;
     }
+
+    // Admin: skip Firestore, langsung pakai localStorage (Pi Browser blokir firestore.googleapis.com)
+    const isAdminUser = currentUser.role === 'admin' || currentUser.username === 'sagatama_admin';
+    if (isAdminUser) {
+        logDebug('[SGT-v3] Admin: skip Firestore, pakai localStorage');
+        try {
+            const bal = localStorage.getItem('sgt_balance_' + currentUser.uid);
+            const tx  = localStorage.getItem('sgt_transactions_' + currentUser.uid);
+            if (bal) sgtBalance = parseInt(bal) || 0;
+            if (tx)  sgtTransactions = JSON.parse(tx);
+        } catch(e) {}
+        updateSGTUI();
+        return;
+    }
     
     const uid = currentUser.uid;
     const username = currentUser.username;
@@ -4873,6 +4887,11 @@ async function init() {
 // Verifikasi sesi user masih valid di Firestore (background check)
 async function verifyUserSession() {
     if (!currentUser?.uid || !db) return;
+    // Admin: skip verifikasi Firestore — Pi Browser tidak bisa connect ke firestore.googleapis.com
+    if (currentUser.role === 'admin' || currentUser.username === 'sagatama_admin') {
+        logDebug('[verifySession] Admin: skip Firestore verify');
+        return;
+    }
     try {
         const userDoc = await getDocWithTimeout(doc(db, 'users', currentUser.uid), 5000);
         if (userDoc.exists()) {
