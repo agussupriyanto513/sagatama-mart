@@ -5499,12 +5499,27 @@ function loadDataFromFirebase() {
         unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
             products = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
-            renderProducts();
-            renderFeaturedProducts();
-            renderHomeCategories();
-            updateAdminStats();
-            if (checkAdmin()) renderAdminProducts();
-        }, (err) => logDebug("Products error: " + err.message + " | code: " + err.code));
+            renderProducts?.();
+            renderFeaturedProducts?.();
+            renderHomeCategories?.();
+            if (checkAdmin()) {
+                updateAdminStatCards(); // Update angka Produk segera
+                updateAdminStats();
+                renderAdminProducts?.();
+            }
+        }, async (err) => {
+            logDebug("Products error: " + err.message + " | code: " + err.code);
+            if (err.code === 'failed-precondition' || err.code === 'unimplemented') {
+                // Fallback: getDocs tanpa orderBy
+                try {
+                    const snap = await getDocs(collection(db, "products"));
+                    products = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                        .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+                    localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+                    renderProducts?.(); if (checkAdmin()) { updateAdminStatCards(); updateAdminStats(); renderAdminProducts?.(); }
+                } catch(fe) { logDebug("Products fallback err: " + fe.message); }
+            }
+        });
     } catch (e) {
         logDebug("Products query error: " + e.message);
     }
@@ -5549,8 +5564,29 @@ function loadDataFromFirebase() {
         let ordersQuery;
         if (checkAdmin()) {
             ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(500));
-            unsubscribers.orders = onSnapshot(ordersQuery, _handleOrdersSnapshot,
-                (err) => logDebug("Orders error: " + err.message + " | code: " + err.code));
+            unsubscribers.orders = onSnapshot(ordersQuery, _handleOrdersSnapshot, async (err) => {
+                logDebug("Orders admin error: " + err.message + " | code: " + err.code);
+                if (err.code === 'failed-precondition' || err.code === 'unimplemented') {
+                    // Index belum ada — fallback tanpa orderBy, sort di client
+                    logDebug("[Orders Admin] Fallback: query tanpa orderBy");
+                    try {
+                        const fallbackQ = query(collection(db, "orders"), limit(500));
+                        unsubscribers.orders_fallback = onSnapshot(fallbackQ, (snap) => {
+                            const docs = snap.docs.map(d => ({id: d.id, ...d.data()}));
+                            docs.sort((a,b) => {
+                                const ta = a.createdAt?.seconds || a.createdAt || 0;
+                                const tb = b.createdAt?.seconds || b.createdAt || 0;
+                                return tb - ta;
+                            });
+                            orders = docs; myOrders = docs;
+                            try { localStorage.setItem('sagatama_orders_cache', JSON.stringify(docs.slice(0, 100))); } catch(e) {}
+                            renderOrders?.(); renderAdminOrders?.(); renderAdminRecentOrders?.(); updateAdminStats?.();
+                        }, e2 => logDebug("Orders admin fallback2: " + e2.message));
+                    } catch(fe) { logDebug("Orders admin fallback err: " + fe.message); }
+                } else if (err.code === 'permission-denied') {
+                    showToast('Akses orders ditolak. Cek Firestore Security Rules.', 'error');
+                }
+            });
         } else {
             const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid || null;
 
@@ -7547,6 +7583,20 @@ function renderAccount() {
         </button>`;
 }
 
+
+// Update 4 stat card utama (Produk, Menunggu, Selesai, Pi Terjual) dari data lokal
+function updateAdminStatCards() {
+    const upd = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined) el.innerText = v; };
+    upd('statTotalProducts', products.length || 0);
+    const pending   = orders.filter(o => ['pending','paid','processing'].includes(o.status)).length;
+    const completed = orders.filter(o => ['completed','shipped'].includes(o.status)).length;
+    const revenue   = orders.filter(o => ['completed','shipped','paid'].includes(o.status))
+                            .reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
+    upd('statPendingOrders',   pending);
+    upd('statCompletedOrders', completed);
+    upd('statTotalRevenue',    revenue.toFixed(8));
+}
+
 function renderAdminDashboard() {
     if (!(currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin')) { switchView('home'); return; }
 
@@ -7564,13 +7614,14 @@ function renderAdminDashboard() {
         } catch(e) {}
     }
 
+    updateAdminStatCards(); // Tampilkan angka dari cache SEGERA
     updateAdminStats();
     renderAdminRecentOrders();
 
-    // Retry lebih sering untuk antisipasi race condition Firebase
-    setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); }, 1500);
-    setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); updateSGTAdminStats(); }, 4000);
-    setTimeout(() => { updateAdminStats(); updateSGTAdminStats(); loadSupplyStats().catch(()=>{}); }, 8000);
+    // Retry bertahap — Firebase butuh waktu untuk kirim data
+    setTimeout(() => { updateAdminStatCards(); updateAdminStats(); renderAdminRecentOrders(); }, 1500);
+    setTimeout(() => { updateAdminStatCards(); updateAdminStats(); updateSGTAdminStats(true); }, 4000);
+    setTimeout(() => { updateAdminStatCards(); updateAdminStats(); updateSGTAdminStats(true); loadSupplyStats().catch(()=>{}); }, 8000);
 }
 
 function updateAdminStats() {
@@ -7580,6 +7631,7 @@ function updateAdminStats() {
     upd('statPendingOrders', orders.filter(o => ['pending','paid','processing'].includes(o.status)).length);
     upd('statCompletedOrders', orders.filter(o => ['completed','shipped'].includes(o.status)).length);
     upd('statTotalRevenue', totalRevenue.toFixed(8));
+    updateAdminStatCards();
 
     // Tampilkan status koneksi Firebase di dashboard
     const statusEl = document.getElementById('adminDbStatus');
@@ -7606,7 +7658,7 @@ window.manualAdminRefresh = function() {
     showToast('Memuat ulang data...', 'info');
 };
 
-let _sgtAdminStatsLastRun = 0;
+let _sgtAdminStatsLastRun = 0;   // 0 = belum pernah jalan, tidak akan di-throttle
 let _sgtAdminStatsRunning = false;
 async function updateSGTAdminStats(forceRefresh = false) {
     const now = Date.now(); const THROTTLE_MS = 30_000; // 30 detik, lebih responsif
@@ -7683,6 +7735,8 @@ async function updateSGTAdminStats(forceRefresh = false) {
         upd('admin-total-distributed', totalDistributed.toLocaleString() + ' SGT');
         upd('admin-total-burned', totalBurned.toLocaleString() + ' SGT');
         upd('statTotalSGTIssued', totalDistributed.toLocaleString());
+        // Juga update stat cards utama dari array lokal (pastikan tidak 0)
+        updateAdminStatCards();
 
         // Render log distribusi (ambil 20 terbaru)
         const tbody = document.getElementById('sgt-logs-body');
