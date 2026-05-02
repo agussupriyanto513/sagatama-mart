@@ -1397,7 +1397,7 @@
                         </div>
                         <div style="text-align:right;">
                             <div style="background:rgba(255,255,255,0.15); padding:4px 12px; border-radius:20px; font-size:10px; font-weight:800; color:#FCD34D; border:1px solid rgba(255,215,77,0.3);">LIVE</div>
-                            <p id="walletRateLabel" style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:4px;">1 π = 100 SGT</p>
+                            <p id="walletRateLabel" style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:4px;">1 π = 500 SGT</p>
                         </div>
                     </div>
 
@@ -1409,6 +1409,9 @@
                             <p style="font-size:22px; font-weight:700; color:rgba(255,255,255,0.6); margin-bottom:6px;">SGT</p>
                         </div>
                         <p style="font-size:12px; color:rgba(255,255,255,0.55); margin-top:4px;">≈ <span id="sgtPiEquivalent">0.00000000</span> Pi</p>
+                        <p id="walletPendingRow" style="font-size:11px; color:rgba(252,211,77,0.75); margin-top:4px; display:none;">
+                            <span id="walletPendingSgt">0.00</span> SGT pending akumulasi
+                        </p>
                     </div>
 
                     <!-- Stats -->
@@ -3249,8 +3252,8 @@
                 <h4 style="font-weight:800; margin-bottom:12px; font-size:14px; color:#1E293B;">⚙️ Rate & Konversi</h4>
                 <div class="form-group">
                     <label class="form-label">SGT per Pi (Rate Belanja)</label>
-                    <input type="number" id="sgtAdminRate" class="form-input" value="100">
-                    <p style="font-size:11px; color:#64748B; margin-top:4px;">Default: 1 Pi = <span id="sgtAdminRateHint">100</span> SGT</p>
+                    <input type="number" id="sgtAdminRate" class="form-input" value="500">
+                    <p style="font-size:11px; color:#64748B; margin-top:4px;">Default: 1 Pi = <span id="sgtAdminRateHint">500</span> SGT</p>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Min. Pembelian untuk dapat SGT (Pi)</label>
@@ -3280,10 +3283,10 @@
             <div style="background:#F0FDF4;border-radius:14px;padding:16px;margin-bottom:12px;border:1px solid #A7F3D0;">
                 <h4 style="font-weight:800;margin-bottom:10px;font-size:13px;color:#065F46;"><i class="fas fa-sliders-h" style="margin-right:6px;"></i>Adjust Rate Mint (SGT/Pi)</h4>
                 <div style="display:flex;gap:8px;align-items:center;">
-                    <input type="number" id="newMintRate" class="form-input" style="flex:1;" placeholder="Default: 100" min="1" max="10000">
+                    <input type="number" id="newMintRate" class="form-input" style="flex:1;" placeholder="Default: 500" min="1" max="10000">
                     <button onclick="updateMintRate()" style="background:#059669;color:white;border:none;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer;font-size:12px;white-space:nowrap;font-family:inherit;"><i class="fas fa-check"></i> Set</button>
                 </div>
-                <p style="font-size:10px;color:#065F46;margin:6px 0 0;">Rate saat ini: <strong id="currentMintRateDisplay">100</strong> SGT/Pi · Ubah dengan hati-hati</p>
+                <p style="font-size:10px;color:#065F46;margin:6px 0 0;">Rate saat ini: <strong id="currentMintRateDisplay">500</strong> SGT/Pi · Ubah dengan hati-hati</p>
             </div>
 
             <div style="background:#FEF2F2; border-radius:14px; padding:16px; margin-bottom:16px; border:1px solid #FECACA;">
@@ -3530,9 +3533,12 @@ const SGT_GENESIS_ALLOC   = {
     baitulMaal: 0.10, // 10% dana sosial
     tim       : 0.05  // 5% pengembang (locked 12 bln)
 };
-// Mint rate (adjustable admin, default 100)
-let sgtRatePerPi   = 100;
-let sgtMinPurchase = 0.1;
+// Mint rate (adjustable admin, default 500)
+let sgtRatePerPi   = 500;
+let sgtMinPurchase = 0.001; // Diturunkan agar belanja kecil bisa akumulasi
+
+// Akumulasi SGT desimal per user — simpan pending float SGT lintas sesi
+let sgtPendingMap = {}; // { uid: float }
 
 // Fee pool — setiap transaksi bayar fee ini, dana ke pool
 const SGT_FEE_RATE      = 0.03;  // 3% dari base reward masuk fee pool
@@ -3711,7 +3717,7 @@ async function loadSGTDataFixed() {
     } catch(e) {
         // Fallback ke localStorage jika offline
         const savedRate = localStorage.getItem('sgt_rate');
-        if (savedRate) sgtRatePerPi = parseInt(savedRate) || 100;
+        if (savedRate) sgtRatePerPi = parseInt(savedRate) || 500;
         logDebug('[SGT-v3] Rate fallback localStorage: ' + sgtRatePerPi);
     }
     const uid = currentUser.uid;
@@ -3767,7 +3773,7 @@ async function loadSGTDataFixed() {
         const rate = localStorage.getItem('sgt_rate');
         if (bal) sgtBalance = parseInt(bal) || 0;
         if (tx) { try { sgtTransactions = JSON.parse(tx); } catch(e) { sgtTransactions = []; } }
-        if (rate) sgtRatePerPi = parseInt(rate) || 100;
+        if (rate) sgtRatePerPi = parseInt(rate) || 500;
         logDebug(`[SGT-v3] ⚠️ Loaded from localStorage: ${sgtBalance} SGT`);
         updateSGTUI();
         
@@ -3802,6 +3808,20 @@ function updateSGTUI() {
     // Update label rate di wallet user secara dinamis
     const rateLabel = document.getElementById('walletRateLabel');
     if (rateLabel) rateLabel.textContent = '1 π = ' + sgtRatePerPi + ' SGT';
+
+    // Tampilkan pending SGT akumulasi jika ada
+    const uid = currentUser?.uid;
+    const pendingVal = uid ? (sgtPendingMap[uid] || 0) : 0;
+    const pendingRow = document.getElementById('walletPendingRow');
+    const pendingSgtEl = document.getElementById('walletPendingSgt');
+    if (pendingRow && pendingSgtEl) {
+        if (pendingVal > 0.001) {
+            pendingRow.style.display = 'block';
+            pendingSgtEl.textContent = pendingVal.toFixed(3);
+        } else {
+            pendingRow.style.display = 'none';
+        }
+    }
 
     const rb = document.getElementById('sgtRedeemBalance');
     if (rb) rb.textContent = bal + ' SGT';
@@ -3942,18 +3962,51 @@ window.burnSGTFromSupply = async function burnSGTFromSupply(amount, reason) {
 }
 
 // ============================================
+// HELPER AKUMULASI SGT — load & save pending desimal dari Firestore
+// ============================================
+async function loadSGTPending(uid) {
+    try {
+        const snap = await getDoc(doc(db, 'sgt_pending', uid));
+        if (snap.exists()) {
+            sgtPendingMap[uid] = parseFloat(snap.data().pending) || 0;
+        } else {
+            sgtPendingMap[uid] = 0;
+        }
+    } catch(e) {
+        // Fallback ke localStorage jika Firestore offline
+        const cached = localStorage.getItem('sgt_pending_' + uid);
+        sgtPendingMap[uid] = cached ? parseFloat(cached) : 0;
+        logDebug('[SGTPending] Fallback localStorage: ' + sgtPendingMap[uid]);
+    }
+    return sgtPendingMap[uid];
+}
+
+async function saveSGTPending(uid, value) {
+    sgtPendingMap[uid] = value;
+    try {
+        localStorage.setItem('sgt_pending_' + uid, value.toString());
+        await setDoc(doc(db, 'sgt_pending', uid), {
+            pending: value,
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+    } catch(e) {
+        logDebug('[SGTPending] Save error: ' + e.message);
+    }
+}
+
+// ============================================
 // AWARD SGT — tier-aware, hard-cap-safe, fee-pool-funded
+// + SISTEM AKUMULASI: belanja kecil tidak kehilangan SGT
 // ============================================
 async function awardSGT(piAmount, description) {
     if (!currentUser) { logDebug('[awardSGT] Skip: tidak ada currentUser'); return 0; }
 
     // FIX TESTNET: Pi testnet amount selalu 0 karena pricePi produk = 0
-    // Gunakan minimum 0.1 Pi agar SGT tetap diberikan saat testing
     if (piAmount <= 0) {
         const isTestnet = (typeof USE_SANDBOX !== 'undefined' && USE_SANDBOX) ||
                           (typeof ESCROW_CONFIG !== 'undefined' && ESCROW_CONFIG.NETWORK === 'testnet');
         if (isTestnet) {
-            piAmount = 0.1; // minimum testnet amount
+            piAmount = 0.1;
             logDebug('[awardSGT] Testnet: amount 0 → fallback 0.1 Pi');
         } else {
             logDebug('[awardSGT] Skip: piAmount 0 di mainnet');
@@ -3961,24 +4014,56 @@ async function awardSGT(piAmount, description) {
         }
     }
 
-    if (piAmount < sgtMinPurchase) { logDebug('[awardSGT] Skip: piAmount terlalu kecil (' + piAmount + ' < ' + sgtMinPurchase + ')'); return 0; }
+    if (piAmount < sgtMinPurchase) {
+        logDebug('[awardSGT] Skip: piAmount terlalu kecil (' + piAmount + ' < ' + sgtMinPurchase + ')');
+        return 0;
+    }
 
-    const tier        = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05, name: 'Bronze' };
-    const baseSGT     = Math.floor(piAmount * sgtRatePerPi);
-    const tierBonus   = Math.floor(baseSGT * tier.rate);
-    const feeAmount   = Math.floor(baseSGT * SGT_FEE_RATE);
-    const sosialShare = Math.floor(baseSGT * SGT_SOSIAL_RATE);
-    const userShare   = baseSGT + tierBonus - feeAmount;
+    const uid = currentUser.uid;
+    const tier = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05, name: 'Bronze' };
 
-    if (userShare <= 0) return 0;
+    // Hitung reward float (sebelum dibulatkan)
+    const rawSGT      = piAmount * sgtRatePerPi;
+    const rawBonus    = rawSGT * tier.rate;
+    const rawFee      = rawSGT * SGT_FEE_RATE;
+    const rawSosial   = rawSGT * SGT_SOSIAL_RATE;
+    const rawUserShare = rawSGT + rawBonus - rawFee;
+
+    // ==================================================
+    // SISTEM AKUMULASI: gabungkan dengan pending sebelumnya
+    // ==================================================
+    await loadSGTPending(uid);
+    const pending    = sgtPendingMap[uid] || 0;
+    const totalFloat = rawUserShare + pending;
+    const userShare  = Math.floor(totalFloat);           // yang dikreditkan sekarang
+    const newPending = parseFloat((totalFloat - userShare).toFixed(6)); // sisa yang disimpan
+
+    logDebug('[awardSGT] raw=' + rawUserShare.toFixed(4) + ' pending=' + pending.toFixed(4) +
+             ' total=' + totalFloat.toFixed(4) + ' dikreditkan=' + userShare + ' sisa=' + newPending);
+
+    // Simpan sisa pending ke Firestore (berapapun, termasuk 0)
+    await saveSGTPending(uid, newPending);
+
+    // Jika belum cukup 1 SGT, beri notifikasi akumulasi dan keluar
+    if (userShare < 1) {
+        const totalPendingNow = newPending;
+        showToast(`+${rawUserShare.toFixed(2)} SGT pending (total: ${totalPendingNow.toFixed(2)} SGT)`, 'info');
+        logDebug('[awardSGT] Belum cukup 1 SGT, akumulasi disimpan: ' + totalPendingNow.toFixed(4));
+        return 0;
+    }
+
+    // Hitung fee & sosial dari bagian yang benar-benar dikreditkan
+    const feeAmount   = Math.floor(userShare * SGT_FEE_RATE);
+    const sosialShare = Math.floor(userShare * SGT_SOSIAL_RATE);
+    const baseSGT     = Math.floor(rawSGT);
 
     // Check hard cap before minting
     let actualMint = 0;
     try {
-        actualMint = await mintSGT(baseSGT, currentUser.uid);
+        actualMint = await mintSGT(baseSGT || 1, uid);
     } catch(mintErr) {
-        logDebug('[awardSGT] mintSGT error: ' + mintErr.message + ' — lanjut dengan kredit lokal');
-        actualMint = baseSGT; // fallback: izinkan mint lokal
+        logDebug('[awardSGT] mintSGT error: ' + mintErr.message + ' — lanjut kredit lokal');
+        actualMint = baseSGT || 1;
     }
     if (!actualMint) { logDebug('[awardSGT] mintSGT returned 0, SGT tidak dikreditkan'); return 0; }
 
@@ -3987,18 +4072,21 @@ async function awardSGT(piAmount, description) {
     sgtTransactions.unshift({
         type: 'earn', amount: userShare,
         description: description || 'Reward belanja',
-        date: new Date().toISOString(), userId: currentUser.uid,
-        tier: tier.name, tierBonus, feeDeducted: feeAmount,
-        baseSGT
+        date: new Date().toISOString(), userId: uid,
+        tier: tier.name,
+        tierBonus: Math.floor(rawBonus),
+        feeDeducted: feeAmount,
+        baseSGT,
+        pendingFlushed: pending > 0 ? parseFloat(pending.toFixed(4)) : undefined
     });
 
-    // Simpan ke localStorage dulu (instant, tidak tergantung Firestore)
+    // Simpan ke localStorage dulu
     try {
-        localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
-        localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions.slice(0, 200)));
+        localStorage.setItem('sgt_balance_' + uid, sgtBalance.toString());
+        localStorage.setItem('sgt_transactions_' + uid, JSON.stringify(sgtTransactions.slice(0, 200)));
     } catch(e) {}
 
-    // Fee pool accumulation (funds staking APY)
+    // Fee pool accumulation
     sgtFeePool += feeAmount;
     try {
         await setDoc(doc(db, 'sgt_config', 'fee_pool'), {
@@ -4012,12 +4100,14 @@ async function awardSGT(piAmount, description) {
         try { await addDanaToPool('baitul_maal', sosialShare); } catch(e) {}
     }
 
-    // Simpan ke Firestore (forceFirestore=true karena ini transaksi penting)
+    // Simpan ke Firestore
     saveSGTData(true);
     updateSGTUI();
     if (typeof updateSosialUI === 'function') updateSosialUI();
-    showToast(`+${userShare.toLocaleString()} SGT (Tier ${tier.name}) 🎉`, 'success');
-    logDebug('SGT awarded: ' + userShare + ' | fee: ' + feeAmount + ' | sosial: ' + sosialShare);
+
+    const pendingMsg = pending > 0 ? ` (+${pending.toFixed(2)} pending)` : '';
+    showToast(`+${userShare.toLocaleString()} SGT (Tier ${tier.name})${pendingMsg} 🎉`, 'success');
+    logDebug('SGT awarded: ' + userShare + ' | fee: ' + feeAmount + ' | sosial: ' + sosialShare + ' | pending baru: ' + newPending);
     return userShare;
 }
 
@@ -4031,10 +4121,15 @@ function calculateSGTReward(piAmount) {
     }
     if (piAmount < sgtMinPurchase) return 0;
     const tier    = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05 };
-    const base    = Math.floor(piAmount * sgtRatePerPi);
-    const bonus   = Math.floor(base * tier.rate);
-    const fee     = Math.floor(base * SGT_FEE_RATE);
-    return Math.max(0, base + bonus - fee);
+    // Gunakan float agar preview reward akurat (termasuk untuk belanja kecil)
+    const base    = piAmount * sgtRatePerPi;
+    const bonus   = base * tier.rate;
+    const fee     = base * SGT_FEE_RATE;
+    const rawReward = Math.max(0, base + bonus - fee);
+    // Tambahkan pending akumulasi user untuk preview
+    const uid = currentUser?.uid;
+    const pending = uid ? (sgtPendingMap[uid] || 0) : 0;
+    return rawReward; // return float — UI akan format sendiri
 }
 
 function showSGTElements(show) {
@@ -4408,10 +4503,21 @@ window.loadMintRateFromFirestore = async function loadMintRateFromFirestore() {
         const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
         if (snap.exists() && snap.data().mintRate) {
             sgtRatePerPi = snap.data().mintRate;
-            const el = document.getElementById('currentMintRateDisplay');
-            if (el) el.textContent = sgtRatePerPi;
-            logDebug('Mint rate loaded: ' + sgtRatePerPi + ' SGT/Pi');
+        } else {
+            // Dokumen belum ada atau mintRate belum diset — seed default 500
+            sgtRatePerPi = 500;
+            await setDoc(doc(db, 'sgt_config', 'supply'), { mintRate: 500 }, { merge: true });
+            logDebug('[loadMintRate] Seeding default rate 500 ke Firestore');
         }
+        const el = document.getElementById('currentMintRateDisplay');
+        if (el) el.textContent = sgtRatePerPi;
+        const rl = document.getElementById('walletRateLabel');
+        if (rl) rl.textContent = '1 π = ' + sgtRatePerPi + ' SGT';
+        const ai = document.getElementById('sgtAdminRate');
+        if (ai) ai.value = sgtRatePerPi;
+        const ah = document.getElementById('sgtAdminRateHint');
+        if (ah) ah.textContent = sgtRatePerPi;
+        logDebug('Mint rate loaded: ' + sgtRatePerPi + ' SGT/Pi');
     } catch(e) { logDebug('loadMintRateFromFirestore error: ' + e.message); }
 };
 
@@ -4715,7 +4821,7 @@ window.openExchangeRateModal = function() {
     const existingModal = document.getElementById('exchangeRateModal');
     if (existingModal) existingModal.remove();
 
-    const currentSgtRate = (typeof sgtRatePerPi !== 'undefined') ? sgtRatePerPi : 100;
+    const currentSgtRate = (typeof sgtRatePerPi !== 'undefined') ? sgtRatePerPi : 500;
 
     const modal = document.createElement('div');
     modal.id = 'exchangeRateModal';
