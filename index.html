@@ -1212,7 +1212,36 @@
 })();
 </script>
 
-    <!-- DEBUG PANEL -->
+    <!-- ERROR 400 INTERCEPTOR: identify mana yang 400 -->
+    <script>
+    (function() {
+        var origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            return origFetch.apply(this, arguments).then(function(res) {
+                if (res.status === 400) {
+                    var urlStr = typeof url === 'string' ? url : (url.url || String(url));
+                    console.warn('[400 INTERCEPTED]', urlStr.substring(0, 120));
+                    var panel = document.getElementById('debugPanel');
+                    if (panel) panel.innerHTML += '<div style="color:#E24B4A">' + new Date().toLocaleTimeString() + ': HTTP 400 dari: ' + urlStr.substring(0, 80) + '</div>';
+                    panel && (panel.scrollTop = panel.scrollHeight);
+                }
+                return res;
+            });
+        };
+        var origXHR = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url) {
+            this._url = url;
+            this.addEventListener('load', function() {
+                if (this.status === 400) {
+                    console.warn('[400 XHR]', String(this._url).substring(0, 120));
+                }
+            });
+            return origXHR.apply(this, arguments);
+        };
+    })();
+    </script>
+
+        <!-- DEBUG PANEL -->
     <div id="debugPanel"></div>
     
     <div id="announcement-banner" style="background-color: #ffa500; color: #000; padding: 15px; text-align: center; font-family: sans-serif; font-weight: bold; border-bottom: 3px solid #e69500; margin-bottom: 20px;">
@@ -5265,13 +5294,17 @@ async function initFirebase() {
             if (!app) app = initializeApp(firebaseConfig);
             if (!auth) auth = getAuth(app);
             if (!db) {
-                // experimentalForceLongPolling: matikan WebChannel sepenuhnya
-                // → tidak ada lagi Listen/channel 404 atau ERR_QUIC
-                // AutoDetect sering tetap memilih WebChannel (yg bermasalah) → paksa long polling
-                db = initializeFirestore(app, {
-                    experimentalForceLongPolling: true,
-                    useFetchStreams: false
-                });
+                try {
+                    // Coba dengan long polling dulu (lebih stabil di beberapa jaringan)
+                    db = initializeFirestore(app, {
+                        experimentalForceLongPolling: true,
+                        useFetchStreams: false
+                    });
+                } catch (fsInitErr) {
+                    logDebug('[Firebase] Firestore longPolling gagal, fallback ke default: ' + fsInitErr.message);
+                    // Fallback: getFirestore default tanpa custom settings
+                    try { db = getFirestore(app); } catch(e2) { db = null; }
+                }
             }
             logDebug(`Firebase initialized OK (attempt ${attempt})`);
 
@@ -5321,14 +5354,25 @@ async function initFirebase() {
 }
 
 function showFirebaseSetupWarning(msg) {
-    if (isPiBrowser) return;
-    if (document.getElementById('_fbWarningBanner')) return;
+    logDebug('[Firebase Setup Warning] ' + msg);
+    // Tampilkan di UI sebagai banner yang bisa di-dismiss
+    const existingBanner = document.getElementById('firebaseWarnBanner');
+    if (existingBanner) return; // jangan dobel
     const banner = document.createElement('div');
-    banner.id = '_fbWarningBanner';
-    banner.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#FEF3C7;border:2px solid #F59E0B;color:#92400E;padding:10px 16px;border-radius:12px;font-size:12px;font-weight:700;z-index:9999;max-width:90%;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
-    banner.innerHTML = `<i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>${msg} <button onclick="this.parentElement.remove()" style="margin-left:8px;background:none;border:none;cursor:pointer;font-weight:900;color:#92400E;">\u2715</button>`;
-    if (document.body) document.body.appendChild(banner);
-    setTimeout(() => { if (banner.parentElement) banner.remove(); }, 15000);
+    banner.id = 'firebaseWarnBanner';
+    banner.style.cssText = 'position:fixed;bottom:70px;left:12px;right:12px;z-index:9998;background:#FCEBEB;border:1px solid #F7C1C1;border-radius:10px;padding:12px 14px;font-size:12px;color:#A32D2D;box-shadow:0 2px 8px rgba(0,0,0,0.1);';
+    banner.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
+            <div>
+                <strong>Koneksi Database Bermasalah</strong><br>
+                ${msg}<br>
+                <span style="font-size:11px;opacity:0.8;">Pastikan: (1) Firestore aktif, (2) Anonymous Auth aktif, (3) API Key tidak dibatasi domain di Google Cloud Console.</span>
+            </div>
+            <button onclick="document.getElementById('firebaseWarnBanner').remove()" style="background:none;border:none;color:#A32D2D;font-size:16px;cursor:pointer;flex-shrink:0;">×</button>
+        </div>
+    `;
+    document.body.appendChild(banner);
+    setTimeout(() => { if (banner.parentNode) banner.remove(); }, 15000);
 }
 
 // ============================================
