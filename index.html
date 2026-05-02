@@ -1751,6 +1751,9 @@
                 </div>
             </div>
 
+            <!-- DB Status Bar -->
+            <div id="adminDbStatus" style="font-size:11px;color:#6B7280;padding:6px 4px;margin-bottom:4px;"></div>
+
             <!-- SGT Overview Panel -->
             <div style="background:linear-gradient(135deg,#0F172A 0%,#1E293B 100%);border-radius:20px;padding:20px;margin-bottom:16px;color:white;box-shadow:0 8px 32px rgba(0,0,0,0.15);">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
@@ -5474,8 +5477,22 @@ function loadDataFromFirebase() {
     Object.values(unsubscribers).forEach(u => typeof u === 'function' && u());
     unsubscribers = {};
 
-    // Gunakan fungsi agar selalu cek real-time, bukan di-capture sekali saat awal
     const checkAdmin = () => currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
+
+    // === FALLBACK: Jika db tidak tersedia, load dari cache localStorage ===
+    if (!db) {
+        logDebug('[loadData] db null — load dari localStorage cache');
+        try {
+            const cachedP = localStorage.getItem('sagatama_products_cache');
+            if (cachedP) products = JSON.parse(cachedP);
+            const cachedO = localStorage.getItem('sagatama_orders_cache');
+            if (cachedO) { orders = JSON.parse(cachedO); myOrders = orders; }
+        } catch(e) {}
+        renderProducts?.();
+        renderOrders?.();
+        if (checkAdmin()) { updateAdminStats(); renderAdminRecentOrders?.(); }
+        return;
+    }
 
     try {
         const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
@@ -5511,6 +5528,8 @@ function loadDataFromFirebase() {
         if (checkAdmin()) {
             orders = docs;
             myOrders = docs;
+            // Cache orders admin untuk fallback saat Firebase lambat
+            try { localStorage.setItem('sagatama_orders_cache', JSON.stringify(docs.slice(0, 100))); } catch(e) {}
         } else {
             orders = docs;
             myOrders = _filterMyOrders(docs);
@@ -6841,7 +6860,22 @@ window.switchView = function(view) {
             case 'orders': renderOrders(); break;
             case 'account': renderAccount(); break;
             case 'wallet': renderWallet(); loadSupplyStats().catch(()=>{}); break;
-            case 'admin-dashboard': renderAdminDashboard(); loadSupplyStats().catch(()=>{}); break;
+            case 'admin-dashboard':
+            renderAdminDashboard();
+            loadSupplyStats().catch(()=>{});
+            // Clear previous interval kalau ada
+            if (window._adminRefreshInterval) clearInterval(window._adminRefreshInterval);
+            // Auto-refresh setiap 30 detik selama di dashboard
+            window._adminRefreshInterval = setInterval(() => {
+                const currentView = document.querySelector('.view-section.active')?.id || '';
+                if (currentView.includes('admin-dashboard') || document.getElementById('adminDashboardView')?.style.display !== 'none') {
+                    updateAdminStats();
+                    updateSGTAdminStats();
+                } else {
+                    clearInterval(window._adminRefreshInterval);
+                }
+            }, 30000);
+            break;
             case 'admin-products':
                 currentAdminProductFilter = 'all';
                 // Coba ambil dari cache dulu kalau products kosong
@@ -7515,10 +7549,28 @@ function renderAccount() {
 
 function renderAdminDashboard() {
     if (!(currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin')) { switchView('home'); return; }
+
+    // === LOAD DARI CACHE DULU agar angka tidak 0 saat Firebase lambat ===
+    if (products.length === 0) {
+        try {
+            const cached = localStorage.getItem('sagatama_products_cache');
+            if (cached) { products = JSON.parse(cached); logDebug('[Admin] Products dari cache: ' + products.length); }
+        } catch(e) {}
+    }
+    if (orders.length === 0) {
+        try {
+            const cached = localStorage.getItem('sagatama_orders_cache');
+            if (cached) { orders = JSON.parse(cached); logDebug('[Admin] Orders dari cache: ' + orders.length); }
+        } catch(e) {}
+    }
+
     updateAdminStats();
     renderAdminRecentOrders();
-    // Retry setelah Firebase kirim data (antisipasi race condition saat pertama login)
-    setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); }, 2000);
+
+    // Retry lebih sering untuk antisipasi race condition Firebase
+    setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); }, 1500);
+    setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); updateSGTAdminStats(); }, 4000);
+    setTimeout(() => { updateAdminStats(); updateSGTAdminStats(); loadSupplyStats().catch(()=>{}); }, 8000);
 }
 
 function updateAdminStats() {
@@ -7528,16 +7580,38 @@ function updateAdminStats() {
     upd('statPendingOrders', orders.filter(o => ['pending','paid','processing'].includes(o.status)).length);
     upd('statCompletedOrders', orders.filter(o => ['completed','shipped'].includes(o.status)).length);
     upd('statTotalRevenue', totalRevenue.toFixed(8));
+
+    // Tampilkan status koneksi Firebase di dashboard
+    const statusEl = document.getElementById('adminDbStatus');
+    if (statusEl) {
+        if (db) {
+            const src = (products.length > 0 || orders.length > 0) ? 'Firestore' : 'Cache';
+            statusEl.innerHTML = '<span style="color:#0F6E56;">● Live</span> ' + src + ' &nbsp;|&nbsp; Produk: ' + products.length + ' &nbsp;|&nbsp; Pesanan: ' + orders.length +
+                ' &nbsp;<button onclick="window.manualAdminRefresh()" style="background:#E1F5EE;border:none;color:#0F6E56;font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;font-weight:600;">↻ Refresh</button>';
+        } else {
+            statusEl.innerHTML = '<span style="color:#A32D2D;">● Offline</span> — Data dari cache lokal &nbsp;<button onclick="initFirebase().then(loadDataFromFirebase)" style="background:#FCEBEB;border:none;color:#A32D2D;font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;font-weight:600;">Hubungkan ulang</button>';
+        }
+    }
+
     // Update SGT stats dari Firestore secara async
     updateSGTAdminStats();
 }
 
+window.manualAdminRefresh = function() {
+    logDebug('[Admin] Manual refresh dipanggil');
+    updateAdminStats();
+    updateSGTAdminStats(true);
+    loadSupplyStats().catch(()=>{});
+    if (db) loadDataFromFirebase();
+    showToast('Memuat ulang data...', 'info');
+};
+
 let _sgtAdminStatsLastRun = 0;
 let _sgtAdminStatsRunning = false;
-async function updateSGTAdminStats() {
-    const now = Date.now(); const THROTTLE_MS = 60_000;
+async function updateSGTAdminStats(forceRefresh = false) {
+    const now = Date.now(); const THROTTLE_MS = 30_000; // 30 detik, lebih responsif
     if (_sgtAdminStatsRunning) { logDebug('[SGT-Stats] Skipped: running'); return; }
-    if (now - _sgtAdminStatsLastRun < THROTTLE_MS) { logDebug('[SGT-Stats] Skipped: throttled'); return; }
+    if (!forceRefresh && now - _sgtAdminStatsLastRun < THROTTLE_MS) { logDebug('[SGT-Stats] Skipped: throttled'); return; }
     _sgtAdminStatsRunning = true; _sgtAdminStatsLastRun = now;
     try {
         if (!db) { _sgtAdminStatsRunning = false; return; }
