@@ -178,9 +178,9 @@
             }
         };
     </script>
-    <!-- Tailwind production build — tanpa warning CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.17/lib/index.min.js"
-            onerror="this.onerror=null;this.src='https://unpkg.com/tailwindcss@3.4.17/lib/index.min.js'"></script>
+    <!-- Tailwind CSS CDN (browser build) -->
+    <script src="https://cdn.tailwindcss.com"
+            onerror="this.onerror=null;this.src='https://unpkg.com/tailwindcss@3/dist/tailwind.min.css'"></script>
     
     <style>
         * { 
@@ -1397,7 +1397,7 @@
                         </div>
                         <div style="text-align:right;">
                             <div style="background:rgba(255,255,255,0.15); padding:4px 12px; border-radius:20px; font-size:10px; font-weight:800; color:#FCD34D; border:1px solid rgba(255,215,77,0.3);">LIVE</div>
-                            <p style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:4px;">1 π = 100 SGT</p>
+                            <p id="walletRateLabel" style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:4px;">1 π = 100 SGT</p>
                         </div>
                     </div>
 
@@ -3250,7 +3250,7 @@
                 <div class="form-group">
                     <label class="form-label">SGT per Pi (Rate Belanja)</label>
                     <input type="number" id="sgtAdminRate" class="form-input" value="100">
-                    <p style="font-size:11px; color:#64748B; margin-top:4px;">Default: 1 Pi = 100 SGT</p>
+                    <p style="font-size:11px; color:#64748B; margin-top:4px;">Default: 1 Pi = <span id="sgtAdminRateHint">100</span> SGT</p>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Min. Pembelian untuk dapat SGT (Pi)</label>
@@ -3700,6 +3700,20 @@ async function loadSGTDataFixed() {
         return;
     }
     
+    // Load mint rate dari Firestore dulu agar rate selalu sinkron dengan admin
+    try {
+        const rateSnap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        if (rateSnap.exists() && rateSnap.data().mintRate) {
+            sgtRatePerPi = rateSnap.data().mintRate;
+            localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
+            logDebug('[SGT-v3] Rate synced from Firestore: ' + sgtRatePerPi + ' SGT/Pi');
+        }
+    } catch(e) {
+        // Fallback ke localStorage jika offline
+        const savedRate = localStorage.getItem('sgt_rate');
+        if (savedRate) sgtRatePerPi = parseInt(savedRate) || 100;
+        logDebug('[SGT-v3] Rate fallback localStorage: ' + sgtRatePerPi);
+    }
     const uid = currentUser.uid;
     const username = currentUser.username;
     logDebug(`[SGT-v3] Loading SGT for uid=${uid}, username=${username}`);
@@ -3784,6 +3798,10 @@ function updateSGTUI() {
 
     const piEq = document.getElementById('sgtPiEquivalent');
     if (piEq) piEq.textContent = (bal / sgtRatePerPi).toFixed(8);
+
+    // Update label rate di wallet user secara dinamis
+    const rateLabel = document.getElementById('walletRateLabel');
+    if (rateLabel) rateLabel.textContent = '1 π = ' + sgtRatePerPi + ' SGT';
 
     const rb = document.getElementById('sgtRedeemBalance');
     if (rb) rb.textContent = bal + ' SGT';
@@ -4139,13 +4157,27 @@ window.redeemSGT = function(rewardType) {
 };
 
 
-window.saveSGTSettings = function() {
+window.saveSGTSettings = async function() {
     const rate = parseInt(document.getElementById('sgtAdminRate')?.value);
     const minPurchase = parseFloat(document.getElementById('sgtAdminMinPurchase')?.value);
     if (rate > 0) sgtRatePerPi = rate;
     if (minPurchase >= 0) sgtMinPurchase = minPurchase;
     localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
     localStorage.setItem('sgt_min_purchase', sgtMinPurchase.toString());
+    // Simpan ke Firestore agar rate konsisten untuk semua user
+    try {
+        await setDoc(doc(db, 'sgt_config', 'supply'), {
+            mintRate: sgtRatePerPi,
+            mintRateUpdatedAt: serverTimestamp(),
+            mintRateUpdatedBy: currentUser?.username || 'admin'
+        }, { merge: true });
+        logDebug('[saveSGTSettings] Rate saved to Firestore: ' + sgtRatePerPi);
+    } catch(e) { logDebug('[saveSGTSettings] Firestore error: ' + e.message); }
+    // Update semua label rate di UI
+    const el = document.getElementById('currentMintRateDisplay');
+    if (el) el.textContent = sgtRatePerPi;
+    const rateLabel = document.getElementById('walletRateLabel');
+    if (rateLabel) rateLabel.textContent = '1 π = ' + sgtRatePerPi + ' SGT';
     showToast(`Pengaturan disimpan! Rate: 1 Pi = ${sgtRatePerPi} SGT`, 'success');
 };
 
@@ -9702,6 +9734,12 @@ window.updateMintRate = async function() {
     } catch(e) {}
     const el = document.getElementById('currentMintRateDisplay');
     if (el) el.textContent = val;
+    // Update label rate di wallet user
+    const rateLabel = document.getElementById('walletRateLabel');
+    if (rateLabel) rateLabel.textContent = '1 π = ' + val + ' SGT';
+    // Update input di admin modal agar sinkron
+    const rateInput = document.getElementById('sgtAdminRate');
+    if (rateInput) rateInput.value = val;
     showToast(`✅ Rate mint diubah ke ${val} SGT/Pi`, 'success');
     logDebug('Mint rate updated to: ' + val);
 };
@@ -9738,6 +9776,11 @@ window.openModal = function(id) {
             const rateLbl = document.getElementById('currentMintRateDisplay');
             if (rateEl) rateEl.value = sgtRatePerPi;
             if (rateLbl) rateLbl.textContent = sgtRatePerPi;
+            // Sinkronkan juga input sgtAdminRate dan hint-nya
+            const adminRateEl = document.getElementById('sgtAdminRate');
+            const adminRateHint = document.getElementById('sgtAdminRateHint');
+            if (adminRateEl) adminRateEl.value = sgtRatePerPi;
+            if (adminRateHint) adminRateHint.textContent = sgtRatePerPi;
         }).catch(()=>{});
     }
 };
