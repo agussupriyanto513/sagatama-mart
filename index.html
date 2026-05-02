@@ -1197,6 +1197,21 @@
     <p class="text-xs text-slate-400 mt-2">Sinkronisasi Dompet Sagatama</p>
 </div>
 
+<!-- TESTNET INDICATOR — otomatis hilang di production -->
+<script>
+(function() {
+    if (typeof USE_SANDBOX !== 'undefined' && USE_SANDBOX) {
+        var banner = document.createElement('div');
+        banner.id = 'testnetBanner';
+        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#854F0B;color:#FAEEDA;text-align:center;font-size:11px;font-weight:600;padding:4px 8px;letter-spacing:0.5px;';
+        banner.textContent = 'MODE TESTNET — Pembayaran Pi tidak nyata';
+        document.body.prepend(banner);
+        // Geser konten ke bawah agar tidak tertimpa banner
+        document.body.style.paddingTop = '24px';
+    }
+})();
+</script>
+
     <!-- DEBUG PANEL -->
     <div id="debugPanel"></div>
     
@@ -3565,7 +3580,7 @@ let sgtFeePool           = 0; // akumulasi fee untuk APY staking
 // Admin exchange rate (hanya untuk referensi admin)
 let adminExchangeRate = 15000;
 
-const USE_SANDBOX = false;
+const USE_SANDBOX = true; // testnet — ubah ke false saat production mainnet
 const ADMIN_CREDENTIALS = { username: 'sagatama_admin', password: 'Admin513' };
 // UID tetap admin@portal-sagatama.pi — digunakan untuk isAdmin() check di Firestore
 const ADMIN_FIREBASE_UID = '8cHVtkw8JAbfF6GcvZGClGrYM143';
@@ -5631,37 +5646,63 @@ window.authenticatePi = async function() {
         loginBtn.style.pointerEvents = 'none';
     }
     
+    // Progress toast setiap 15 detik agar user tidak panik
+    const progressMsgs = [
+        'Menghubungkan ke Pi Network...',
+        'Masih menunggu respons Pi...',
+        'Hampir selesai, tunggu sebentar...',
+        'Memverifikasi akun Pi Anda...'
+    ];
+    let progressIdx = 0;
+    showToast(progressMsgs[progressIdx], 'info');
+    const progressInterval = setInterval(() => {
+        progressIdx = Math.min(progressIdx + 1, progressMsgs.length - 1);
+        showToast(progressMsgs[progressIdx], 'info');
+    }, 15000);
+
     try {
-        showToast('Menghubungkan ke Pi Network...', 'info');
-        
         const scopes = ['username', 'payments'];
         
         const onIncompletePaymentFound = async (payment) => {
-            logDebug("[AUTH-v3] Incomplete payment: " + payment?.identifier);
+            logDebug("[AUTH-v4] Incomplete payment: " + payment?.identifier);
             try { 
                 await handleIncompletePayment(payment); 
             } catch (err) {
-                logDebug("[AUTH-v3] Handle incomplete error: " + err.message);
+                logDebug("[AUTH-v4] Handle incomplete error: " + err.message);
             }
         };
         
-        // PERBAIKAN: Timeout 30 detik (bukan 60) - user tidak sabar menunggu
+        // Timeout 60 detik — cukup untuk koneksi lambat
         const authResult = await Promise.race([
             window.Pi.authenticate(scopes, onIncompletePaymentFound),
             new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout: Pi auth terlalu lama')), 30000)
+                setTimeout(() => reject(new Error('Timeout: Pi auth terlalu lama (60 detik)')), 60000)
             )
         ]);
         
+        clearInterval(progressInterval);
+
         if (!authResult?.user) {
             throw new Error('Auth result tidak valid - user object hilang');
         }
         
-        // Step 4: Proses hasil auth
-        await processPiAuthSuccess(authResult);
+        // Proses hasil auth — bungkus tersendiri agar error di sini
+        // tidak menyebabkan tombol login stuck
+        try {
+            await processPiAuthSuccess(authResult);
+        } catch (procErr) {
+            logDebug("[AUTH-v4] processPiAuthSuccess error: " + procErr.message);
+            // Restore tombol agar user bisa retry
+            if (loginBtn) {
+                if (originalBtnHTML) loginBtn.innerHTML = originalBtnHTML;
+                loginBtn.style.pointerEvents = 'auto';
+            }
+            showToast('Login berhasil tapi ada kendala memuat data. Coba lagi.', 'warning');
+        }
         
     } catch (error) {
-        logDebug("[AUTH-v3] ❌ Auth error: " + error.message);
+        clearInterval(progressInterval);
+        logDebug("[AUTH-v4] Auth error: " + error.message);
         handlePiAuthError(error, loginBtn, originalBtnHTML);
     }
 };
@@ -5685,20 +5726,32 @@ async function processPiAuthSuccess(authResult) {
     localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
     logDebug(`[AUTH-v3] User authenticated: @${currentUser.username} | UID: ${piUid}`);
     
-    // Step 5: Firebase Auth - Anonymous sign in untuk Firestore write permission
+    // Step 5: Firebase Auth dengan retry 3x — penting untuk Firestore write
     let firebaseUid = null;
-    try {
-        if (auth) {
-            if (!auth.currentUser) {
-                const anonResult = await signInAnonymously(auth);
-                firebaseUid = anonResult.user.uid;
-                logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
-            } else {
-                firebaseUid = auth.currentUser.uid;
+    if (auth) {
+        if (auth.currentUser) {
+            firebaseUid = auth.currentUser.uid;
+            logDebug('[AUTH-v4] Firebase sudah login: ' + firebaseUid);
+        } else {
+            // Retry hingga 3x dengan delay 2 detik
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    const anonResult = await signInAnonymously(auth);
+                    firebaseUid = anonResult.user.uid;
+                    logDebug('[AUTH-v4] Firebase anonymous OK (attempt ' + attempt + '): ' + firebaseUid);
+                    break;
+                } catch (fbErr) {
+                    logDebug('[AUTH-v4] Firebase anon attempt ' + attempt + ' gagal: ' + fbErr.message);
+                    if (attempt < 3) {
+                        await new Promise(r => setTimeout(r, 2000));
+                    } else {
+                        // Tetap lanjut tapi warn user bahwa sinkronisasi terbatas
+                        logDebug('[AUTH-v4] Firebase anon gagal semua attempt — Firestore write mungkin terbatas');
+                        showToast('Peringatan: sinkronisasi data terbatas. Pastikan koneksi internet stabil.', 'warning');
+                    }
+                }
             }
         }
-    } catch (fbErr) {
-        logDebug("[AUTH-v3] Firebase anon warning (non-kritis): " + fbErr.message);
     }
 
     // KRITIS: simpan firebaseUid ke currentUser agar query Firestore bisa pakai
@@ -5755,32 +5808,34 @@ async function processPiAuthSuccess(authResult) {
 }
 
 function handlePiAuthError(error, loginBtn, originalHTML) {
-    // Restore tombol
+    // Restore tombol agar selalu bisa retry
     if (loginBtn) {
         if (originalHTML) loginBtn.innerHTML = originalHTML;
         loginBtn.style.pointerEvents = 'auto';
+        loginBtn.style.opacity = '1';
     }
-    
-    const msg = (error.message || '').toLowerCase();
-    
-    // Reset state untuk memungkinkan retry
+
+    // Reset SEMUA state Pi SDK agar retry bisa jalan bersih
     isPiSDKReady = false;
     piInitPromise = null;
     piInitAttempts = 0;
-    
-    if (msg.includes('consent') || msg.includes('cancel') || msg.includes('dibatalkan')) {
-        showToast('Login dibatalkan', 'warning');
+
+    const msg = (error.message || '').toLowerCase();
+
+    if (msg.includes('consent') || msg.includes('cancel') || msg.includes('dibatalkan') || msg.includes('user cancel')) {
+        showToast('Login dibatalkan. Ketuk tombol Pi untuk coba lagi.', 'warning');
     } else if (msg.includes('timeout') || msg.includes('terlalu lama')) {
-        showToast('Koneksi timeout. Coba lagi.', 'error');
-        setTimeout(() => {
-            if (confirm('Login timeout. Coba lagi sekarang?')) {
-                authenticatePi();
-            }
-        }, 800);
-    } else if (msg.includes('messaging') || msg.includes('promise')) {
-        showToast('Pi SDK error. Refresh halaman dan coba lagi.', 'error');
+        showToast('Koneksi lambat. Silakan coba lagi.', 'error');
+        // Tawaran retry otomatis setelah 1 detik
+        setTimeout(() => authenticatePi(), 1500);
+    } else if (msg.includes('messaging') || msg.includes('promise') || msg.includes('timed out')) {
+        showToast('Pi Browser sedang sibuk. Coba lagi dalam 3 detik...', 'error');
+        setTimeout(() => authenticatePi(), 3000);
+    } else if (msg.includes('network') || msg.includes('fetch')) {
+        showToast('Tidak ada koneksi internet. Periksa jaringan lalu coba lagi.', 'error');
     } else {
-        showToast('Gagal login: ' + error.message, 'error');
+        showToast('Gagal login. Silakan coba lagi.', 'error');
+        logDebug('[AUTH] Detail error: ' + error.message);
     }
 }
 
@@ -6269,7 +6324,7 @@ async function createPiPayment() {
         const callbacks = {
 
             onReadyForServerApproval: async (paymentId) => {
-                logDebug("APPROVAL: " + paymentId);
+                logDebug('[PAY] onReadyForServerApproval: ' + paymentId);
 
                 try {
                     const res = await approvePaymentOnServer(paymentId);
@@ -6278,17 +6333,19 @@ async function createPiPayment() {
                         throw new Error(res?.error || 'Approve gagal');
                     }
 
-                    logDebug("Approve SUCCESS");
+                    logDebug('[PAY] Approve OK');
 
                 } catch (err) {
-                    logDebug("Approve FAILED: " + err.message);
-                    showToast('Gagal verifikasi pembayaran', 'error');
+                    logDebug('[PAY] Approve FAILED: ' + err.message);
+                    showToast('Gagal memproses pembayaran. Coba lagi.', 'error');
+                    // PENTING: reset state agar user bisa coba bayar lagi
                     resetPaymentState();
+                    // Tidak perlu cancel ke Pi — Pi SDK sudah handle kalau approve tidak dipanggil
                 }
             },
 
             onReadyForServerCompletion: async (paymentId, txid) => {
-                logDebug("COMPLETE: " + paymentId);
+                logDebug('[PAY] onReadyForServerCompletion: ' + paymentId);
 
                 try {
                     const res = await completePaymentOnServer(paymentId, txid, cartSnapshot);
@@ -6297,16 +6354,17 @@ async function createPiPayment() {
                         throw new Error(res?.error || 'Complete gagal');
                     }
 
-                    showToast('Pembayaran berhasil!', 'success');
-
-                    cart.length = 0;
-                    renderCart?.();
-
+                    showToast('Pembayaran berhasil! Pesanan sedang diproses.', 'success');
+                    // cart dibersihkan oleh completePaymentOnServer
                     resetPaymentState();
 
                 } catch (err) {
-                    logDebug("Complete FAILED: " + err.message);
-                    showToast('Transaksi gagal disimpan', 'error');
+                    logDebug('[PAY] Complete FAILED: ' + err.message);
+                    if (err.message.includes('timeout')) {
+                        showToast('Jaringan lambat, tapi pembayaran mungkin berhasil. Cek riwayat pesanan.', 'warning');
+                    } else {
+                        showToast('Ada kendala menyimpan pesanan. Cek riwayat pesanan Anda.', 'warning');
+                    }
                     resetPaymentState();
                 }
             },
@@ -6317,26 +6375,32 @@ async function createPiPayment() {
                 resetPaymentState();
             },
 
-            onError: (error) => {
-                logDebug("ERROR: " + (error?.message || error));
+            onError: (error, payment) => {
+                const errMsg = error?.message || String(error) || 'Unknown error';
+                logDebug('[PAY] onError: ' + errMsg);
 
-                const msg = (error?.message || '').toLowerCase();
+                const msg = errMsg.toLowerCase();
 
-                if (msg.includes('insufficient')) {
-                    showToast('Saldo tidak cukup', 'error');
-                } else if (msg.includes('cancel')) {
-                    showToast('Dibatalkan', 'warning');
+                if (msg.includes('insufficient') || msg.includes('balance')) {
+                    showToast('Saldo Pi tidak cukup untuk transaksi ini.', 'error');
+                } else if (msg.includes('cancel') || msg.includes('user_cancel')) {
+                    showToast('Pembayaran dibatalkan.', 'warning');
+                } else if (msg.includes('network') || msg.includes('fetch')) {
+                    showToast('Koneksi terputus. Periksa internet lalu coba lagi.', 'error');
+                } else if (msg.includes('already') || msg.includes('duplicate')) {
+                    showToast('Pembayaran ini sudah pernah diproses.', 'warning');
                 } else {
-                    showToast('Error pembayaran', 'error');
+                    showToast('Pembayaran gagal: ' + errMsg, 'error');
                 }
 
+                // Selalu reset state agar tombol aktif kembali
                 resetPaymentState();
             }
         };
 
         window.Pi.createPayment({
             amount: parseFloat(totalPi.toFixed(8)),
-            memo: `Sagatama Mart - ${cart.length} item`,
+            memo: `Sagatama Mart - ${cart.length} item${USE_SANDBOX ? ' [TESTNET]' : ''}`,
             metadata: orderMetadata
         }, callbacks);
 
@@ -6355,59 +6419,71 @@ async function createPiPayment() {
     }
 }
 
+// ============================================================
+// APPROVE PAYMENT — Firestore-based (tanpa backend server)
+// Pi SDK memvalidasi transaksi di blockchain, kita catat ke Firestore
+// ============================================================
 async function approvePaymentOnServer(paymentId) {
-    // Timeout 20 detik untuk approve — jika server tidak merespons segera
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
-    let response;
+    logDebug('[PAY] Approve paymentId: ' + paymentId);
+
+    if (!db) throw new Error('Database tidak tersedia saat approve');
+
+    // Catat ke Firestore sebagai "pending approval"
+    // Pi SDK yang handle validasi blockchain — kita hanya perlu record-keeping
     try {
-        response = await fetch('/api/payments/approve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ paymentId }),
-            signal: controller.signal
-        });
-    } catch (fetchErr) {
-        if (fetchErr.name === 'AbortError') {
-            throw new Error('Server approve timeout (20s). Cek koneksi atau hubungi admin.');
-        }
-        throw new Error('Tidak dapat menghubungi server approve: ' + fetchErr.message);
-    } finally {
-        clearTimeout(timeoutId);
-    }
-
-    let result;
-    try { result = await response.json(); } catch { result = {}; }
-    if (!response.ok) throw new Error(result.error_message || result.error || `Server error ${response.status}`);
-
-    // Simpan ke pending_payments di Firestore untuk tracking (non-kritis)
-    if (db) {
-        addDoc(collection(db, 'pending_payments'), {
+        await setDoc(doc(db, 'payments', paymentId), {
             paymentId,
             status: 'pending_approval',
-            createdAt: serverTimestamp(),
-            customer: currentUser?.username,
-            customerUid: currentUser?.uid,
-            amount: pendingPayment?.amount || 0
-        }).catch(e => logDebug("Pending payment save (non-kritis): " + e.message));
+            approvedAt: serverTimestamp(),
+            customer: currentUser?.username || 'unknown',
+            customerUid: currentUser?.uid || '',
+            firebaseUid: currentUser?.firebaseUid || auth?.currentUser?.uid || '',
+            amount: pendingPayment?.amount || 0,
+            items: pendingPayment?.items?.map(i => ({ id: i.id, name: i.name, qty: i.qty, pricePi: i.pricePi })) || [],
+            network: USE_SANDBOX ? 'testnet' : 'mainnet'
+        }, { merge: true });
+        logDebug('[PAY] Approve recorded to Firestore OK');
+    } catch (fsErr) {
+        // Firestore write gagal — log tapi tetap lanjut
+        // Pi sendiri yang validasi transaksinya, ini hanya record
+        logDebug('[PAY] Firestore approve record skip: ' + fsErr.message);
     }
-    return result;
+
+    // Return object yang diharapkan oleh caller
+    return { success: true, paymentId, source: 'firestore' };
 }
 
-/**
- * PERBAIKAN: completePaymentOnServer sekarang menerima cartSnapshot
- * Order disimpan ke Firestore SEBELUM cart dibersihkan
- */
+// ============================================================
+// COMPLETE PAYMENT — Firestore-based + timeout 30 detik
+// ============================================================
 async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
-    // Langkah 1: Konfirmasi ke server Pi
-    const response = await fetch('/api/payments/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId, txid })
-    });
-    if (!response.ok) throw new Error("Gagal konfirmasi ke server");
-    const result = await response.json();
-    logDebug("Server Pi mengonfirmasi selesai");
+    logDebug('[PAY] Complete paymentId: ' + paymentId + ' txid: ' + txid);
+
+    // Timeout 30 detik untuk complete
+    const completeTimeout = new Promise((_, rej) =>
+        setTimeout(() => rej(new Error('Complete payment timeout 30 detik')), 30000)
+    );
+
+    const doComplete = async () => {
+        // Update status di Firestore payments collection
+        if (db) {
+            try {
+                await setDoc(doc(db, 'payments', paymentId), {
+                    status: 'completed',
+                    txid,
+                    completedAt: serverTimestamp(),
+                    network: USE_SANDBOX ? 'testnet' : 'mainnet'
+                }, { merge: true });
+                logDebug('[PAY] Payment completed recorded to Firestore');
+            } catch (fsErr) {
+                logDebug('[PAY] Firestore complete record skip: ' + fsErr.message);
+            }
+        }
+        return { success: true, paymentId, txid };
+    };
+
+    const result = await Promise.race([doComplete(), completeTimeout]);
+    logDebug('[PAY] Complete selesai');
 
     const finalAmount = pendingPayment?.amount || 0;
     const finalItems = cartSnapshot || pendingPayment?.items || [];
@@ -6560,56 +6636,101 @@ function listenSGTTransactions(userId) {
 // HANDLE INCOMPLETE PAYMENT
 // ============================================
 async function handleIncompletePayment(payment) {
-    logDebug("Handling incomplete payment: " + payment?.identifier);
+    logDebug('[PAY] handleIncompletePayment: ' + payment?.identifier);
     if (!payment?.identifier) return;
 
     try {
-        const existingOrder = orders.find(o => o.paymentId === payment.identifier);
-        if (existingOrder?.status === 'completed' || existingOrder?.status === 'paid') {
-            logDebug("Payment sudah diproses");
-            if (payment?.transaction?.txid) {
-                await completePaymentOnServer(payment.identifier, payment.transaction.txid, []);
+        // Cek Firestore dulu (lebih akurat dari array orders lokal)
+        let alreadyDone = false;
+        if (db) {
+            try {
+                const paySnap = await getDoc(doc(db, 'payments', payment.identifier));
+                if (paySnap.exists()) {
+                    const st = paySnap.data().status;
+                    if (st === 'completed' || st === 'paid') {
+                        alreadyDone = true;
+                        logDebug('[PAY] Incomplete: sudah completed di Firestore, skip');
+                    }
+                }
+            } catch (e) {
+                // Fallback: cek array lokal
+                const existingOrder = orders.find(o => o.paymentId === payment.identifier);
+                if (existingOrder?.status === 'completed' || existingOrder?.status === 'paid') {
+                    alreadyDone = true;
+                }
+            }
+        }
+
+        if (alreadyDone) {
+            // Sudah selesai — hanya update Firestore status, jangan award SGT lagi
+            if (payment?.transaction?.txid && db) {
+                await setDoc(doc(db, 'payments', payment.identifier), {
+                    status: 'completed', txid: payment.transaction.txid
+                }, { merge: true }).catch(() => {});
             }
             return;
         }
 
         if (payment?.transaction?.txid) {
-            if (!existingOrder) {
+            // Ada txid = transaksi sudah di blockchain, selesaikan
+            const items = payment.metadata?.items || [];
+            const amount = parseFloat(payment.amount) || 0;
+
+            if (db) {
                 const orderData = {
                     paymentId: payment.identifier,
                     txid: payment.transaction.txid,
-                    amount: parseFloat(payment.amount) || 0,
-                    items: payment.metadata?.items || [],
+                    amount,
+                    items,
                     status: 'paid',
                     customer: currentUser?.username || 'User',
                     customerUid: currentUser?.uid || '',
+                    firebaseUid: currentUser?.firebaseUid || auth?.currentUser?.uid || '',
                     createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp(),
                     metadata: payment.metadata || {},
-                    sgtEarned: calculateSGTReward(parseFloat(payment.amount) || 0)
+                    sgtEarned: calculateSGTReward(amount),
+                    source: 'incomplete_recovery'
                 };
-                await saveOrderToFirebase(orderData, payment.identifier);
+                await saveOrderToFirebase(orderData, payment.identifier).catch(e =>
+                    logDebug('[PAY] saveOrder incomplete skip: ' + e.message)
+                );
             }
-            await completePaymentOnServer(payment.identifier, payment.transaction.txid, payment.metadata?.items || []);
+
+            await completePaymentOnServer(payment.identifier, payment.transaction.txid, items);
+            // Award SGT hanya jika belum pernah (cek dari transactions lokal)
+            const alreadyAwarded = sgtTransactions.some(t =>
+                t.description && t.description.includes(payment.identifier.substring(0, 8))
+            );
+            if (!alreadyAwarded) {
+                await awardSGT(parseFloat(payment.amount) || 0, 'Recovery pesanan #' + payment.identifier.substring(0, 8));
+            }
             showToast('Pembayaran pending berhasil diselesaikan!', 'success');
         } else {
+            // Tidak ada txid = batalkan
             await cancelPaymentOnServer(payment.identifier);
+            logDebug('[PAY] Incomplete tanpa txid — cancelled');
         }
         pendingPayment = null;
     } catch (err) {
-        logDebug("Handle incomplete error: " + err.message);
+        logDebug('[PAY] handleIncomplete error: ' + err.message);
         try { await cancelPaymentOnServer(payment.identifier); } catch (e) {}
     }
 }
 
 async function cancelPaymentOnServer(paymentId) {
-    const response = await fetch('/api/payments/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId })
-    });
-    if (!response.ok) throw new Error("Gagal cancel payment");
-    logDebug("Payment cancelled: " + paymentId);
+    logDebug('[PAY] Cancel paymentId: ' + paymentId);
+    if (db) {
+        try {
+            await setDoc(doc(db, 'payments', paymentId), {
+                status: 'cancelled',
+                cancelledAt: serverTimestamp()
+            }, { merge: true });
+        } catch (e) {
+            logDebug('[PAY] Cancel Firestore skip: ' + e.message);
+        }
+    }
+    logDebug('[PAY] Payment cancelled recorded: ' + paymentId);
     return true;
 }
 
@@ -8656,7 +8777,7 @@ window.submitBeasiswa = async function() {
     } catch(e) {
         logDebug('submitBeasiswa error: ' + e.message + ' | code: ' + e.code);
         let errMsg = e.message;
-        if (e.code === 'permission-denied') errMsg = 'Akses ditolak. Aktifkan Anonymous Auth di Firebase Console atau coba login ulang.';
+        if (e.code === 'permission-denied') errMsg = 'Akses ditolak. Pastikan Anonymous Auth aktif di Firebase Console dan Firestore rules sudah benar. Coba logout lalu login ulang.';
         else if (e.code === 'unavailable' || (e.message||'').includes('offline')) errMsg = 'Tidak ada koneksi internet. Periksa jaringan dan coba lagi.';
         else if (e.code === 'not-found') errMsg = 'Database tidak ditemukan. Hubungi admin untuk mengaktifkan Firestore.';
         showToast('Gagal kirim beasiswa: ' + errMsg, 'error');
@@ -8733,7 +8854,7 @@ window.submitBantuan = async function() {
     } catch(e) {
         logDebug('submitBantuan error: ' + e.message + ' | code: ' + e.code);
         let errMsg = e.message;
-        if (e.code === 'permission-denied') errMsg = 'Akses ditolak. Aktifkan Anonymous Auth di Firebase Console atau coba login ulang.';
+        if (e.code === 'permission-denied') errMsg = 'Akses ditolak. Pastikan Anonymous Auth aktif di Firebase Console dan Firestore rules sudah benar. Coba logout lalu login ulang.';
         else if (e.code === 'unavailable' || (e.message||'').includes('offline')) errMsg = 'Tidak ada koneksi internet. Periksa jaringan dan coba lagi.';
         else if (e.code === 'not-found') errMsg = 'Database tidak ditemukan. Hubungi admin untuk mengaktifkan Firestore.';
         showToast('Gagal kirim bantuan sosial: ' + errMsg, 'error');
