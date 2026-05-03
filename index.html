@@ -3530,9 +3530,9 @@ const SGT_GENESIS_ALLOC   = {
     baitulMaal: 0.10, // 10% dana sosial
     tim       : 0.05  // 5% pengembang (locked 12 bln)
 };
-// Mint rate (adjustable admin, default 100)
-let sgtRatePerPi   = 100;
-let sgtMinPurchase = 0.1;
+// Mint rate (adjustable admin, default 500)
+let sgtRatePerPi   = 500;
+let sgtMinPurchase = 0.001;
 
 // Fee pool — setiap transaksi bayar fee ini, dana ke pool
 const SGT_FEE_RATE      = 0.03;  // 3% dari base reward masuk fee pool
@@ -3753,7 +3753,7 @@ async function loadSGTDataFixed() {
         const rate = localStorage.getItem('sgt_rate');
         if (bal) sgtBalance = parseInt(bal) || 0;
         if (tx) { try { sgtTransactions = JSON.parse(tx); } catch(e) { sgtTransactions = []; } }
-        if (rate) sgtRatePerPi = parseInt(rate) || 100;
+        if (rate) sgtRatePerPi = parseInt(rate) || 500;
         logDebug(`[SGT-v3] ⚠️ Loaded from localStorage: ${sgtBalance} SGT`);
         updateSGTUI();
         
@@ -4376,10 +4376,28 @@ window.loadMintRateFromFirestore = async function loadMintRateFromFirestore() {
         const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
         if (snap.exists() && snap.data().mintRate) {
             sgtRatePerPi = snap.data().mintRate;
-            const el = document.getElementById('currentMintRateDisplay');
-            if (el) el.textContent = sgtRatePerPi;
-            logDebug('Mint rate loaded: ' + sgtRatePerPi + ' SGT/Pi');
+            logDebug('Mint rate loaded from Firestore: ' + sgtRatePerPi + ' SGT/Pi');
+        } else {
+            // Belum ada di Firestore — set default 500 dan simpan
+            sgtRatePerPi = 500;
+            logDebug('Mint rate belum ada di Firestore, set default 500 SGT/Pi');
+            try {
+                await setDoc(doc(db, 'sgt_config', 'supply'), {
+                    mintRate: 500,
+                    mintRateUpdatedAt: serverTimestamp(),
+                    mintRateUpdatedBy: 'system_default'
+                }, { merge: true });
+            } catch(saveErr) { logDebug('Gagal simpan default mintRate: ' + saveErr.message); }
         }
+        // Sync semua elemen UI yang menampilkan rate
+        ['currentMintRateDisplay','walletRateLabel','sgtAdminRate','sgtAdminRateHint'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (id === 'walletRateLabel') el.textContent = '1 \u03c0 = ' + sgtRatePerPi + ' SGT';
+            else if (el.tagName === 'INPUT') el.value = sgtRatePerPi;
+            else el.textContent = sgtRatePerPi;
+        });
+        localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
     } catch(e) { logDebug('loadMintRateFromFirestore error: ' + e.message); }
 };
 
@@ -9003,6 +9021,8 @@ window.switchZakatTab = function(tab, btn) {
             b.style.border = t===tab ? 'none' : '2px solid #E5E7EB';
         }
     });
+    // Selalu reload riwayat saat ganti tab agar data terbaru tampil
+    loadZakatHistory();
 };
 
 // ── HAUL TRACKER ─────────────────────────────────────────────
@@ -9175,6 +9195,7 @@ window.bayarInfaq = async function() {
         document.getElementById('infaqAmount').value = '';
         document.getElementById('infaqNiat').value = '';
         updateNisabUI();
+        loadZakatHistory();
     } catch(e) { showToast('Gagal kirim infaq: '+e.message,'error'); }
 };
 
@@ -9210,19 +9231,35 @@ async function loadZakatHistory() {
     if (!c) return;
     try {
         const snap = await getDocs(query(collection(db,'zakat_logs'),
-            where('userId','==',currentUser.uid), orderBy('timestamp','desc'), limit(5)));
-        if (snap.empty) { c.innerHTML='<div class="empty-state" style="padding:24px;"><i class="fas fa-mosque" style="font-size:36px;"></i><p>Belum ada riwayat zakat</p></div>'; return; }
+            where('userId','==',currentUser.uid), orderBy('timestamp','desc'), limit(20)));
+        if (snap.empty) {
+            c.innerHTML='<div class="empty-state" style="padding:24px;"><i class="fas fa-mosque" style="font-size:36px;"></i><p>Belum ada riwayat zakat & infaq</p></div>';
+            return;
+        }
         c.innerHTML='';
         snap.forEach(d => {
-            const s=d.data();
-            const dt=s.timestamp?.toDate?s.timestamp.toDate().toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):'-';
-            c.innerHTML+=`<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#F0FDF4;border-radius:12px;margin-bottom:8px;">
-                <div style="width:38px;height:38px;background:#D1FAE5;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;">🌙</div>
-                <div style="flex:1;"><p style="font-weight:700;color:#065F46;font-size:13px;margin:0;">Zakat Mal 2.5%</p><p style="font-size:10px;color:#6B7280;margin:0;">${dt}</p></div>
-                <p style="font-weight:800;color:#059669;">-${s.amount?.toLocaleString()} SGT</p>
+            const s = d.data();
+            const dt = s.timestamp?.toDate
+                ? s.timestamp.toDate().toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})
+                : '-';
+            let icon, label, bg, iconBg, textColor;
+            if (s.type === 'infaq') {
+                icon = '\u{1F91F}'; label = 'Infaq/Shadaqah' + (s.niat ? ': '+s.niat : '');
+                bg = '#FFF7ED'; iconBg = '#FED7AA'; textColor = '#92400E';
+            } else if (s.type === 'fitrah') {
+                icon = '\u{1F319}'; label = 'Zakat Fitrah ' + (s.jiwa||1) + ' jiwa';
+                bg = '#EFF6FF'; iconBg = '#BFDBFE'; textColor = '#1E40AF';
+            } else {
+                icon = '\u{1F319}'; label = 'Zakat Mal 2.5%';
+                bg = '#F0FDF4'; iconBg = '#D1FAE5'; textColor = '#065F46';
+            }
+            c.innerHTML += `<div style="display:flex;align-items:center;gap:12px;padding:12px;background:${bg};border-radius:12px;margin-bottom:8px;">
+                <div style="width:38px;height:38px;background:${iconBg};border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;">${icon}</div>
+                <div style="flex:1;min-width:0;"><p style="font-weight:700;color:${textColor};font-size:13px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</p><p style="font-size:10px;color:#6B7280;margin:0;">${dt}</p></div>
+                <p style="font-weight:800;color:#059669;white-space:nowrap;">-${(s.amount||0).toLocaleString()} SGT</p>
             </div>`;
         });
-    } catch(e) {}
+    } catch(e) { logDebug('loadZakatHistory error: '+e.message); }
 }
 
 
