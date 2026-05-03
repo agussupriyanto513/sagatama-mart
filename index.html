@@ -3434,6 +3434,7 @@ TINDAKAN WAJIB SETELAH DEPLOY:
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit, enableNetwork, disableNetwork } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js";
 
 // ============================================
 // ERROR HANDLER GLOBAL
@@ -3601,7 +3602,7 @@ const firebaseConfig = {
     appId: "1:372845954028:web:189f2a3127ea8189b9f6c9"
 };
 
-let app, auth, db;
+let app, auth, db, functions;
 let products = [];
 let orders = [];
 let myOrders = [];
@@ -5470,6 +5471,7 @@ async function initFirebase() {
                     // Gunakan getFirestore default — paling kompatibel untuk mobile & Pi Browser
                     // experimentalForceLongPolling dihapus karena sering sebabkan "client offline" di mobile
                     db = getFirestore(app);
+                    functions = getFunctions(app, 'asia-southeast1'); // Jakarta region
                     logDebug('[Firebase] Firestore init: default mode');
                 } catch (fsInitErr) {
                     logDebug('[Firebase] Firestore default gagal, coba longPolling: ' + fsInitErr.message);
@@ -6827,16 +6829,39 @@ async function createPiPayment() {
 // https://developers.minepi.com → App → API Keys → Server-Side Key
 // JANGAN hardcode di production — gunakan Vercel/Firebase env variable
 // Untuk sementara isi di sini agar pembayaran berfungsi
-const PI_SERVER_API_KEY = 'AIzaSyDNWOochfAyHjBYUNyq2IAYhA9p7Ie834M'; // ← ISI SERVER API KEY DARI PI DEVELOPER PORTAL
+const PI_SERVER_API_KEY = ''; // ← ISI SERVER API KEY DARI PI DEVELOPER PORTAL
 
 const PI_API_BASE = USE_SANDBOX
     ? 'https://api.minepi.com/v2'
     : 'https://api.minepi.com/v2';
 
+// ============================================================
+// FIREBASE CLOUD FUNCTION: piPaymentAction
+// Deploy function ini ke Firebase agar approve/complete berfungsi
+// Lihat komentar di bawah untuk cara deploy
+// ============================================================
 async function callPiPlatformAPI(endpoint, method = 'POST', body = null) {
+    // CARA 1: Via Firebase Cloud Function (DIREKOMENDASIKAN - aman, no CORS)
+    if (functions) {
+        try {
+            const piPaymentAction = httpsCallable(functions, 'piPaymentAction');
+            const result = await piPaymentAction({ endpoint, method, body });
+            logDebug('[Pi API] Cloud Function OK: ' + JSON.stringify(result.data).substring(0,120));
+            return { status: 200, data: result.data, ok: true };
+        } catch (fnErr) {
+            logDebug('[Pi API] Cloud Function error: ' + fnErr.message);
+            // Jika Function belum di-deploy (NOT_FOUND), lanjut ke cara 2
+            if (!fnErr.message?.includes('NOT_FOUND') && !fnErr.message?.includes('not found')) {
+                return { status: 500, data: { error: fnErr.message }, ok: false };
+            }
+            logDebug('[Pi API] Function belum di-deploy — coba direct fetch...');
+        }
+    }
+
+    // CARA 2: Direct fetch (hanya berfungsi jika Pi API mengizinkan CORS — biasanya TIDAK)
     if (!PI_SERVER_API_KEY) {
-        logDebug('[Pi API] ⚠️ PI_SERVER_API_KEY kosong — skip Pi Platform API call');
-        logDebug('[Pi API] → Isi PI_SERVER_API_KEY di kode untuk mengaktifkan pembayaran');
+        logDebug('[Pi API] ⚠️ PI_SERVER_API_KEY kosong & Cloud Function tidak tersedia');
+        logDebug('[Pi API] → Deploy Firebase Function "piPaymentAction" untuk mengaktifkan pembayaran');
         return null;
     }
     try {
@@ -6850,13 +6875,44 @@ async function callPiPlatformAPI(endpoint, method = 'POST', body = null) {
         if (body) opts.body = JSON.stringify(body);
         const res = await fetch(PI_API_BASE + endpoint, opts);
         const data = await res.json().catch(() => ({}));
-        logDebug('[Pi API] ' + method + ' ' + endpoint + ' → ' + res.status + ' ' + JSON.stringify(data).substring(0,100));
+        logDebug('[Pi API] Direct fetch ' + method + ' ' + endpoint + ' → ' + res.status);
         return { status: res.status, data, ok: res.ok };
     } catch(e) {
-        logDebug('[Pi API] fetch error: ' + e.message);
+        logDebug('[Pi API] Direct fetch error (CORS?): ' + e.message);
         return null;
     }
 }
+
+/*
+================================================================
+CARA DEPLOY FIREBASE CLOUD FUNCTION (WAJIB untuk payment):
+================================================================
+1. Install Firebase CLI: npm install -g firebase-tools
+2. firebase login
+3. firebase init functions  (pilih project: portal-sagatama)
+4. Buat file functions/index.js dengan isi:
+
+const functions = require('firebase-functions');
+const axios = require('axios');
+
+const PI_SERVER_KEY = functions.config().pi.serverkey; // firebase functions:config:set pi.serverkey="KEY_KAMU"
+
+exports.piPaymentAction = functions.https.onCall(async (data) => {
+    const { endpoint, method, body } = data;
+    // Validasi endpoint hanya boleh payments
+    if (!endpoint.startsWith('/payments/')) throw new functions.https.HttpsError('invalid-argument', 'Invalid endpoint');
+    
+    const url = 'https://api.minepi.com/v2' + endpoint;
+    const resp = await axios({ method, url, data: body || {}, headers: {
+        'Authorization': 'Key ' + PI_SERVER_KEY
+    }});
+    return resp.data;
+});
+
+5. firebase functions:config:set pi.serverkey="ISI_SERVER_KEY_DARI_PI_DEVELOPER_PORTAL"
+6. firebase deploy --only functions
+================================================================
+*/
 
 async function approvePaymentOnServer(paymentId) {
     logDebug('[PAY] Approve paymentId: ' + paymentId);
