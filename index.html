@@ -178,9 +178,9 @@
             }
         };
     </script>
-    <!-- Tailwind CSS CDN (browser build) -->
-    <script src="https://cdn.tailwindcss.com"
-            onerror="this.onerror=null;this.src='https://unpkg.com/tailwindcss@3/dist/tailwind.min.css'"></script>
+    <!-- Tailwind production build — tanpa warning CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.17/lib/index.min.js"
+            onerror="this.onerror=null;this.src='https://unpkg.com/tailwindcss@3.4.17/lib/index.min.js'"></script>
     
     <style>
         * { 
@@ -1397,7 +1397,7 @@
                         </div>
                         <div style="text-align:right;">
                             <div style="background:rgba(255,255,255,0.15); padding:4px 12px; border-radius:20px; font-size:10px; font-weight:800; color:#FCD34D; border:1px solid rgba(255,215,77,0.3);">LIVE</div>
-                            <p id="walletRateLabel" style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:4px;">1 π = 100 SGT</p>
+                            <p style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:4px;">1 π = 100 SGT</p>
                         </div>
                     </div>
 
@@ -2484,12 +2484,12 @@
                     </button>
                 </div>
 
-                <!-- Riwayat zakat -->
+                <!-- Riwayat zakat — di dalam tab zakat agar guard updateNisabUI tidak blokir -->
                 <div class="sosial-card">
                     <h4 style="font-weight:800;color:#1F2937;margin-bottom:12px;font-size:14px;"><i class="fas fa-history" style="color:#8B5CF6;margin-right:8px;"></i>Riwayat Zakat & Infaq</h4>
                     <div id="zakatHistory"><div class="empty-state" style="padding:24px;"><i class="fas fa-mosque" style="font-size:36px;"></i><p>Belum ada riwayat zakat</p></div></div>
                 </div>
-            </div>
+            </div><!-- end sosial-tab-zakat -->
 
         <!-- ======== VIEW: REFERRAL ======== -->
         <div id="referral-view" class="view">
@@ -3250,7 +3250,7 @@
                 <div class="form-group">
                     <label class="form-label">SGT per Pi (Rate Belanja)</label>
                     <input type="number" id="sgtAdminRate" class="form-input" value="100">
-                    <p style="font-size:11px; color:#64748B; margin-top:4px;">Default: 1 Pi = <span id="sgtAdminRateHint">100</span> SGT</p>
+                    <p style="font-size:11px; color:#64748B; margin-top:4px;">Default: 1 Pi = 100 SGT</p>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Min. Pembelian untuk dapat SGT (Pi)</label>
@@ -3530,9 +3530,9 @@ const SGT_GENESIS_ALLOC   = {
     baitulMaal: 0.10, // 10% dana sosial
     tim       : 0.05  // 5% pengembang (locked 12 bln)
 };
-// Mint rate (adjustable admin, default 100)
-let sgtRatePerPi   = 100;
-let sgtMinPurchase = 0.1;
+// Mint rate (adjustable admin, default 500)
+let sgtRatePerPi   = 500;
+let sgtMinPurchase = 0.001;
 
 // Fee pool — setiap transaksi bayar fee ini, dana ke pool
 const SGT_FEE_RATE      = 0.03;  // 3% dari base reward masuk fee pool
@@ -3700,20 +3700,6 @@ async function loadSGTDataFixed() {
         return;
     }
     
-    // Load mint rate dari Firestore dulu agar rate selalu sinkron dengan admin
-    try {
-        const rateSnap = await getDoc(doc(db, 'sgt_config', 'supply'));
-        if (rateSnap.exists() && rateSnap.data().mintRate) {
-            sgtRatePerPi = rateSnap.data().mintRate;
-            localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
-            logDebug('[SGT-v3] Rate synced from Firestore: ' + sgtRatePerPi + ' SGT/Pi');
-        }
-    } catch(e) {
-        // Fallback ke localStorage jika offline
-        const savedRate = localStorage.getItem('sgt_rate');
-        if (savedRate) sgtRatePerPi = parseInt(savedRate) || 100;
-        logDebug('[SGT-v3] Rate fallback localStorage: ' + sgtRatePerPi);
-    }
     const uid = currentUser.uid;
     const username = currentUser.username;
     logDebug(`[SGT-v3] Loading SGT for uid=${uid}, username=${username}`);
@@ -3767,7 +3753,7 @@ async function loadSGTDataFixed() {
         const rate = localStorage.getItem('sgt_rate');
         if (bal) sgtBalance = parseInt(bal) || 0;
         if (tx) { try { sgtTransactions = JSON.parse(tx); } catch(e) { sgtTransactions = []; } }
-        if (rate) sgtRatePerPi = parseInt(rate) || 100;
+        if (rate) sgtRatePerPi = parseInt(rate) || 500;
         logDebug(`[SGT-v3] ⚠️ Loaded from localStorage: ${sgtBalance} SGT`);
         updateSGTUI();
         
@@ -3798,10 +3784,6 @@ function updateSGTUI() {
 
     const piEq = document.getElementById('sgtPiEquivalent');
     if (piEq) piEq.textContent = (bal / sgtRatePerPi).toFixed(8);
-
-    // Update label rate di wallet user secara dinamis
-    const rateLabel = document.getElementById('walletRateLabel');
-    if (rateLabel) rateLabel.textContent = '1 π = ' + sgtRatePerPi + ' SGT';
 
     const rb = document.getElementById('sgtRedeemBalance');
     if (rb) rb.textContent = bal + ' SGT';
@@ -4157,27 +4139,13 @@ window.redeemSGT = function(rewardType) {
 };
 
 
-window.saveSGTSettings = async function() {
+window.saveSGTSettings = function() {
     const rate = parseInt(document.getElementById('sgtAdminRate')?.value);
     const minPurchase = parseFloat(document.getElementById('sgtAdminMinPurchase')?.value);
     if (rate > 0) sgtRatePerPi = rate;
     if (minPurchase >= 0) sgtMinPurchase = minPurchase;
     localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
     localStorage.setItem('sgt_min_purchase', sgtMinPurchase.toString());
-    // Simpan ke Firestore agar rate konsisten untuk semua user
-    try {
-        await setDoc(doc(db, 'sgt_config', 'supply'), {
-            mintRate: sgtRatePerPi,
-            mintRateUpdatedAt: serverTimestamp(),
-            mintRateUpdatedBy: currentUser?.username || 'admin'
-        }, { merge: true });
-        logDebug('[saveSGTSettings] Rate saved to Firestore: ' + sgtRatePerPi);
-    } catch(e) { logDebug('[saveSGTSettings] Firestore error: ' + e.message); }
-    // Update semua label rate di UI
-    const el = document.getElementById('currentMintRateDisplay');
-    if (el) el.textContent = sgtRatePerPi;
-    const rateLabel = document.getElementById('walletRateLabel');
-    if (rateLabel) rateLabel.textContent = '1 π = ' + sgtRatePerPi + ' SGT';
     showToast(`Pengaturan disimpan! Rate: 1 Pi = ${sgtRatePerPi} SGT`, 'success');
 };
 
@@ -4408,10 +4376,28 @@ window.loadMintRateFromFirestore = async function loadMintRateFromFirestore() {
         const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
         if (snap.exists() && snap.data().mintRate) {
             sgtRatePerPi = snap.data().mintRate;
-            const el = document.getElementById('currentMintRateDisplay');
-            if (el) el.textContent = sgtRatePerPi;
-            logDebug('Mint rate loaded: ' + sgtRatePerPi + ' SGT/Pi');
+            logDebug('Mint rate loaded from Firestore: ' + sgtRatePerPi + ' SGT/Pi');
+        } else {
+            // Belum ada di Firestore — set default 500 dan simpan
+            sgtRatePerPi = 500;
+            logDebug('Mint rate belum ada di Firestore, set default 500 SGT/Pi');
+            try {
+                await setDoc(doc(db, 'sgt_config', 'supply'), {
+                    mintRate: 500,
+                    mintRateUpdatedAt: serverTimestamp(),
+                    mintRateUpdatedBy: 'system_default'
+                }, { merge: true });
+            } catch(saveErr) { logDebug('Gagal simpan default mintRate: ' + saveErr.message); }
         }
+        // Sync semua elemen UI yang menampilkan rate
+        ['currentMintRateDisplay','walletRateLabel','sgtAdminRate','sgtAdminRateHint'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (id === 'walletRateLabel') el.textContent = '1 \u03c0 = ' + sgtRatePerPi + ' SGT';
+            else if (el.tagName === 'INPUT') el.value = sgtRatePerPi;
+            else el.textContent = sgtRatePerPi;
+        });
+        localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
     } catch(e) { logDebug('loadMintRateFromFirestore error: ' + e.message); }
 };
 
@@ -4495,17 +4481,33 @@ function listenUserSGTBalanceFixed(userId) {
                 const data = docSnap.data();
                 const newBalance = data.sgtBalance || 0;
                 
-                // Hanya update jika berbeda (mencegah flicker)
-                if (newBalance !== sgtBalance) {
+                // Update balance dan transactions dari Firestore
+                // Deduplicate transaksi: gabung local + Firestore, hilangkan duplikat
+                const remoteTxs = data.sgtTransactions || [];
+                const localTxs  = sgtTransactions || [];
+
+                // Buat set key unik: type+amount+date (sampai detik)
+                const seen = new Set();
+                const merged = [];
+                [...localTxs, ...remoteTxs].forEach(tx => {
+                    const key = (tx.type||'') + '|' + (tx.amount||0) + '|' + (tx.date||'').substring(0,19);
+                    if (!seen.has(key)) { seen.add(key); merged.push(tx); }
+                });
+                // Sort by date desc, ambil 200 terbaru
+                merged.sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+                const dedupedTxs = merged.slice(0, 200);
+
+                const changed = newBalance !== sgtBalance || dedupedTxs.length !== sgtTransactions.length;
+                if (changed) {
                     sgtBalance = newBalance;
-                    sgtTransactions = data.sgtTransactions || [];
-                    
+                    sgtTransactions = dedupedTxs;
+
                     // Sync ke localStorage
                     localStorage.setItem('sgt_balance_' + userId, sgtBalance.toString());
                     localStorage.setItem('sgt_transactions_' + userId, JSON.stringify(sgtTransactions));
-                    
+
                     updateSGTUI();
-                    logDebug(`[SGT-v3] 🔔 Realtime update: ${sgtBalance} SGT`);
+                    logDebug(`[SGT-v3] 🔔 Realtime update: ${sgtBalance} SGT | txs: ${sgtTransactions.length}`);
                 }
             } else {
                 logDebug(`[SGT-v3] Doc not found: ${userId}, trying fallback...`);
@@ -5065,8 +5067,17 @@ async function verifyUserSession() {
 function detectPiEnv() {
     try {
         const ua = navigator.userAgent || '';
-        isPiBrowser = ua.includes('PiBrowser') || typeof window.Pi !== 'undefined';
-        logDebug("Environment: " + (isPiBrowser ? "Pi Browser" : "External Browser"));
+        const host = window.location.hostname || '';
+        // Cek berbagai indikator Pi Browser
+        const hasPiUA  = ua.includes('PiBrowser') || ua.includes('MinepiApp') ||
+                         ua.toLowerCase().includes('pibrowser');
+        const hasPiObj = typeof window.Pi !== 'undefined' &&
+                         typeof window.Pi.authenticate === 'function';
+        const isPiHost = host.includes('minepi.com') || host.includes('pi.app');
+        isPiBrowser = hasPiUA || hasPiObj || isPiHost;
+        logDebug('[ENV] UA: ' + ua.substring(0,80));
+        logDebug('[ENV] hasPiUA=' + hasPiUA + ' hasPiObj=' + hasPiObj + ' isPiHost=' + isPiHost);
+        logDebug('[ENV] isPiBrowser=' + isPiBrowser + ' isPiSDKReady=' + isPiSDKReady);
     } catch (e) {
         logDebug("Detect env error: " + e.message);
     }
@@ -5088,50 +5099,69 @@ async function initPiSDK() {
 }
 
 async function initPiSDKRobust() {
+    // Kalau sudah berhasil sebelumnya, langsung return true
+    if (isPiSDKReady) return true;
+    // Kalau sedang dalam proses init, tunggu promise yang ada
     if (piInitPromise) return piInitPromise;
 
     piInitPromise = new Promise(async (resolve) => {
+        const ua = navigator.userAgent || '';
+        const looksLikePi = ua.includes('PiBrowser') || ua.includes('MinepiApp') ||
+                            ua.toLowerCase().includes('pibrowser') ||
+                            typeof window.Pi !== 'undefined';
 
-        // ── FAST PATH: kalau bukan Pi Browser, langsung skip ──
-        // Tidak perlu retry 5x × 2-10 detik = buang 34 detik percuma
-        if (!window.Pi && navigator.userAgent.indexOf('PiBrowser') === -1) {
+        // Skip hanya kalau benar-benar bukan Pi Browser sama sekali
+        if (!looksLikePi) {
             logDebug('[AUTH-v3] Bukan Pi Browser — skip Pi SDK init');
             resolve(false);
             return;
         }
 
+        const MAX_WAIT_MS = 8000; // tunggu Pi inject window.Pi maksimal 8 detik
+        const started = Date.now();
+
+        // Tunggu window.Pi tersedia dulu (Pi Browser inject lambat)
+        while (!window.Pi && (Date.now() - started) < MAX_WAIT_MS) {
+            logDebug('[AUTH-v3] Menunggu window.Pi tersedia...');
+            await delay(500);
+        }
+
+        if (!window.Pi) {
+            logDebug('[AUTH-v3] window.Pi tidak tersedia setelah ' + MAX_WAIT_MS + 'ms');
+            resolve(false);
+            return;
+        }
+
+        // Coba Pi.init() hingga MAX_PI_INIT_ATTEMPTS kali
         while (piInitAttempts < MAX_PI_INIT_ATTEMPTS) {
             piInitAttempts++;
             logDebug(`[AUTH-v3] Pi SDK init attempt ${piInitAttempts}/${MAX_PI_INIT_ATTEMPTS}`);
-
             try {
-                if (!window.Pi) {
-                    logDebug('[AUTH-v3] Pi object belum tersedia, menunggu...');
-                    await delay(1500);
-                    // Cek lagi setelah delay — kalau tetap tidak ada, keluar
-                    if (!window.Pi) { resolve(false); return; }
-                    continue;
-                }
-
-                await window.Pi.init({
-                    version: "2.0",
-                    sandbox: USE_SANDBOX
-                });
-
+                await window.Pi.init({ version: "2.0", sandbox: USE_SANDBOX });
                 isPiSDKReady = true;
                 isPiBrowser  = true;
                 logDebug('[AUTH-v3] Pi SDK initialized ✅');
                 resolve(true);
                 return;
-
             } catch (err) {
-                logDebug(`[AUTH-v3] Pi SDK init gagal: ${err.message}`);
-                const waitTime = Math.min(2000 * Math.pow(2, piInitAttempts - 1), 5000);
-                await delay(waitTime);
+                logDebug(`[AUTH-v3] Pi SDK init gagal (attempt ${piInitAttempts}): ${err.message}`);
+                if (piInitAttempts < MAX_PI_INIT_ATTEMPTS) {
+                    await delay(Math.min(1500 * piInitAttempts, 4000));
+                }
             }
         }
 
-        logDebug('[AUTH-v3] Pi SDK init gagal setelah max attempts');
+        // Kalau Pi.init() terus error tapi window.Pi ada, anggap Pi Browser valid
+        // (beberapa versi Pi Browser tidak butuh Pi.init() eksplisit)
+        if (window.Pi && typeof window.Pi.authenticate === 'function') {
+            logDebug('[AUTH-v3] Pi.init() gagal tapi Pi.authenticate tersedia — lanjut ✅');
+            isPiSDKReady = true;
+            isPiBrowser  = true;
+            resolve(true);
+            return;
+        }
+
+        logDebug('[AUTH-v3] Pi SDK init gagal setelah semua attempts');
         resolve(false);
     });
 
@@ -5494,15 +5524,27 @@ window.authenticatePi = async function() {
     logDebug("[AUTH-v3] authenticatePi dipanggil");
     
     // Step 1: Inisialisasi Pi SDK dengan retry
+    // Reset promise agar deteksi ulang dari awal (penting kalau dipanggil ulang)
+    if (!isPiSDKReady) {
+        piInitPromise = null;
+        piInitAttempts = 0;
+    }
     const sdkReady = await initPiSDKRobust();
-    
-    if (!sdkReady) {
+
+    // Fallback: meski initPiSDKRobust gagal, kalau Pi.authenticate ada → tetap lanjut
+    const canAuth = sdkReady ||
+        (typeof window.Pi !== 'undefined' && typeof window.Pi.authenticate === 'function');
+
+    if (!canAuth) {
         logDebug('[AUTH-v3] Pi SDK tidak tersedia, menampilkan fallback');
         showToast('Pi Browser tidak terdeteksi. Gunakan login manual.', 'warning');
         showManualLoginFallback();
         return;
     }
-    
+
+    // Pastikan flag sinkron
+    if (canAuth) { isPiBrowser = true; isPiSDKReady = true; }
+
     // Step 2: Validasi environment
     if (!isPiBrowser) {
         showToast('Login Pi hanya tersedia di Pi Browser', 'warning');
@@ -7810,13 +7852,26 @@ window.processPayment = async function() {
     if (btn?.disabled) return;
 
     // Guard: pastikan hanya berjalan di Pi Browser
+    // Kalau flag belum set tapi window.Pi ada → coba re-init dulu
     if (!isPiBrowser || !isPiSDKReady) {
-        showToast('Pembayaran Pi hanya tersedia di Pi Browser. Gunakan aplikasi Pi Browser untuk bertransaksi.', 'warning');
-        logDebug('[Payment] Ditolak: bukan Pi Browser atau SDK belum siap. isPiBrowser=' + isPiBrowser + ' isPiSDKReady=' + isPiSDKReady);
-        // Tampilkan info di modal jika ada
-        const paymentNote = document.getElementById('paymentNotPiBrowserNote');
-        if (paymentNote) paymentNote.style.display = 'block';
-        return;
+        logDebug('[Payment] Flag belum ready, coba re-init... isPiBrowser=' + isPiBrowser + ' isPiSDKReady=' + isPiSDKReady);
+        if (typeof window.Pi !== 'undefined' && typeof window.Pi.authenticate === 'function') {
+            logDebug('[Payment] window.Pi tersedia → set flag dan lanjut');
+            isPiBrowser  = true;
+            isPiSDKReady = true;
+            // Reset promise agar bisa init ulang dengan bersih
+            piInitPromise = null;
+            piInitAttempts = 0;
+            try { await window.Pi.init({ version: "2.0", sandbox: USE_SANDBOX }); } catch(e) {
+                logDebug('[Payment] Pi.init warning: ' + e.message + ' — tetap lanjut');
+            }
+        } else {
+            showToast('Pembayaran Pi hanya tersedia di Pi Browser.', 'warning');
+            logDebug('[Payment] Ditolak: window.Pi tidak tersedia');
+            const paymentNote = document.getElementById('paymentNotPiBrowserNote');
+            if (paymentNote) paymentNote.style.display = 'block';
+            return;
+        }
     }
 
     // Guard: pastikan user sudah login Pi
@@ -9035,6 +9090,8 @@ window.switchZakatTab = function(tab, btn) {
             b.style.border = t===tab ? 'none' : '2px solid #E5E7EB';
         }
     });
+    // Selalu reload riwayat saat ganti tab agar data terbaru tampil
+    loadZakatHistory();
 };
 
 // ── HAUL TRACKER ─────────────────────────────────────────────
@@ -9112,6 +9169,7 @@ window.updateNisabUI = function() {
         if (el('zakatResult'))     el('zakatResult').style.display     = 'none';
         if (el('zakatBelumNisab')) el('zakatBelumNisab').style.display = 'block';
     }
+    // loadZakatHistory tidak perlu guard tab/view — dia load dari Firestore langsung
     loadZakatHistory();
     loadHaulTracker();
     loadBaitulMaalDashboard();
@@ -9207,6 +9265,7 @@ window.bayarInfaq = async function() {
         document.getElementById('infaqAmount').value = '';
         document.getElementById('infaqNiat').value = '';
         updateNisabUI();
+        loadZakatHistory();
     } catch(e) { showToast('Gagal kirim infaq: '+e.message,'error'); }
 };
 
@@ -9237,24 +9296,41 @@ window.loadBaitulMaalDashboard = async function() {
 
 
 async function loadZakatHistory() {
-    if (!currentUser||!db) return;
+    if (!currentUser || !db) return;
     const c = document.getElementById('zakatHistory');
     if (!c) return;
+    // Tidak perlu guard cek tab aktif — riwayat harus selalu bisa dimuat
     try {
         const snap = await getDocs(query(collection(db,'zakat_logs'),
-            where('userId','==',currentUser.uid), orderBy('timestamp','desc'), limit(5)));
-        if (snap.empty) { c.innerHTML='<div class="empty-state" style="padding:24px;"><i class="fas fa-mosque" style="font-size:36px;"></i><p>Belum ada riwayat zakat</p></div>'; return; }
+            where('userId','==',currentUser.uid), orderBy('timestamp','desc'), limit(20)));
+        if (snap.empty) {
+            c.innerHTML='<div class="empty-state" style="padding:24px;"><i class="fas fa-mosque" style="font-size:36px;"></i><p>Belum ada riwayat zakat & infaq</p></div>';
+            return;
+        }
         c.innerHTML='';
         snap.forEach(d => {
-            const s=d.data();
-            const dt=s.timestamp?.toDate?s.timestamp.toDate().toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):'-';
-            c.innerHTML+=`<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#F0FDF4;border-radius:12px;margin-bottom:8px;">
-                <div style="width:38px;height:38px;background:#D1FAE5;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;">🌙</div>
-                <div style="flex:1;"><p style="font-weight:700;color:#065F46;font-size:13px;margin:0;">Zakat Mal 2.5%</p><p style="font-size:10px;color:#6B7280;margin:0;">${dt}</p></div>
-                <p style="font-weight:800;color:#059669;">-${s.amount?.toLocaleString()} SGT</p>
+            const s = d.data();
+            const dt = s.timestamp?.toDate
+                ? s.timestamp.toDate().toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})
+                : '-';
+            let icon, label, bg, iconBg, textColor;
+            if (s.type === 'infaq') {
+                icon = '\u{1F91F}'; label = 'Infaq/Shadaqah' + (s.niat ? ': '+s.niat : '');
+                bg = '#FFF7ED'; iconBg = '#FED7AA'; textColor = '#92400E';
+            } else if (s.type === 'fitrah') {
+                icon = '\u{1F319}'; label = 'Zakat Fitrah ' + (s.jiwa||1) + ' jiwa';
+                bg = '#EFF6FF'; iconBg = '#BFDBFE'; textColor = '#1E40AF';
+            } else {
+                icon = '\u{1F319}'; label = 'Zakat Mal 2.5%';
+                bg = '#F0FDF4'; iconBg = '#D1FAE5'; textColor = '#065F46';
+            }
+            c.innerHTML += `<div style="display:flex;align-items:center;gap:12px;padding:12px;background:${bg};border-radius:12px;margin-bottom:8px;">
+                <div style="width:38px;height:38px;background:${iconBg};border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;">${icon}</div>
+                <div style="flex:1;min-width:0;"><p style="font-weight:700;color:${textColor};font-size:13px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</p><p style="font-size:10px;color:#6B7280;margin:0;">${dt}</p></div>
+                <p style="font-weight:800;color:#059669;white-space:nowrap;">-${(s.amount||0).toLocaleString()} SGT</p>
             </div>`;
         });
-    } catch(e) {}
+    } catch(e) { logDebug('loadZakatHistory error: '+e.message); }
 }
 
 
@@ -9734,12 +9810,6 @@ window.updateMintRate = async function() {
     } catch(e) {}
     const el = document.getElementById('currentMintRateDisplay');
     if (el) el.textContent = val;
-    // Update label rate di wallet user
-    const rateLabel = document.getElementById('walletRateLabel');
-    if (rateLabel) rateLabel.textContent = '1 π = ' + val + ' SGT';
-    // Update input di admin modal agar sinkron
-    const rateInput = document.getElementById('sgtAdminRate');
-    if (rateInput) rateInput.value = val;
     showToast(`✅ Rate mint diubah ke ${val} SGT/Pi`, 'success');
     logDebug('Mint rate updated to: ' + val);
 };
@@ -9776,11 +9846,6 @@ window.openModal = function(id) {
             const rateLbl = document.getElementById('currentMintRateDisplay');
             if (rateEl) rateEl.value = sgtRatePerPi;
             if (rateLbl) rateLbl.textContent = sgtRatePerPi;
-            // Sinkronkan juga input sgtAdminRate dan hint-nya
-            const adminRateEl = document.getElementById('sgtAdminRate');
-            const adminRateHint = document.getElementById('sgtAdminRateHint');
-            if (adminRateEl) adminRateEl.value = sgtRatePerPi;
-            if (adminRateHint) adminRateHint.textContent = sgtRatePerPi;
         }).catch(()=>{});
     }
 };
