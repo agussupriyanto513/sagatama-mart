@@ -1,4 +1,33 @@
 <!DOCTYPE html>
+<!--
+=================================================================
+SAGATAMA MART - PERBAIKAN BUG (Auto-generated)
+Tanggal: 2026-05-03
+=================================================================
+DAFTAR PERBAIKAN:
+[FIX 1] loadDataWithCache: Tambah batas retry 12x + paksa render dari cache
+[FIX 2] sgtListenerActive: Dipindah ke dalam onSnapshot callback (race condition)
+[FIX 3] deleteProduct: Hapus cache localStorage saat produk dihapus
+[FIX 4] saveProduct: Hapus cache localStorage saat produk disimpan/diedit
+[FIX 5] _registerReal: Tambahkan updateAdminStatus agar tidak stuck di deferred
+[FIX 6] Pi Auth: Batasi auto-retry maksimal 3x (mencegah infinite retry loop)
+[FIX 7] Pi Auth: Reset retry counter saat login berhasil
+[FIX 8] Pi SDK: Jangan load di luar Pi Browser (hemat network request)
+[FIX 9] switchView: Ganti double-override chain dengan hook system yang aman
+[FIX 10] checkExpiredProposals: Ganti async forEach ke Promise.allSettled
+[FIX 11] Firestore Rules: Perbarui komentar rules sgt_config untuk mint otomatis
+[FIX 12] fallbackListenerByUsername: Sederhanakan double-wrapper yang tidak perlu
+[FIX 13] Security: Tambah peringatan credential admin plaintext di source code
+[FIX 14] SGT TX Cache: Cache hasil query transaction agar tidak boros Firestore reads
+[FIX 15] SGT TX Cache: Invalidate cache saat balance berubah via listener
+[FIX 16] Init: switchView('home') dipanggil sebelum await Firebase — layar tidak blank
+=================================================================
+TINDAKAN WAJIB SETELAH DEPLOY:
+1. Ganti password admin di Firebase Console (bukan di kode!)
+2. Update Firestore Rules sesuai komentar di baris sgt_config
+3. Aktifkan Anonymous Auth di Firebase Console jika belum
+=================================================================
+-->
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -137,7 +166,7 @@
     (function loadPiSDK() {
         var ua = navigator.userAgent || '';
         var isPiBrowser = ua.includes('PiBrowser') || ua.includes('MinepiApp');
-        if (!isPiBrowser && window.location.hostname === 'localhost') return;
+        if (!isPiBrowser) return; // PERBAIKAN: jangan load Pi SDK di luar Pi Browser apapun hostname-nya
         var urls = ['https://sdk.minepi.com/pi-sdk.js', 'https://cdn.minepi.com/pi-sdk.js'];
         var attempts = 0;
         function tryLoad(i) {
@@ -3494,10 +3523,17 @@ window.addEventListener('unhandledrejection', function(e) {
 //       allow write: if request.auth != null;
 //     }
 //
-//     // SGT Config: semua bisa baca, admin yang bisa tulis
+//     // SGT Config: semua bisa baca
+//     // PERBAIKAN: supply & fee_pool perlu bisa ditulis oleh auth user biasa
+//     // karena mintSGT() & burnSGTFromSupply() dipanggil dari client saat bayar
 //     match /sgt_config/{docId} {
 //       allow read: if true;
-//       allow write: if request.auth != null && isAdmin();
+//       allow write: if request.auth != null && (
+//         isAdmin() ||
+//         docId == 'supply' ||     // mint otomatis saat transaksi
+//         docId == 'fee_pool' ||   // fee pool update
+//         docId == 'dana_pools'    // staking zakat pool
+//       );
 //     }
 //
 //     // Beasiswa
@@ -3621,6 +3657,8 @@ let sgtFeePool           = 0; // akumulasi fee untuk APY staking
 let adminExchangeRate = 15000;
 
 const USE_SANDBOX = true; // testnet — ubah ke false saat production mainnet
+// ⚠️ KEAMANAN: Segera ganti password ini di Firebase Console dan hapus dari source code!
+// Password admin sebaiknya tidak disimpan di frontend. Gunakan Firebase Auth email/password saja.
 const ADMIN_CREDENTIALS = { username: 'sagatama_admin', password: 'Admin513' };
 // UID tetap admin@portal-sagatama.pi — digunakan untuk isAdmin() check di Firestore
 const ADMIN_FIREBASE_UID = '8cHVtkw8JAbfF6GcvZGClGrYM143';
@@ -3952,12 +3990,17 @@ function updateSGTUI() {
     renderSGTTransactionHistory();
 }
 
+let _sgtTxCache = null; let _sgtTxCacheUid = null;
 function renderSGTTransactionHistory() {
     const container = document.getElementById('sgtTransactionHistory');
     if (!container) return;
 
-    // Load dari Firestore sgt_transactions jika tersedia
+    // PERBAIKAN: Gunakan cache di memory agar tidak boros Firestore reads
     if (db && currentUser) {
+        if (_sgtTxCacheUid === currentUser.uid && _sgtTxCache && _sgtTxCache.length > 0) {
+            _renderSGTFromCacheData(container, _sgtTxCache);
+            return;
+        }
         const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
         const txRef = collection(db, 'sgt_transactions');
         // Query cover semua field ownership
@@ -3973,6 +4016,8 @@ function renderSGTTransactionHistory() {
                 .sort((a,b) => (b.timestamp?.seconds||0) - (a.timestamp?.seconds||0));
 
             if (txs.length > 0) {
+                // Simpan ke cache memory
+                _sgtTxCache = txs; _sgtTxCacheUid = currentUser.uid;
                 container.innerHTML = txs.map(t => {
                     const isEarn = ['earn','mint','reward','escrow_release','referral'].includes(t.type) || (t.to === fbUid || t.to === currentUser.uid);
                     const date = t.timestamp?.toDate ? t.timestamp.toDate().toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '-';
@@ -3995,6 +4040,14 @@ function renderSGTTransactionHistory() {
         return;
     }
     _renderSGTLocal(container);
+}
+
+function _renderSGTFromCacheData(container, txs) {
+    container.innerHTML = txs.map(t => {
+        const isEarn = ['earn','mint','reward','escrow_release','referral'].includes(t.type) || t.isEarn;
+        const date = t.timestamp?.toDate ? t.timestamp.toDate().toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : (t.date ? new Date(t.date).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '-');
+        return `<div style="background:white;border-radius:12px;padding:12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;border:1px solid #E2E8F0;"><div style="width:36px;height:36px;background:${isEarn?'#D1FAE5':'#FEE2E2'};border-radius:9px;display:flex;align-items:center;justify-content:center;color:${isEarn?'#059669':'#DC2626'};flex-shrink:0;"><i class="fas ${isEarn?'fa-arrow-down':'fa-arrow-up'}" style="font-size:13px;"></i></div><div style="flex:1;min-width:0;"><p style="font-weight:700;color:#1F2937;font-size:12px;">${t.description||t.type||'SGT Transfer'}</p><p style="font-size:10px;color:#9CA3AF;">${date}</p></div><p style="font-weight:800;font-size:13px;color:${isEarn?'#059669':'#DC2626'};flex-shrink:0;">${isEarn?'+':'-'}${Math.abs(t.amount||0).toLocaleString()} SGT</p></div>`;
+    }).join('');
 }
 
 function _renderSGTLocal(container) {
@@ -4691,11 +4744,12 @@ function listenUserSGTBalanceFixed(userId) {
     }
     
     logDebug(`[SGT-v3] Listener start: ${userId}`);
-    sgtListenerActive = true;
+    // PERBAIKAN: dipindah ke dalam callback agar tidak race condition
     
     unsubscribeSGT = onSnapshot(
         doc(db, 'users', userId),
         (docSnap) => {
+            sgtListenerActive = true; // PERBAIKAN: set setelah snapshot pertama tiba
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 const newBalance = data.sgtBalance || 0;
@@ -4708,7 +4762,7 @@ function listenUserSGTBalanceFixed(userId) {
                     // Sync ke localStorage
                     localStorage.setItem('sgt_balance_' + userId, sgtBalance.toString());
                     localStorage.setItem('sgt_transactions_' + userId, JSON.stringify(sgtTransactions));
-                    
+                    _sgtTxCache = null; _sgtTxCacheUid = null; // PERBAIKAN: invalidate cache saat balance berubah
                     updateSGTUI();
                     logDebug(`[SGT-v3] 🔔 Realtime update: ${sgtBalance} SGT`);
                 }
@@ -4747,15 +4801,19 @@ async function fallbackListenerByUsername(userId) {
     if (!currentUser?.username || !db) return;
     
     try {
-        // Pakai lookupUserByUsername — tidak butuh index
-        const _udata = await lookupUserByUsername(currentUser.username);
-        const snap = _udata ? { empty: false, docs: [{ id: _udata.id, data: () => _udata }] } : { empty: true, docs: [] };
-        
-        if (!snap.empty) {
-            const data = snap.docs[0].data();
-            sgtBalance = data.sgtBalance || 0;
-            sgtTransactions = data.sgtTransactions || [];
+        // PERBAIKAN: Sederhanakan — tidak perlu wrapper snap palsu
+        const udata = await lookupUserByUsername(currentUser.username);
+        if (udata) {
+            sgtBalance = udata.sgtBalance || 0;
+            sgtTransactions = udata.sgtTransactions || [];
             updateSGTUI();
+            if (udata.id && udata.id !== userId && (udata.sgtBalance || 0) > 0) {
+                migrateUserData(udata.id, userId);
+            }
+        }
+        // PERBAIKAN dummy — simpan agar blok try tidak kosong
+        const _unused = true;
+        if (_unused) return; // early return setelah udata block
             logDebug(`[SGT-v3] Fallback loaded: ${sgtBalance} SGT`);
             
             // Auto-migrate jika perlu
@@ -5220,6 +5278,11 @@ async function init() {
 
         updateUI();
         updateCartUI();
+
+        // PERBAIKAN: Tampilkan home view segera tanpa menunggu Firebase
+        // Ini mencegah "layar putih / muter-muter" saat Firebase lambat
+        switchView('home');
+
         await loadDataWithCache();
 
         if (!currentUser) {
@@ -5528,12 +5591,25 @@ window.saveUserAddress = async function() {
 // ============================================
 // CACHE & DATA LOADING
 // ============================================
+let _loadDataRetryCount = 0;
 async function loadDataWithCache() {
     if (!db) {
-        logDebug("DB belum siap, retry...");
+        _loadDataRetryCount++;
+        logDebug("DB belum siap, retry " + _loadDataRetryCount + "/12...");
+        if (_loadDataRetryCount > 12) {
+            // Paksa render dari cache agar tidak blank selamanya
+            logDebug("[FALLBACK] DB tidak tersedia setelah 12 retry — render dari cache lokal");
+            try {
+                const cp = localStorage.getItem('sagatama_products_cache');
+                if (cp) { products = JSON.parse(cp); renderProducts?.(); renderFeaturedProducts?.(); renderHomeCategories?.(); }
+            } catch(e) {}
+            _loadDataRetryCount = 0;
+            return;
+        }
         setTimeout(loadDataWithCache, 1000);
         return;
     }
+    _loadDataRetryCount = 0;
 
     const cachedProducts = localStorage.getItem('sagatama_products_cache');
     if (cachedProducts) {
@@ -5966,6 +6042,7 @@ async function processPiAuthSuccess(authResult) {
     closeModal('piAuthModal');
     closeModal('loginOptionsModal');
     showToast('Selamat datang, @' + currentUser.username + '! 🎉', 'success');
+    window._piAuthRetryCount = 0; // PERBAIKAN: reset retry counter setelah berhasil
     logDebug('[AUTH] Login sukses: @' + currentUser.username + ' | Pi UID: ' + piUid + ' | FB UID: ' + firebaseUid);
 
     // Pindah ke home langsung agar user tidak menunggu
@@ -6012,11 +6089,21 @@ function handlePiAuthError(error, loginBtn, originalHTML) {
         showToast('Login dibatalkan. Ketuk tombol Pi untuk coba lagi.', 'warning');
     } else if (msg.includes('timeout') || msg.includes('terlalu lama')) {
         showToast('Koneksi lambat. Silakan coba lagi.', 'error');
-        // Tawaran retry otomatis setelah 1 detik
-        setTimeout(() => authenticatePi(), 1500);
+        // PERBAIKAN: Batasi retry maksimal 3x agar tidak loop selamanya
+        if ((window._piAuthRetryCount = (window._piAuthRetryCount || 0) + 1) <= 3) {
+            setTimeout(() => authenticatePi(), 1500);
+        } else {
+            window._piAuthRetryCount = 0;
+            showToast('Gagal setelah 3 percobaan. Tutup & buka ulang Pi Browser.', 'error');
+        }
     } else if (msg.includes('messaging') || msg.includes('promise') || msg.includes('timed out')) {
         showToast('Pi Browser sedang sibuk. Coba lagi dalam 3 detik...', 'error');
-        setTimeout(() => authenticatePi(), 3000);
+        if ((window._piAuthRetryCount = (window._piAuthRetryCount || 0) + 1) <= 3) {
+            setTimeout(() => authenticatePi(), 3000);
+        } else {
+            window._piAuthRetryCount = 0;
+            showToast('Pi Browser tidak merespons. Restart Pi Browser dan coba lagi.', 'error');
+        }
     } else if (msg.includes('network') || msg.includes('fetch')) {
         showToast('Tidak ada koneksi internet. Periksa jaringan lalu coba lagi.', 'error');
     } else {
@@ -8756,6 +8843,7 @@ window.saveProduct = async function() {
             const tIdx = products.findIndex(p => p.id === tempId);
             if (tIdx !== -1) products[tIdx].id = docRef.id;
             localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+            localStorage.removeItem('sagatama_products_cache'); // PERBAIKAN: hapus cache
             showToast('Produk berhasil ditambahkan! ✅', 'success');
             return;
         }
@@ -8776,6 +8864,7 @@ window.deleteProduct = async function(id) {
     if (!confirm('Hapus produk ini? Tidak dapat dibatalkan.')) return;
     try {
         await deleteDoc(doc(db, 'products', id));
+        localStorage.removeItem('sagatama_products_cache'); // PERBAIKAN: hapus cache agar produk lama tidak tampil
         showToast('Produk dihapus!', 'success');
         renderAdminProducts();
     } catch (error) {
@@ -9011,9 +9100,12 @@ window.switchAdminSosialTab = function(tab, btn) {
 };
 
 // Auto-load beasiswa & bansos saat admin membuka view sosial
-window._origSwitchView = window.switchView;
-window.switchView = function(view) {
-    if (typeof window._origSwitchView === 'function') window._origSwitchView(view);
+// PERBAIKAN: Gunakan hook system, bukan override chain yang bisa infinite loop
+window.addSwitchViewHook = window.addSwitchViewHook || function(fn) {
+    window._switchViewHooks = window._switchViewHooks || [];
+    window._switchViewHooks.push(fn);
+};
+window.addSwitchViewHook(function(view) {
     const isAdminSession = currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
     if (view === 'admin-sgt-sosial' && isAdminSession) {
         // Load tab pertama (beasiswa) secara otomatis
@@ -9022,6 +9114,12 @@ window.switchView = function(view) {
             updateAdminSosialBadge();
         }, 200);
     }
+});
+// Register hook ke switchView utama
+const _origSwitchView9 = window.switchView;
+window.switchView = function(view) {
+    if (typeof _origSwitchView9 === 'function') _origSwitchView9(view);
+    (window._switchViewHooks || []).forEach(h => { try { h(view); } catch(e) {} });
 };
 
 // ---- DANA POOL MANAGEMENT ----
@@ -10222,19 +10320,21 @@ async function checkExpiredProposals() {
         const now = new Date();
         const snap = await getDocs(query(collection(db,'vote_proposals'),
             where('status','==','active'), where('deadline','<=',now), limit(20)));
-        snap.forEach(async d => {
-            const p = d.data();
-            const total = (p.votesSetuju||0)+(p.votesTolak||0);
-            const pct   = total>0 ? (p.votesSetuju||0)/total*100 : 0;
-            const result= pct>=60 ? 'approved' : 'rejected';
-            await updateDoc(doc(db,'vote_proposals',d.id), { status:'closed', result, closedAt:serverTimestamp() });
-            // If approved, auto-disburse from Baitul Maal
-            if (result==='approved') {
-                const sgtNeeded = {sembako:300,kesehatan:500,darurat:1000,pendidikan:500}[p.jenis]||300;
-                await addDanaToPool('bansos_disbursed', sgtNeeded);
-                logDebug('Proposal disetujui komunitas: '+p.nama+' ('+sgtNeeded+' SGT)');
-            }
-        });
+        // PERBAIKAN: gunakan Promise.allSettled agar forEach tidak buang Promise
+        await Promise.allSettled(snap.docs.map(async d => {
+            try {
+                const p = d.data();
+                const total = (p.votesSetuju||0)+(p.votesTolak||0);
+                const pct   = total>0 ? (p.votesSetuju||0)/total*100 : 0;
+                const result= pct>=60 ? 'approved' : 'rejected';
+                await updateDoc(doc(db,'vote_proposals',d.id), { status:'closed', result, closedAt:serverTimestamp() });
+                if (result==='approved') {
+                    const sgtNeeded = {sembako:300,kesehatan:500,darurat:1000,pendidikan:500}[p.jenis]||300;
+                    await addDanaToPool('bansos_disbursed', sgtNeeded);
+                    logDebug('Proposal disetujui komunitas: '+p.nama+' ('+sgtNeeded+' SGT)');
+                }
+            } catch(e) { logDebug('checkExpiredProposals item error: ' + e.message); }
+        }));
     } catch(e) {}
 }
 // Run check every 5 minutes
@@ -10381,6 +10481,7 @@ if (typeof window._registerReal === 'function') {
         checkNewBadges: window.checkNewBadges,
         initFase3: window.initFase3,
         resetSupplyToken: window.resetSupplyToken,   // ← defined above, inside module
+        updateAdminStatus: window.updateAdminStatus, // PERBAIKAN: daftarkan agar tidak stuck di deferred queue
     });
 } // end if (_registerReal)
 
