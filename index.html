@@ -3073,11 +3073,19 @@
                 <div id="paymentItems" style="max-height:150px; overflow-y:auto;"></div>
             </div>
 
-            <div style="background:#FEF3C7; border-radius:12px; padding:16px; margin-bottom:20px;">
+            <div style="background:#FEF3C7; border-radius:12px; padding:16px; margin-bottom:12px;">
                 <p style="font-size:12px; color:#92400E; font-weight:600;">
                     <i class="fas fa-info-circle" style="margin-right:6px;"></i>
                     Pembayaran diproses melalui Pi Browser Wallet. SGT reward dikreditkan otomatis setelah pembayaran berhasil.
                 </p>
+            </div>
+
+            <!-- Tombol bersihkan payment stuck — muncul jika ada error pending payment -->
+            <div id="clearStuckPayBtn" style="display:none; margin-bottom:12px;">
+                <button onclick="window.clearStuckPayment()" style="width:100%;padding:12px;background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;">
+                    🔄 Bersihkan Pembayaran Tertunda &amp; Coba Lagi
+                </button>
+                <p style="font-size:11px;color:#9CA3AF;text-align:center;margin:4px 0 0;">Pembayaran sebelumnya belum selesai di Pi Browser</p>
             </div>
 
             <!-- Peringatan jika bukan Pi Browser -->
@@ -5763,24 +5771,11 @@ window.authenticatePi = async function() {
         const scopes = ['username', 'payments'];
         
         const onIncompletePaymentFound = async (payment) => {
-            logDebug("[AUTH-v4] Incomplete payment found: " + payment?.identifier);
-            if (!payment?.identifier) return;
-            try {
-                if (payment?.transaction?.txid) {
-                    logDebug("[AUTH-v4] Incomplete HAS txid — completing");
-                    await completePaymentOnServer(payment.identifier, payment.transaction.txid, payment.metadata?.items || []);
-                    showToast("Pesanan sebelumnya berhasil dipulihkan!", "success");
-                } else {
-                    logDebug("[AUTH-v4] Incomplete NO txid — cancelling");
-                    await cancelPaymentOnServer(payment.identifier);
-                }
-                pendingPayment = null;
-                paymentInProgress = false;
-                logDebug("[AUTH-v4] Incomplete payment resolved OK");
+            logDebug("[AUTH-v4] Incomplete payment: " + payment?.identifier);
+            try { 
+                await handleIncompletePayment(payment); 
             } catch (err) {
-                logDebug("[AUTH-v4] Handle incomplete error (ignored): " + err.message);
-                pendingPayment = null;
-                paymentInProgress = false;
+                logDebug("[AUTH-v4] Handle incomplete error: " + err.message);
             }
         };
         
@@ -6370,7 +6365,6 @@ let paymentInProgress = false;
 
 async function createPiPayment() {
     if (paymentInProgress) {
-        // Jika sudah lebih dari 5 menit, paksa reset (bisa stuck karena error sebelumnya)
         showToast('Transaksi sedang diproses...', 'warning');
         return;
     }
@@ -6390,24 +6384,12 @@ async function createPiPayment() {
         return;
     }
 
-    // Paksa cancel pendingPayment lama yang mungkin masih tersimpan di state
-    if (pendingPayment) {
-        logDebug('[PAY] Ada pendingPayment tersisa, paksa cancel sebelum buat baru...');
-        try {
-            if (pendingPayment.paymentId) {
-                await cancelPaymentOnServer(pendingPayment.paymentId);
-            }
-        } catch(e) {}
-        pendingPayment = null;
-    }
-
     paymentInProgress = true;
 
     if (paymentTimeout) {
         clearTimeout(paymentTimeout);
         paymentTimeout = null;
     }
-
 
     const resetPaymentState = () => {
         paymentInProgress = false;
@@ -6525,19 +6507,52 @@ async function createPiPayment() {
                     showToast('Koneksi terputus. Periksa internet lalu coba lagi.', 'error');
                 } else if (msg.includes('already') || msg.includes('duplicate')) {
                     showToast('Pembayaran ini sudah pernah diproses.', 'warning');
+                } else if (msg.includes('pending') || msg.includes('failed to check') || msg.includes('cannot be prepared')) {
+                    // Ini error "Failed to check a pending payment"
+                    // Ada payment lama yang nyangkut di Pi SDK
+                    showToast('Ada pembayaran tertunda. Ketuk tombol di bawah untuk membersihkan.', 'warning');
+                    // Tampilkan tombol bersihkan
+                    const btn = document.getElementById('clearStuckPayBtn');
+                    if (btn) btn.style.display = 'block';
                 } else {
-                    showToast('Pembayaran gagal: ' + errMsg, 'error');
+                    showToast('Pembayaran gagal. Coba lagi.', 'error');
+                    logDebug('[PAY] Detail error: ' + errMsg);
                 }
 
-                // Selalu reset state agar tombol aktif kembali
                 resetPaymentState();
             }
         };
 
-        logDebug("[PAY] Calling Pi.createPayment...");
-        // Beri jeda 300ms agar Pi SDK selesai bersihkan state incomplete
-        await new Promise(r => setTimeout(r, 300));
+        // Sebelum createPayment, pastikan tidak ada incomplete payment
+        // dengan authenticate ulang — Pi SDK akan auto-trigger onIncompletePaymentFound
+        // jika ada payment lama yang nyangkut
+        logDebug('[PAY] Pre-check incomplete payments via authenticate...');
+        try {
+            await new Promise((resolve) => {
+                const checkTimeout = setTimeout(resolve, 8000); // max 8 detik
+                window.Pi.authenticate(['username', 'payments'], async (incompletePay) => {
+                    clearTimeout(checkTimeout);
+                    logDebug('[PAY] Pre-check: incomplete payment ditemukan, membersihkan...');
+                    showToast('Membersihkan pembayaran tertunda...', 'info');
+                    await handleIncompletePayment(incompletePay);
+                    showToast('Siap! Membuka konfirmasi pembayaran...', 'info');
+                    setTimeout(resolve, 500);
+                }).then((authResult) => {
+                    // Tidak ada incomplete payment — lanjut
+                    logDebug('[PAY] Pre-check: tidak ada incomplete payment');
+                    clearTimeout(checkTimeout);
+                    resolve();
+                }).catch((authErr) => {
+                    logDebug('[PAY] Pre-check auth skip (lanjut): ' + authErr.message);
+                    clearTimeout(checkTimeout);
+                    resolve();
+                });
+            });
+        } catch(preCheckErr) {
+            logDebug('[PAY] Pre-check skip (lanjut): ' + preCheckErr.message);
+        }
 
+        logDebug('[PAY] Memulai createPayment...');
         window.Pi.createPayment({
             amount: parseFloat(totalPi.toFixed(8)),
             memo: `Sagatama Mart - ${cart.length} item${USE_SANDBOX ? ' [TESTNET]' : ''}`,
@@ -6804,86 +6819,149 @@ function listenSGTTransactions(userId) {
 // ============================================
 // HANDLE INCOMPLETE PAYMENT
 // ============================================
+// ============================================================
+// CLEAR STUCK PAYMENT — untuk user yang kena "Failed to check pending payment"
+// Panggil Pi.authenticate ulang → Pi akan trigger onIncompletePaymentFound
+// kita complete/cancel payment lama → lock dilepas → bisa bayar lagi
+// ============================================================
+window.clearStuckPayment = async function() {
+    showToast('Membersihkan pembayaran tertunda...', 'info');
+    document.getElementById('clearStuckPayBtn').style.display = 'none';
+    try {
+        // Re-authenticate akan trigger onIncompletePaymentFound otomatis
+        // Di sana kita akan complete/cancel payment lama
+        const scopes = ['username', 'payments'];
+        await window.Pi.authenticate(scopes, async (payment) => {
+            logDebug('[CLEAR] Clearing stuck payment: ' + payment?.identifier);
+            await handleIncompletePayment(payment);
+            showToast('Pembayaran tertunda dibersihkan! Silakan coba bayar lagi.', 'success');
+        });
+    } catch(e) {
+        logDebug('[CLEAR] clearStuckPayment error: ' + e.message);
+        showToast('Gagal membersihkan. Coba tutup Pi Browser dan buka ulang.', 'error');
+    }
+};
+
 async function handleIncompletePayment(payment) {
+    // ============================================================
+    // PENTING: Pi SDK memanggil callback ini dan MENUNGGU kita
+    // memanggil payment.complete(txid) ATAU payment.cancel()
+    // Jika tidak dipanggil → Pi SDK tetap anggap ada payment pending
+    // → error "Failed to check a pending payment" saat buat payment baru
+    // ============================================================
     logDebug('[PAY] handleIncompletePayment: ' + payment?.identifier);
     if (!payment?.identifier) return;
 
+    const pid = payment.identifier;
+    const txid = payment?.transaction?.txid || null;
+
     try {
-        // Cek Firestore dulu (lebih akurat dari array orders lokal)
+        // Cek Firestore apakah sudah pernah di-complete
         let alreadyDone = false;
         if (db) {
             try {
-                const paySnap = await getDoc(doc(db, 'payments', payment.identifier));
+                const paySnap = await getDoc(doc(db, 'payments', pid));
                 if (paySnap.exists()) {
                     const st = paySnap.data().status;
                     if (st === 'completed' || st === 'paid') {
                         alreadyDone = true;
-                        logDebug('[PAY] Incomplete: sudah completed di Firestore, skip');
+                        logDebug('[PAY] Incomplete sudah selesai di Firestore');
                     }
                 }
             } catch (e) {
-                // Fallback: cek array lokal
-                const existingOrder = orders.find(o => o.paymentId === payment.identifier);
+                const existingOrder = orders.find(o => o.paymentId === pid);
                 if (existingOrder?.status === 'completed' || existingOrder?.status === 'paid') {
                     alreadyDone = true;
                 }
             }
         }
 
-        if (alreadyDone) {
-            // Sudah selesai — hanya update Firestore status, jangan award SGT lagi
-            if (payment?.transaction?.txid && db) {
-                await setDoc(doc(db, 'payments', payment.identifier), {
-                    status: 'completed', txid: payment.transaction.txid
+        if (txid) {
+            // Ada txid = transaksi SUDAH di blockchain Pi
+            // WAJIB panggil payment.complete(txid) ke Pi SDK agar payment dianggap selesai
+            logDebug('[PAY] Incomplete punya txid — complete ke Pi SDK: ' + txid);
+
+            // Update Firestore
+            if (db) {
+                try {
+                    await setDoc(doc(db, 'payments', pid), {
+                        status: 'completed', txid,
+                        completedAt: serverTimestamp(),
+                        source: 'incomplete_recovery'
+                    }, { merge: true });
+                } catch(e) { logDebug('[PAY] Firestore incomplete update skip: ' + e.message); }
+            }
+
+            // Simpan order jika belum ada
+            if (!alreadyDone && db) {
+                const amount = parseFloat(payment.amount) || 0;
+                const fbUid  = auth?.currentUser?.uid || currentUser?.firebaseUid || '';
+                const orderData = {
+                    paymentId: pid, txid, amount,
+                    items:       payment.metadata?.items || [],
+                    status:      'paid',
+                    customer:    currentUser?.username || 'User',
+                    customerUid: currentUser?.uid || '',
+                    firebaseUid: fbUid,
+                    userId:      fbUid || currentUser?.uid || '',
+                    createdAt:   serverTimestamp(),
+                    updatedAt:   serverTimestamp(),
+                    metadata:    payment.metadata || {},
+                    sgtEarned:   calculateSGTReward(amount),
+                    source:      'incomplete_recovery'
+                };
+                await saveOrderToFirebase(orderData, pid)
+                    .catch(e => logDebug('[PAY] saveOrder incomplete skip: ' + e.message));
+
+                // Award SGT sekali saja
+                const awarded = sgtTransactions.some(t =>
+                    t.description?.includes(pid.substring(0, 8))
+                );
+                if (!awarded) {
+                    awardSGT(parseFloat(payment.amount) || 0, 'Recovery #' + pid.substring(0, 8))
+                        .catch(e => logDebug('[PAY] SGT recovery skip: ' + e.message));
+                }
+                showToast('Pembayaran pending berhasil diselesaikan!', 'success');
+            }
+
+            // KRITIS: beritahu Pi SDK bahwa payment ini selesai
+            // Ini yang membebaskan lock sehingga payment baru bisa dibuat
+            try {
+                await payment.complete(txid);
+                logDebug('[PAY] payment.complete() dipanggil ke Pi SDK OK');
+            } catch(completeErr) {
+                logDebug('[PAY] payment.complete() error (mungkin sudah selesai): ' + completeErr.message);
+            }
+
+        } else {
+            // Tidak ada txid = payment belum dikonfirmasi user di Pi Browser
+            // WAJIB panggil payment.cancel() agar Pi SDK hapus lock-nya
+            logDebug('[PAY] Incomplete tanpa txid — cancel ke Pi SDK');
+
+            // Update Firestore
+            if (db) {
+                await setDoc(doc(db, 'payments', pid), {
+                    status: 'cancelled', cancelledAt: serverTimestamp(), source: 'incomplete_no_txid'
                 }, { merge: true }).catch(() => {});
             }
-            return;
+
+            // KRITIS: beritahu Pi SDK untuk cancel payment ini
+            try {
+                await payment.cancel();
+                logDebug('[PAY] payment.cancel() dipanggil ke Pi SDK OK');
+            } catch(cancelErr) {
+                logDebug('[PAY] payment.cancel() error (mungkin sudah cancel): ' + cancelErr.message);
+            }
         }
 
-        if (payment?.transaction?.txid) {
-            // Ada txid = transaksi sudah di blockchain, selesaikan
-            const items = payment.metadata?.items || [];
-            const amount = parseFloat(payment.amount) || 0;
-
-            if (db) {
-                const orderData = {
-                    paymentId: payment.identifier,
-                    txid: payment.transaction.txid,
-                    amount,
-                    items,
-                    status: 'paid',
-                    customer: currentUser?.username || 'User',
-                    customerUid: currentUser?.uid || '',
-                    firebaseUid: currentUser?.firebaseUid || auth?.currentUser?.uid || '',
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                    metadata: payment.metadata || {},
-                    sgtEarned: calculateSGTReward(amount),
-                    source: 'incomplete_recovery'
-                };
-                await saveOrderToFirebase(orderData, payment.identifier).catch(e =>
-                    logDebug('[PAY] saveOrder incomplete skip: ' + e.message)
-                );
-            }
-
-            await completePaymentOnServer(payment.identifier, payment.transaction.txid, items);
-            // Award SGT hanya jika belum pernah (cek dari transactions lokal)
-            const alreadyAwarded = sgtTransactions.some(t =>
-                t.description && t.description.includes(payment.identifier.substring(0, 8))
-            );
-            if (!alreadyAwarded) {
-                await awardSGT(parseFloat(payment.amount) || 0, 'Recovery pesanan #' + payment.identifier.substring(0, 8));
-            }
-            showToast('Pembayaran pending berhasil diselesaikan!', 'success');
-        } else {
-            // Tidak ada txid = batalkan
-            await cancelPaymentOnServer(payment.identifier);
-            logDebug('[PAY] Incomplete tanpa txid — cancelled');
-        }
         pendingPayment = null;
+
     } catch (err) {
-        logDebug('[PAY] handleIncomplete error: ' + err.message);
-        try { await cancelPaymentOnServer(payment.identifier); } catch (e) {}
+        logDebug('[PAY] handleIncomplete outer error: ' + err.message);
+        // Terakhir: coba cancel agar lock Pi SDK dilepas
+        try { await payment.cancel(); } catch (e) {
+            logDebug('[PAY] Emergency cancel error: ' + e.message);
+        }
     }
 }
 
@@ -8575,17 +8653,10 @@ window.deleteProduct = async function(id) {
     if (!confirm('Hapus produk ini? Tidak dapat dibatalkan.')) return;
     try {
         await deleteDoc(doc(db, 'products', id));
-        // Hapus dari array lokal & update cache agar produk lama tidak muncul lagi
-        products = products.filter(p => p.id !== id);
-        try {
-            localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
-        } catch(e) {}
         showToast('Produk dihapus!', 'success');
-        renderProducts();
-        renderFeaturedProducts();
         renderAdminProducts();
     } catch (error) {
-        showToast('Gagal menghapus produk: ' + (error?.message || error), 'error');
+        showToast('Gagal menghapus produk', 'error');
     }
 };
 
@@ -10191,26 +10262,6 @@ if (typeof window._registerReal === 'function') {
 // Helper untuk akses sgtBalance dari inline HTML onclick
 // (variabel module tidak bisa diakses langsung dari onclick="...")
 window._getSgtBalance = function() { return sgtBalance || 0; };
-
-// ── Utility: Reset paksa jika payment stuck (bisa dipanggil dari console) ──
-window._resetPaymentState = function() {
-    paymentInProgress = false;
-    pendingPayment = null;
-    const btn = document.getElementById('btnProcessPayment');
-    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.style.pointerEvents = 'auto'; btn.innerHTML = '<i class="fas fa-lock"></i> Konfirmasi & Bayar'; }
-    const chkBtn = document.getElementById('checkoutBtn');
-    if (chkBtn) { chkBtn.disabled = false; chkBtn.style.opacity = '1'; chkBtn.style.pointerEvents = 'auto'; }
-    if (typeof showToast === 'function') showToast('Payment state direset', 'info');
-    console.log('[Sagatama] Payment state berhasil direset');
-};
-
-// ── Utility: Hapus cache produk lama dari localStorage ──
-window._clearProductsCache = function() {
-    localStorage.removeItem('sagatama_products_cache');
-    console.log('[Sagatama] Cache produk dihapus. Refresh halaman untuk muat ulang.');
-    if (typeof showToast === 'function') showToast('Cache produk dihapus, memuat ulang...', 'info');
-    setTimeout(() => location.reload(), 1500);
-};
 
 // ============================================================
 // Additional functions exposed to window (outside module gate)
