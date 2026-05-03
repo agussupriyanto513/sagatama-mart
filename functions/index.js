@@ -21,7 +21,7 @@ const PI_SERVER_KEY = functions.config().pi?.serverkey || process.env.PI_SERVER_
 // Validasi konfigurasi saat startup
 if (!PI_SERVER_KEY) {
     console.error('⚠️  PI_SERVER_KEY tidak dikonfigurasi! Jalankan:');
-    console.error('   firebase functions:config:set pi.serverkey="AIzaSyDNWOochfAyHjBYUNyq2IAYhA9p7Ie834M"');
+    console.error('   firebase functions:config:set pi.serverkey="l7qurexyafoqorzaikws6xw7maokynqhbl7zswetejazo1k517hvhvbiipgia5qt"');
 }
 
 /**
