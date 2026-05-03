@@ -3805,20 +3805,21 @@ async function loadSGTDataFixed() {
             }
         }
         
-        // Strategy 2: Cari by username
+        // Strategy 2: Cari by username — pakai lookupUserByUsername (tidak butuh index)
         if (db && username) {
-            const snap = await getDocs(
-                query(collection(db, 'users'), where('username', '==', username), limit(1))
-            );
-            if (!snap.empty) {
-                const data = snap.docs[0].data();
-                sgtBalance = data.sgtBalance || 0;
-                sgtTransactions = data.sgtTransactions || [];
-                localStorage.setItem('sgt_balance_' + uid, sgtBalance.toString());
-                localStorage.setItem('sgt_transactions_' + uid, JSON.stringify(sgtTransactions));
-                logDebug(`[SGT-v3] ✅ Loaded from username: ${sgtBalance} SGT`);
-                updateSGTUI();
-                return;
+            try {
+                const userData = await lookupUserByUsername(username);
+                if (userData) {
+                    sgtBalance = userData.sgtBalance || 0;
+                    sgtTransactions = userData.sgtTransactions || [];
+                    localStorage.setItem('sgt_balance_' + uid, sgtBalance.toString());
+                    localStorage.setItem('sgt_transactions_' + uid, JSON.stringify(sgtTransactions));
+                    logDebug('[SGT-v3] Loaded from username lookup: ' + sgtBalance + ' SGT');
+                    updateSGTUI();
+                    return;
+                }
+            } catch(s2Err) {
+                logDebug('[SGT-v3] Strategy 2 skip: ' + s2Err.message);
             }
         }
         
@@ -4227,13 +4228,13 @@ window.processSGTTransfer = async function() {
 
         showToast('Memproses transfer...', 'info');
 
-        // Cari penerima
-        const receiverSnap = await getDocs(query(collection(db, 'users'), where('username', '==', targetUserInput)));
-        if (receiverSnap.empty) throw new Error('User penerima tidak ditemukan');
-        const receiverDoc = receiverSnap.docs[0];
-        if (receiverDoc.id === currentUser.uid) throw new Error('Tidak bisa transfer ke diri sendiri');
+        // Cari penerima — pakai lookupUserByUsername (tidak butuh index)
+        const receiverUser = await lookupUserByUsername(targetUserInput);
+        if (!receiverUser) throw new Error('User @' + targetUserInput + ' tidak ditemukan');
+        if (receiverUser.id === currentUser.uid) throw new Error('Tidak bisa transfer ke diri sendiri');
 
-        const receiverData = receiverDoc.data();
+        const receiverDoc = { id: receiverUser.id };
+        const receiverData = receiverUser;
         // Update pengirim
         sgtBalance -= amount;
         const newTxSender = { type:'transfer', amount, description:`Transfer ke @${targetUserInput}`, date:new Date().toISOString(), userId:currentUser.uid };
@@ -4349,11 +4350,10 @@ window._real_.distributeSGTManual = async function() {
     try {
         if (!db) throw new Error('Database tidak siap');
         
-        // STEP 1: Cari user by username
-        const usersSnap = await getDocs(
-            query(collection(db, 'users'), where('username', '==', targetUser))
-        );
-        
+        // STEP 1: Cari user by username — pakai lookupUserByUsername (tidak butuh index)
+        const targetUserData = await lookupUserByUsername(targetUser);
+        const usersSnap = targetUserData ? { empty: false, docs: [{ id: targetUserData.id, data: () => targetUserData }] } : { empty: true, docs: [] };
+
         if (usersSnap.empty) {
             showToast(`User @${targetUser} tidak ditemukan`, 'error');
             return;
@@ -4703,9 +4703,9 @@ async function fallbackListenerByUsername(userId) {
     if (!currentUser?.username || !db) return;
     
     try {
-        const snap = await getDocs(
-            query(collection(db, 'users'), where('username', '==', currentUser.username), limit(1))
-        );
+        // Pakai lookupUserByUsername — tidak butuh index
+        const _udata = await lookupUserByUsername(currentUser.username);
+        const snap = _udata ? { empty: false, docs: [{ id: _udata.id, data: () => _udata }] } : { empty: true, docs: [] };
         
         if (!snap.empty) {
             const data = snap.docs[0].data();
@@ -6065,6 +6065,46 @@ window.manualPiLogin = async function() {
 // ============================================
 // SECTION D: ENSURE USER DOCUMENT EXISTS - v3
 // ============================================
+
+// ============================================================
+// HELPER: Lookup user by username tanpa composite index
+// Pakai koleksi usernames/{username} → {uid} terlebih dahulu
+// Fallback ke query where('username') jika belum ada
+// ============================================================
+async function lookupUserByUsername(username) {
+    if (!db || !username) return null;
+    // Try 1: getDoc ke usernames/{username} — tidak butuh index
+    try {
+        const nameSnap = await getDoc(doc(db, 'usernames', username));
+        if (nameSnap.exists()) {
+            const uid = nameSnap.data().uid;
+            if (uid) {
+                const userSnap = await getDoc(doc(db, 'users', uid));
+                if (userSnap.exists()) {
+                    return { id: uid, ...userSnap.data() };
+                }
+            }
+        }
+    } catch(e) { logDebug('[lookupUser] usernames lookup skip: ' + e.message); }
+
+    // Try 2: fallback query where (butuh index, tapi ada try/catch)
+    try {
+        const snap = await getDocs(
+            query(collection(db, 'users'), where('username', '==', username), limit(1))
+        );
+        if (!snap.empty) {
+            const d = snap.docs[0];
+            // Simpan ke usernames untuk lookup berikutnya lebih cepat
+            setDoc(doc(db, 'usernames', username), {
+                uid: d.id, firebaseUid: d.data().firebaseUid || null
+            }, { merge: true }).catch(() => {});
+            return { id: d.id, ...d.data() };
+        }
+    } catch(e) { logDebug('[lookupUser] query fallback skip: ' + e.message); }
+
+    return null;
+}
+
 async function ensureUserDocumentExists(piUid, username, firebaseUid) {
     if (!db) { logDebug('[ensureUser] db null, skip'); return; }
 
@@ -6077,26 +6117,18 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
         if (!userSnap.exists()) {
             logDebug('[ensureUser] User baru — buat dokumen');
 
-            // FIX: query username pakai try/catch tersendiri
-            // failed-precondition (index belum ada) tidak boleh gagalkan login
             let oldBalance = 0, oldTransactions = [], oldDocsToMigrate = [];
             try {
-                const oldSnap = await getDocs(
-                    query(collection(db, 'users'), where('username', '==', username), limit(5))
-                );
-                oldSnap.forEach(oldDoc => {
-                    if (oldDoc.id !== piUid) {
-                        const d = oldDoc.data();
-                        if ((d.sgtBalance || 0) > 0) {
-                            oldBalance += d.sgtBalance;
-                            oldTransactions.push(...(d.sgtTransactions || []));
-                            oldDocsToMigrate.push(oldDoc.id);
-                        }
-                    }
-                });
+                // Pakai lookupUserByUsername agar tidak butuh index
+                const oldUser = await lookupUserByUsername(username);
+                if (oldUser && oldUser.id !== piUid && (oldUser.sgtBalance || 0) > 0) {
+                    oldBalance = oldUser.sgtBalance;
+                    oldTransactions = oldUser.sgtTransactions || [];
+                    oldDocsToMigrate = [oldUser.id];
+                    logDebug('[ensureUser] Migrasi dari: ' + oldUser.id + ' | ' + oldBalance + ' SGT');
+                }
             } catch(qErr) {
-                // Index belum ada / query gagal — skip migrasi, tetap lanjut buat user
-                logDebug('[ensureUser] Query username skip (lanjut): ' + qErr.message);
+                logDebug('[ensureUser] Migration lookup skip: ' + qErr.message);
             }
 
             // Buat dokumen user baru
@@ -6110,6 +6142,10 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
                 isNewUser: true
             };
             await setDoc(userRef, newData);
+            // Simpan juga ke usernames/{username} → {uid} untuk lookup cepat tanpa index
+            setDoc(doc(db, 'usernames', username), {
+                uid: piUid, firebaseUid: firebaseUid || null, createdAt: serverTimestamp()
+            }).catch(() => {});
             logDebug('[ensureUser] Dokumen user dibuat: ' + piUid);
 
             // Welcome bonus 50 SGT untuk user benar-benar baru
@@ -6147,6 +6183,10 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
                 lastLogin:   serverTimestamp(),
                 firebaseUid: firebaseUid || userSnap.data().firebaseUid || null
             }, { merge: true }).catch(e => logDebug('[ensureUser] lastLogin update skip: ' + e.message));
+            // Pastikan usernames/{username} ada (untuk akun lama sebelum fitur ini)
+            setDoc(doc(db, 'usernames', username), {
+                uid: piUid, firebaseUid: firebaseUid || null
+            }, { merge: true }).catch(() => {});
             logDebug('[ensureUser] User exists, lastLogin updated');
         }
 
@@ -9350,8 +9390,10 @@ window.adminDistribusiSGT = async function() {
     if (!username||!jumlah||jumlah<1) { showToast('Lengkapi data distribusi', 'error'); return; }
 
     try {
-        const q = query(collection(db,'users'), where('username','==',username), limit(1));
-        const snap = await getDocs(q);
+        // Pakai lookupUserByUsername — tidak butuh index
+        const _lookupResult = await lookupUserByUsername(username);
+        const snap = _lookupResult ? { empty: false, docs: [{ id: _lookupResult.id, data: () => _lookupResult }] } : { empty: true, docs: [] };
+        const _ignored = await getDocs(q);
         if (snap.empty) { showToast('User @'+username+' tidak ditemukan', 'error'); return; }
         const userDoc = snap.docs[0];
         const curBal = userDoc.data().sgtBalance || 0;
