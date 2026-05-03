@@ -1,33 +1,4 @@
 <!DOCTYPE html>
-<!--
-=================================================================
-SAGATAMA MART - PERBAIKAN BUG (Auto-generated)
-Tanggal: 2026-05-03
-=================================================================
-DAFTAR PERBAIKAN:
-[FIX 1] loadDataWithCache: Tambah batas retry 12x + paksa render dari cache
-[FIX 2] sgtListenerActive: Dipindah ke dalam onSnapshot callback (race condition)
-[FIX 3] deleteProduct: Hapus cache localStorage saat produk dihapus
-[FIX 4] saveProduct: Hapus cache localStorage saat produk disimpan/diedit
-[FIX 5] _registerReal: Tambahkan updateAdminStatus agar tidak stuck di deferred
-[FIX 6] Pi Auth: Batasi auto-retry maksimal 3x (mencegah infinite retry loop)
-[FIX 7] Pi Auth: Reset retry counter saat login berhasil
-[FIX 8] Pi SDK: Jangan load di luar Pi Browser (hemat network request)
-[FIX 9] switchView: Ganti double-override chain dengan hook system yang aman
-[FIX 10] checkExpiredProposals: Ganti async forEach ke Promise.allSettled
-[FIX 11] Firestore Rules: Perbarui komentar rules sgt_config untuk mint otomatis
-[FIX 12] fallbackListenerByUsername: Sederhanakan double-wrapper yang tidak perlu
-[FIX 13] Security: Tambah peringatan credential admin plaintext di source code
-[FIX 14] SGT TX Cache: Cache hasil query transaction agar tidak boros Firestore reads
-[FIX 15] SGT TX Cache: Invalidate cache saat balance berubah via listener
-[FIX 16] Init: switchView('home') dipanggil sebelum await Firebase — layar tidak blank
-=================================================================
-TINDAKAN WAJIB SETELAH DEPLOY:
-1. Ganti password admin di Firebase Console (bukan di kode!)
-2. Update Firestore Rules sesuai komentar di baris sgt_config
-3. Aktifkan Anonymous Auth di Firebase Console jika belum
-=================================================================
--->
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -165,19 +136,8 @@ TINDAKAN WAJIB SETELAH DEPLOY:
     <script>
     (function loadPiSDK() {
         var ua = navigator.userAgent || '';
-        var host = window.location.hostname;
-
-        // Hanya skip di localhost/dev untuk mencegah error di browser biasa
-        // Di production (vercel/firebase hosting), selalu coba load SDK
-        // karena Pi Browser versi baru berbasis Chromium mungkin tidak punya "PiBrowser" di UA
-        var isLocalDev = (host === 'localhost' || host === '127.0.0.1');
-        var looksLikePi = ua.includes('PiBrowser') || ua.includes('MinepiApp') ||
-                          ua.includes('pi-browser') || ua.toLowerCase().includes('pibrowser') ||
-                          typeof window.Pi !== 'undefined';
-
-        // Skip hanya jika localhost DAN tidak ada tanda-tanda Pi Browser
-        if (isLocalDev && !looksLikePi) return;
-
+        var isPiBrowser = ua.includes('PiBrowser') || ua.includes('MinepiApp');
+        if (!isPiBrowser && window.location.hostname === 'localhost') return;
         var urls = ['https://sdk.minepi.com/pi-sdk.js', 'https://cdn.minepi.com/pi-sdk.js'];
         var attempts = 0;
         function tryLoad(i) {
@@ -186,13 +146,6 @@ TINDAKAN WAJIB SETELAH DEPLOY:
             var s = document.createElement('script');
             s.src = urls[i];
             s.async = true;
-            s.onload = function() {
-                // Pi SDK berhasil load — set flag global agar detectPiEnv tahu
-                window.__piSDKLoaded = true;
-                // Trigger re-detect jika fungsi sudah tersedia
-                if (typeof window.detectPiEnv === 'function') window.detectPiEnv();
-                if (typeof window.initPiSDK === 'function') window.initPiSDK();
-            };
             s.onerror = function() { setTimeout(function(){ tryLoad(i+1); }, 500); };
             document.head.appendChild(s);
         }
@@ -225,9 +178,9 @@ TINDAKAN WAJIB SETELAH DEPLOY:
             }
         };
     </script>
-    <!-- Tailwind CSS CDN (browser build) -->
-    <script src="https://cdn.tailwindcss.com"
-            onerror="this.onerror=null;this.src='https://unpkg.com/tailwindcss@3/dist/tailwind.min.css'"></script>
+    <!-- Tailwind production build — tanpa warning CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.17/lib/index.min.js"
+            onerror="this.onerror=null;this.src='https://unpkg.com/tailwindcss@3.4.17/lib/index.min.js'"></script>
     
     <style>
         * { 
@@ -1244,51 +1197,7 @@ TINDAKAN WAJIB SETELAH DEPLOY:
     <p class="text-xs text-slate-400 mt-2">Sinkronisasi Dompet Sagatama</p>
 </div>
 
-<!-- TESTNET INDICATOR — otomatis hilang di production -->
-<script>
-(function() {
-    if (typeof USE_SANDBOX !== 'undefined' && USE_SANDBOX) {
-        var banner = document.createElement('div');
-        banner.id = 'testnetBanner';
-        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#854F0B;color:#FAEEDA;text-align:center;font-size:11px;font-weight:600;padding:4px 8px;letter-spacing:0.5px;';
-        banner.textContent = 'MODE TESTNET — Pembayaran Pi tidak nyata';
-        document.body.prepend(banner);
-        // Geser konten ke bawah agar tidak tertimpa banner
-        document.body.style.paddingTop = '24px';
-    }
-})();
-</script>
-
-    <!-- ERROR 400 INTERCEPTOR: identify mana yang 400 -->
-    <script>
-    (function() {
-        var origFetch = window.fetch;
-        window.fetch = function(url, opts) {
-            return origFetch.apply(this, arguments).then(function(res) {
-                if (res.status === 400) {
-                    var urlStr = typeof url === 'string' ? url : (url.url || String(url));
-                    console.warn('[400 INTERCEPTED]', urlStr.substring(0, 120));
-                    var panel = document.getElementById('debugPanel');
-                    if (panel) panel.innerHTML += '<div style="color:#E24B4A">' + new Date().toLocaleTimeString() + ': HTTP 400 dari: ' + urlStr.substring(0, 80) + '</div>';
-                    panel && (panel.scrollTop = panel.scrollHeight);
-                }
-                return res;
-            });
-        };
-        var origXHR = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function(method, url) {
-            this._url = url;
-            this.addEventListener('load', function() {
-                if (this.status === 400) {
-                    console.warn('[400 XHR]', String(this._url).substring(0, 120));
-                }
-            });
-            return origXHR.apply(this, arguments);
-        };
-    })();
-    </script>
-
-        <!-- DEBUG PANEL -->
+    <!-- DEBUG PANEL -->
     <div id="debugPanel"></div>
     
     <div id="announcement-banner" style="background-color: #ffa500; color: #000; padding: 15px; text-align: center; font-family: sans-serif; font-weight: bold; border-bottom: 3px solid #e69500; margin-bottom: 20px;">
@@ -1488,7 +1397,7 @@ TINDAKAN WAJIB SETELAH DEPLOY:
                         </div>
                         <div style="text-align:right;">
                             <div style="background:rgba(255,255,255,0.15); padding:4px 12px; border-radius:20px; font-size:10px; font-weight:800; color:#FCD34D; border:1px solid rgba(255,215,77,0.3);">LIVE</div>
-                            <p id="walletRateLabel" style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:4px;">1 π = 500 SGT</p>
+                            <p style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:4px;">1 π = 100 SGT</p>
                         </div>
                     </div>
 
@@ -1500,9 +1409,6 @@ TINDAKAN WAJIB SETELAH DEPLOY:
                             <p style="font-size:22px; font-weight:700; color:rgba(255,255,255,0.6); margin-bottom:6px;">SGT</p>
                         </div>
                         <p style="font-size:12px; color:rgba(255,255,255,0.55); margin-top:4px;">≈ <span id="sgtPiEquivalent">0.00000000</span> Pi</p>
-                        <p id="walletPendingRow" style="font-size:11px; color:rgba(252,211,77,0.75); margin-top:4px; display:none;">
-                            <span id="walletPendingSgt">0.00</span> SGT pending akumulasi
-                        </p>
                     </div>
 
                     <!-- Stats -->
@@ -1797,9 +1703,6 @@ TINDAKAN WAJIB SETELAH DEPLOY:
                     </div>
                 </div>
             </div>
-
-            <!-- DB Status Bar -->
-            <div id="adminDbStatus" style="font-size:11px;color:#6B7280;padding:6px 4px;margin-bottom:4px;"></div>
 
             <!-- SGT Overview Panel -->
             <div style="background:linear-gradient(135deg,#0F172A 0%,#1E293B 100%);border-radius:20px;padding:20px;margin-bottom:16px;color:white;box-shadow:0 8px 32px rgba(0,0,0,0.15);">
@@ -3120,19 +3023,11 @@ TINDAKAN WAJIB SETELAH DEPLOY:
                 <div id="paymentItems" style="max-height:150px; overflow-y:auto;"></div>
             </div>
 
-            <div style="background:#FEF3C7; border-radius:12px; padding:16px; margin-bottom:12px;">
+            <div style="background:#FEF3C7; border-radius:12px; padding:16px; margin-bottom:20px;">
                 <p style="font-size:12px; color:#92400E; font-weight:600;">
                     <i class="fas fa-info-circle" style="margin-right:6px;"></i>
                     Pembayaran diproses melalui Pi Browser Wallet. SGT reward dikreditkan otomatis setelah pembayaran berhasil.
                 </p>
-            </div>
-
-            <!-- Tombol bersihkan payment stuck — muncul jika ada error pending payment -->
-            <div id="clearStuckPayBtn" style="display:none; margin-bottom:12px;">
-                <button onclick="window.clearStuckPayment()" style="width:100%;padding:12px;background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;">
-                    🔄 Bersihkan Pembayaran Tertunda &amp; Coba Lagi
-                </button>
-                <p style="font-size:11px;color:#9CA3AF;text-align:center;margin:4px 0 0;">Pembayaran sebelumnya belum selesai di Pi Browser</p>
             </div>
 
             <!-- Peringatan jika bukan Pi Browser -->
@@ -3354,8 +3249,8 @@ TINDAKAN WAJIB SETELAH DEPLOY:
                 <h4 style="font-weight:800; margin-bottom:12px; font-size:14px; color:#1E293B;">⚙️ Rate & Konversi</h4>
                 <div class="form-group">
                     <label class="form-label">SGT per Pi (Rate Belanja)</label>
-                    <input type="number" id="sgtAdminRate" class="form-input" value="500">
-                    <p style="font-size:11px; color:#64748B; margin-top:4px;">Default: 1 Pi = <span id="sgtAdminRateHint">500</span> SGT</p>
+                    <input type="number" id="sgtAdminRate" class="form-input" value="100">
+                    <p style="font-size:11px; color:#64748B; margin-top:4px;">Default: 1 Pi = 100 SGT</p>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Min. Pembelian untuk dapat SGT (Pi)</label>
@@ -3385,10 +3280,10 @@ TINDAKAN WAJIB SETELAH DEPLOY:
             <div style="background:#F0FDF4;border-radius:14px;padding:16px;margin-bottom:12px;border:1px solid #A7F3D0;">
                 <h4 style="font-weight:800;margin-bottom:10px;font-size:13px;color:#065F46;"><i class="fas fa-sliders-h" style="margin-right:6px;"></i>Adjust Rate Mint (SGT/Pi)</h4>
                 <div style="display:flex;gap:8px;align-items:center;">
-                    <input type="number" id="newMintRate" class="form-input" style="flex:1;" placeholder="Default: 500" min="1" max="10000">
+                    <input type="number" id="newMintRate" class="form-input" style="flex:1;" placeholder="Default: 100" min="1" max="10000">
                     <button onclick="updateMintRate()" style="background:#059669;color:white;border:none;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer;font-size:12px;white-space:nowrap;font-family:inherit;"><i class="fas fa-check"></i> Set</button>
                 </div>
-                <p style="font-size:10px;color:#065F46;margin:6px 0 0;">Rate saat ini: <strong id="currentMintRateDisplay">500</strong> SGT/Pi · Ubah dengan hati-hati</p>
+                <p style="font-size:10px;color:#065F46;margin:6px 0 0;">Rate saat ini: <strong id="currentMintRateDisplay">100</strong> SGT/Pi · Ubah dengan hati-hati</p>
             </div>
 
             <div style="background:#FEF2F2; border-radius:14px; padding:16px; margin-bottom:16px; border:1px solid #FECACA;">
@@ -3433,8 +3328,7 @@ TINDAKAN WAJIB SETELAH DEPLOY:
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit, enableNetwork, disableNetwork } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js";
+import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 // ============================================
 // ERROR HANDLER GLOBAL
@@ -3542,17 +3436,10 @@ window.addEventListener('unhandledrejection', function(e) {
 //       allow write: if request.auth != null;
 //     }
 //
-//     // SGT Config: semua bisa baca
-//     // PERBAIKAN: supply & fee_pool perlu bisa ditulis oleh auth user biasa
-//     // karena mintSGT() & burnSGTFromSupply() dipanggil dari client saat bayar
+//     // SGT Config: semua bisa baca, admin yang bisa tulis
 //     match /sgt_config/{docId} {
 //       allow read: if true;
-//       allow write: if request.auth != null && (
-//         isAdmin() ||
-//         docId == 'supply' ||     // mint otomatis saat transaksi
-//         docId == 'fee_pool' ||   // fee pool update
-//         docId == 'dana_pools'    // staking zakat pool
-//       );
+//       allow write: if request.auth != null && isAdmin();
 //     }
 //
 //     // Beasiswa
@@ -3602,7 +3489,7 @@ const firebaseConfig = {
     appId: "1:372845954028:web:189f2a3127ea8189b9f6c9"
 };
 
-let app, auth, db, functions;
+let app, auth, db;
 let products = [];
 let orders = [];
 let myOrders = [];
@@ -3643,12 +3530,9 @@ const SGT_GENESIS_ALLOC   = {
     baitulMaal: 0.10, // 10% dana sosial
     tim       : 0.05  // 5% pengembang (locked 12 bln)
 };
-// Mint rate (adjustable admin, default 500)
-let sgtRatePerPi   = 500;
-let sgtMinPurchase = 0.001; // Diturunkan agar belanja kecil bisa akumulasi
-
-// Akumulasi SGT desimal per user — simpan pending float SGT lintas sesi
-let sgtPendingMap = {}; // { uid: float }
+// Mint rate (adjustable admin, default 100)
+let sgtRatePerPi   = 100;
+let sgtMinPurchase = 0.1;
 
 // Fee pool — setiap transaksi bayar fee ini, dana ke pool
 const SGT_FEE_RATE      = 0.03;  // 3% dari base reward masuk fee pool
@@ -3675,9 +3559,7 @@ let sgtFeePool           = 0; // akumulasi fee untuk APY staking
 // Admin exchange rate (hanya untuk referensi admin)
 let adminExchangeRate = 15000;
 
-const USE_SANDBOX = true; // testnet — ubah ke false saat production mainnet
-// ⚠️ KEAMANAN: Segera ganti password ini di Firebase Console dan hapus dari source code!
-// Password admin sebaiknya tidak disimpan di frontend. Gunakan Firebase Auth email/password saja.
+const USE_SANDBOX = false;
 const ADMIN_CREDENTIALS = { username: 'sagatama_admin', password: 'Admin513' };
 // UID tetap admin@portal-sagatama.pi — digunakan untuk isAdmin() check di Firestore
 const ADMIN_FIREBASE_UID = '8cHVtkw8JAbfF6GcvZGClGrYM143';
@@ -3812,71 +3694,12 @@ async function loadSGTData() {
 // ============================================
 // SGT LOAD FIXED - Multi-Strategy Fallback (v3)
 // ============================================
-
-// ============================================================
-// FIRESTORE ONLINE HELPER — auto-reconnect sebelum fetch
-// Jika Firestore offline, coba enableNetwork dulu lalu retry
-// ============================================================
-async function firestoreGet(docRef, retries = 2) {
-    for (let i = 0; i <= retries; i++) {
-        try {
-            return await getDoc(docRef);
-        } catch(e) {
-            const isOffline = e.message && (
-                e.message.includes('offline') ||
-                e.message.includes('Failed to get document') ||
-                e.code === 'unavailable'
-            );
-            if (isOffline && i < retries && db) {
-                logDebug('[Firestore] Offline terdeteksi, reconnect attempt ' + (i+1));
-                try { await enableNetwork(db); await new Promise(r => setTimeout(r, 1000)); } catch(re) {}
-            } else {
-                throw e;
-            }
-        }
-    }
-}
-
-async function firestoreGetDocs(queryRef, retries = 2) {
-    for (let i = 0; i <= retries; i++) {
-        try {
-            return await getDocs(queryRef);
-        } catch(e) {
-            const isOffline = e.message && (
-                e.message.includes('offline') ||
-                e.message.includes('Failed to get document') ||
-                e.code === 'unavailable'
-            );
-            if (isOffline && i < retries && db) {
-                logDebug('[Firestore] Offline getDocs, reconnect attempt ' + (i+1));
-                try { await enableNetwork(db); await new Promise(r => setTimeout(r, 1000)); } catch(re) {}
-            } else {
-                throw e;
-            }
-        }
-    }
-}
-
 async function loadSGTDataFixed() {
-    if (!currentUser || !currentUser.uid) {
-        logDebug('[SGT-v3] No currentUser or uid — skip SGT load');
+    if (!currentUser) {
+        logDebug('[SGT-v3] No currentUser');
         return;
     }
     
-    // Load mint rate dari Firestore dulu agar rate selalu sinkron dengan admin
-    try {
-        const rateSnap = await getDoc(doc(db, 'sgt_config', 'supply'));
-        if (rateSnap.exists() && rateSnap.data().mintRate) {
-            sgtRatePerPi = rateSnap.data().mintRate;
-            localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
-            logDebug('[SGT-v3] Rate synced from Firestore: ' + sgtRatePerPi + ' SGT/Pi');
-        }
-    } catch(e) {
-        // Fallback ke localStorage jika offline
-        const savedRate = localStorage.getItem('sgt_rate');
-        if (savedRate) sgtRatePerPi = parseInt(savedRate) || 500;
-        logDebug('[SGT-v3] Rate fallback localStorage: ' + sgtRatePerPi);
-    }
     const uid = currentUser.uid;
     const username = currentUser.username;
     logDebug(`[SGT-v3] Loading SGT for uid=${uid}, username=${username}`);
@@ -3907,21 +3730,20 @@ async function loadSGTDataFixed() {
             }
         }
         
-        // Strategy 2: Cari by username — pakai lookupUserByUsername (tidak butuh index)
+        // Strategy 2: Cari by username
         if (db && username) {
-            try {
-                const userData = await lookupUserByUsername(username);
-                if (userData) {
-                    sgtBalance = userData.sgtBalance || 0;
-                    sgtTransactions = userData.sgtTransactions || [];
-                    localStorage.setItem('sgt_balance_' + uid, sgtBalance.toString());
-                    localStorage.setItem('sgt_transactions_' + uid, JSON.stringify(sgtTransactions));
-                    logDebug('[SGT-v3] Loaded from username lookup: ' + sgtBalance + ' SGT');
-                    updateSGTUI();
-                    return;
-                }
-            } catch(s2Err) {
-                logDebug('[SGT-v3] Strategy 2 skip: ' + s2Err.message);
+            const snap = await getDocs(
+                query(collection(db, 'users'), where('username', '==', username), limit(1))
+            );
+            if (!snap.empty) {
+                const data = snap.docs[0].data();
+                sgtBalance = data.sgtBalance || 0;
+                sgtTransactions = data.sgtTransactions || [];
+                localStorage.setItem('sgt_balance_' + uid, sgtBalance.toString());
+                localStorage.setItem('sgt_transactions_' + uid, JSON.stringify(sgtTransactions));
+                logDebug(`[SGT-v3] ✅ Loaded from username: ${sgtBalance} SGT`);
+                updateSGTUI();
+                return;
             }
         }
         
@@ -3931,7 +3753,7 @@ async function loadSGTDataFixed() {
         const rate = localStorage.getItem('sgt_rate');
         if (bal) sgtBalance = parseInt(bal) || 0;
         if (tx) { try { sgtTransactions = JSON.parse(tx); } catch(e) { sgtTransactions = []; } }
-        if (rate) sgtRatePerPi = parseInt(rate) || 500;
+        if (rate) sgtRatePerPi = parseInt(rate) || 100;
         logDebug(`[SGT-v3] ⚠️ Loaded from localStorage: ${sgtBalance} SGT`);
         updateSGTUI();
         
@@ -3963,24 +3785,6 @@ function updateSGTUI() {
     const piEq = document.getElementById('sgtPiEquivalent');
     if (piEq) piEq.textContent = (bal / sgtRatePerPi).toFixed(8);
 
-    // Update label rate di wallet user secara dinamis
-    const rateLabel = document.getElementById('walletRateLabel');
-    if (rateLabel) rateLabel.textContent = '1 π = ' + sgtRatePerPi + ' SGT';
-
-    // Tampilkan pending SGT akumulasi jika ada
-    const uid = currentUser?.uid;
-    const pendingVal = uid ? (sgtPendingMap[uid] || 0) : 0;
-    const pendingRow = document.getElementById('walletPendingRow');
-    const pendingSgtEl = document.getElementById('walletPendingSgt');
-    if (pendingRow && pendingSgtEl) {
-        if (pendingVal > 0.001) {
-            pendingRow.style.display = 'block';
-            pendingSgtEl.textContent = pendingVal.toFixed(3);
-        } else {
-            pendingRow.style.display = 'none';
-        }
-    }
-
     const rb = document.getElementById('sgtRedeemBalance');
     if (rb) rb.textContent = bal + ' SGT';
 
@@ -4009,17 +3813,12 @@ function updateSGTUI() {
     renderSGTTransactionHistory();
 }
 
-let _sgtTxCache = null; let _sgtTxCacheUid = null;
 function renderSGTTransactionHistory() {
     const container = document.getElementById('sgtTransactionHistory');
     if (!container) return;
 
-    // PERBAIKAN: Gunakan cache di memory agar tidak boros Firestore reads
+    // Load dari Firestore sgt_transactions jika tersedia
     if (db && currentUser) {
-        if (_sgtTxCacheUid === currentUser.uid && _sgtTxCache && _sgtTxCache.length > 0) {
-            _renderSGTFromCacheData(container, _sgtTxCache);
-            return;
-        }
         const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
         const txRef = collection(db, 'sgt_transactions');
         // Query cover semua field ownership
@@ -4035,8 +3834,6 @@ function renderSGTTransactionHistory() {
                 .sort((a,b) => (b.timestamp?.seconds||0) - (a.timestamp?.seconds||0));
 
             if (txs.length > 0) {
-                // Simpan ke cache memory
-                _sgtTxCache = txs; _sgtTxCacheUid = currentUser.uid;
                 container.innerHTML = txs.map(t => {
                     const isEarn = ['earn','mint','reward','escrow_release','referral'].includes(t.type) || (t.to === fbUid || t.to === currentUser.uid);
                     const date = t.timestamp?.toDate ? t.timestamp.toDate().toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '-';
@@ -4059,14 +3856,6 @@ function renderSGTTransactionHistory() {
         return;
     }
     _renderSGTLocal(container);
-}
-
-function _renderSGTFromCacheData(container, txs) {
-    container.innerHTML = txs.map(t => {
-        const isEarn = ['earn','mint','reward','escrow_release','referral'].includes(t.type) || t.isEarn;
-        const date = t.timestamp?.toDate ? t.timestamp.toDate().toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : (t.date ? new Date(t.date).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '-');
-        return `<div style="background:white;border-radius:12px;padding:12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;border:1px solid #E2E8F0;"><div style="width:36px;height:36px;background:${isEarn?'#D1FAE5':'#FEE2E2'};border-radius:9px;display:flex;align-items:center;justify-content:center;color:${isEarn?'#059669':'#DC2626'};flex-shrink:0;"><i class="fas ${isEarn?'fa-arrow-down':'fa-arrow-up'}" style="font-size:13px;"></i></div><div style="flex:1;min-width:0;"><p style="font-weight:700;color:#1F2937;font-size:12px;">${t.description||t.type||'SGT Transfer'}</p><p style="font-size:10px;color:#9CA3AF;">${date}</p></div><p style="font-weight:800;font-size:13px;color:${isEarn?'#059669':'#DC2626'};flex-shrink:0;">${isEarn?'+':'-'}${Math.abs(t.amount||0).toLocaleString()} SGT</p></div>`;
-    }).join('');
 }
 
 function _renderSGTLocal(container) {
@@ -4135,51 +3924,18 @@ window.burnSGTFromSupply = async function burnSGTFromSupply(amount, reason) {
 }
 
 // ============================================
-// HELPER AKUMULASI SGT — load & save pending desimal dari Firestore
-// ============================================
-async function loadSGTPending(uid) {
-    try {
-        const snap = await getDoc(doc(db, 'sgt_pending', uid));
-        if (snap.exists()) {
-            sgtPendingMap[uid] = parseFloat(snap.data().pending) || 0;
-        } else {
-            sgtPendingMap[uid] = 0;
-        }
-    } catch(e) {
-        // Fallback ke localStorage jika Firestore offline
-        const cached = localStorage.getItem('sgt_pending_' + uid);
-        sgtPendingMap[uid] = cached ? parseFloat(cached) : 0;
-        logDebug('[SGTPending] Fallback localStorage: ' + sgtPendingMap[uid]);
-    }
-    return sgtPendingMap[uid];
-}
-
-async function saveSGTPending(uid, value) {
-    sgtPendingMap[uid] = value;
-    try {
-        localStorage.setItem('sgt_pending_' + uid, value.toString());
-        await setDoc(doc(db, 'sgt_pending', uid), {
-            pending: value,
-            updatedAt: serverTimestamp()
-        }, { merge: true });
-    } catch(e) {
-        logDebug('[SGTPending] Save error: ' + e.message);
-    }
-}
-
-// ============================================
 // AWARD SGT — tier-aware, hard-cap-safe, fee-pool-funded
-// + SISTEM AKUMULASI: belanja kecil tidak kehilangan SGT
 // ============================================
 async function awardSGT(piAmount, description) {
     if (!currentUser) { logDebug('[awardSGT] Skip: tidak ada currentUser'); return 0; }
 
     // FIX TESTNET: Pi testnet amount selalu 0 karena pricePi produk = 0
+    // Gunakan minimum 0.1 Pi agar SGT tetap diberikan saat testing
     if (piAmount <= 0) {
         const isTestnet = (typeof USE_SANDBOX !== 'undefined' && USE_SANDBOX) ||
                           (typeof ESCROW_CONFIG !== 'undefined' && ESCROW_CONFIG.NETWORK === 'testnet');
         if (isTestnet) {
-            piAmount = 0.1;
+            piAmount = 0.1; // minimum testnet amount
             logDebug('[awardSGT] Testnet: amount 0 → fallback 0.1 Pi');
         } else {
             logDebug('[awardSGT] Skip: piAmount 0 di mainnet');
@@ -4187,56 +3943,24 @@ async function awardSGT(piAmount, description) {
         }
     }
 
-    if (piAmount < sgtMinPurchase) {
-        logDebug('[awardSGT] Skip: piAmount terlalu kecil (' + piAmount + ' < ' + sgtMinPurchase + ')');
-        return 0;
-    }
+    if (piAmount < sgtMinPurchase) { logDebug('[awardSGT] Skip: piAmount terlalu kecil (' + piAmount + ' < ' + sgtMinPurchase + ')'); return 0; }
 
-    const uid = currentUser.uid;
-    const tier = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05, name: 'Bronze' };
+    const tier        = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05, name: 'Bronze' };
+    const baseSGT     = Math.floor(piAmount * sgtRatePerPi);
+    const tierBonus   = Math.floor(baseSGT * tier.rate);
+    const feeAmount   = Math.floor(baseSGT * SGT_FEE_RATE);
+    const sosialShare = Math.floor(baseSGT * SGT_SOSIAL_RATE);
+    const userShare   = baseSGT + tierBonus - feeAmount;
 
-    // Hitung reward float (sebelum dibulatkan)
-    const rawSGT      = piAmount * sgtRatePerPi;
-    const rawBonus    = rawSGT * tier.rate;
-    const rawFee      = rawSGT * SGT_FEE_RATE;
-    const rawSosial   = rawSGT * SGT_SOSIAL_RATE;
-    const rawUserShare = rawSGT + rawBonus - rawFee;
-
-    // ==================================================
-    // SISTEM AKUMULASI: gabungkan dengan pending sebelumnya
-    // ==================================================
-    await loadSGTPending(uid);
-    const pending    = sgtPendingMap[uid] || 0;
-    const totalFloat = rawUserShare + pending;
-    const userShare  = Math.floor(totalFloat);           // yang dikreditkan sekarang
-    const newPending = parseFloat((totalFloat - userShare).toFixed(6)); // sisa yang disimpan
-
-    logDebug('[awardSGT] raw=' + rawUserShare.toFixed(4) + ' pending=' + pending.toFixed(4) +
-             ' total=' + totalFloat.toFixed(4) + ' dikreditkan=' + userShare + ' sisa=' + newPending);
-
-    // Simpan sisa pending ke Firestore (berapapun, termasuk 0)
-    await saveSGTPending(uid, newPending);
-
-    // Jika belum cukup 1 SGT, beri notifikasi akumulasi dan keluar
-    if (userShare < 1) {
-        const totalPendingNow = newPending;
-        showToast(`+${rawUserShare.toFixed(2)} SGT pending (total: ${totalPendingNow.toFixed(2)} SGT)`, 'info');
-        logDebug('[awardSGT] Belum cukup 1 SGT, akumulasi disimpan: ' + totalPendingNow.toFixed(4));
-        return 0;
-    }
-
-    // Hitung fee & sosial dari bagian yang benar-benar dikreditkan
-    const feeAmount   = Math.floor(userShare * SGT_FEE_RATE);
-    const sosialShare = Math.floor(userShare * SGT_SOSIAL_RATE);
-    const baseSGT     = Math.floor(rawSGT);
+    if (userShare <= 0) return 0;
 
     // Check hard cap before minting
     let actualMint = 0;
     try {
-        actualMint = await mintSGT(baseSGT || 1, uid);
+        actualMint = await mintSGT(baseSGT, currentUser.uid);
     } catch(mintErr) {
-        logDebug('[awardSGT] mintSGT error: ' + mintErr.message + ' — lanjut kredit lokal');
-        actualMint = baseSGT || 1;
+        logDebug('[awardSGT] mintSGT error: ' + mintErr.message + ' — lanjut dengan kredit lokal');
+        actualMint = baseSGT; // fallback: izinkan mint lokal
     }
     if (!actualMint) { logDebug('[awardSGT] mintSGT returned 0, SGT tidak dikreditkan'); return 0; }
 
@@ -4245,21 +3969,18 @@ async function awardSGT(piAmount, description) {
     sgtTransactions.unshift({
         type: 'earn', amount: userShare,
         description: description || 'Reward belanja',
-        date: new Date().toISOString(), userId: uid,
-        tier: tier.name,
-        tierBonus: Math.floor(rawBonus),
-        feeDeducted: feeAmount,
-        baseSGT,
-        pendingFlushed: pending > 0 ? parseFloat(pending.toFixed(4)) : undefined
+        date: new Date().toISOString(), userId: currentUser.uid,
+        tier: tier.name, tierBonus, feeDeducted: feeAmount,
+        baseSGT
     });
 
-    // Simpan ke localStorage dulu
+    // Simpan ke localStorage dulu (instant, tidak tergantung Firestore)
     try {
-        localStorage.setItem('sgt_balance_' + uid, sgtBalance.toString());
-        localStorage.setItem('sgt_transactions_' + uid, JSON.stringify(sgtTransactions.slice(0, 200)));
+        localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
+        localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions.slice(0, 200)));
     } catch(e) {}
 
-    // Fee pool accumulation
+    // Fee pool accumulation (funds staking APY)
     sgtFeePool += feeAmount;
     try {
         await setDoc(doc(db, 'sgt_config', 'fee_pool'), {
@@ -4273,14 +3994,12 @@ async function awardSGT(piAmount, description) {
         try { await addDanaToPool('baitul_maal', sosialShare); } catch(e) {}
     }
 
-    // Simpan ke Firestore
+    // Simpan ke Firestore (forceFirestore=true karena ini transaksi penting)
     saveSGTData(true);
     updateSGTUI();
     if (typeof updateSosialUI === 'function') updateSosialUI();
-
-    const pendingMsg = pending > 0 ? ` (+${pending.toFixed(2)} pending)` : '';
-    showToast(`+${userShare.toLocaleString()} SGT (Tier ${tier.name})${pendingMsg} 🎉`, 'success');
-    logDebug('SGT awarded: ' + userShare + ' | fee: ' + feeAmount + ' | sosial: ' + sosialShare + ' | pending baru: ' + newPending);
+    showToast(`+${userShare.toLocaleString()} SGT (Tier ${tier.name}) 🎉`, 'success');
+    logDebug('SGT awarded: ' + userShare + ' | fee: ' + feeAmount + ' | sosial: ' + sosialShare);
     return userShare;
 }
 
@@ -4294,15 +4013,10 @@ function calculateSGTReward(piAmount) {
     }
     if (piAmount < sgtMinPurchase) return 0;
     const tier    = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05 };
-    // Gunakan float agar preview reward akurat (termasuk untuk belanja kecil)
-    const base    = piAmount * sgtRatePerPi;
-    const bonus   = base * tier.rate;
-    const fee     = base * SGT_FEE_RATE;
-    const rawReward = Math.max(0, base + bonus - fee);
-    // Tambahkan pending akumulasi user untuk preview
-    const uid = currentUser?.uid;
-    const pending = uid ? (sgtPendingMap[uid] || 0) : 0;
-    return rawReward; // return float — UI akan format sendiri
+    const base    = Math.floor(piAmount * sgtRatePerPi);
+    const bonus   = Math.floor(base * tier.rate);
+    const fee     = Math.floor(base * SGT_FEE_RATE);
+    return Math.max(0, base + bonus - fee);
 }
 
 function showSGTElements(show) {
@@ -4345,13 +4059,13 @@ window.processSGTTransfer = async function() {
 
         showToast('Memproses transfer...', 'info');
 
-        // Cari penerima — pakai lookupUserByUsername (tidak butuh index)
-        const receiverUser = await lookupUserByUsername(targetUserInput);
-        if (!receiverUser) throw new Error('User @' + targetUserInput + ' tidak ditemukan');
-        if (receiverUser.id === currentUser.uid) throw new Error('Tidak bisa transfer ke diri sendiri');
+        // Cari penerima
+        const receiverSnap = await getDocs(query(collection(db, 'users'), where('username', '==', targetUserInput)));
+        if (receiverSnap.empty) throw new Error('User penerima tidak ditemukan');
+        const receiverDoc = receiverSnap.docs[0];
+        if (receiverDoc.id === currentUser.uid) throw new Error('Tidak bisa transfer ke diri sendiri');
 
-        const receiverDoc = { id: receiverUser.id };
-        const receiverData = receiverUser;
+        const receiverData = receiverDoc.data();
         // Update pengirim
         sgtBalance -= amount;
         const newTxSender = { type:'transfer', amount, description:`Transfer ke @${targetUserInput}`, date:new Date().toISOString(), userId:currentUser.uid };
@@ -4425,27 +4139,13 @@ window.redeemSGT = function(rewardType) {
 };
 
 
-window.saveSGTSettings = async function() {
+window.saveSGTSettings = function() {
     const rate = parseInt(document.getElementById('sgtAdminRate')?.value);
     const minPurchase = parseFloat(document.getElementById('sgtAdminMinPurchase')?.value);
     if (rate > 0) sgtRatePerPi = rate;
     if (minPurchase >= 0) sgtMinPurchase = minPurchase;
     localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
     localStorage.setItem('sgt_min_purchase', sgtMinPurchase.toString());
-    // Simpan ke Firestore agar rate konsisten untuk semua user
-    try {
-        await setDoc(doc(db, 'sgt_config', 'supply'), {
-            mintRate: sgtRatePerPi,
-            mintRateUpdatedAt: serverTimestamp(),
-            mintRateUpdatedBy: currentUser?.username || 'admin'
-        }, { merge: true });
-        logDebug('[saveSGTSettings] Rate saved to Firestore: ' + sgtRatePerPi);
-    } catch(e) { logDebug('[saveSGTSettings] Firestore error: ' + e.message); }
-    // Update semua label rate di UI
-    const el = document.getElementById('currentMintRateDisplay');
-    if (el) el.textContent = sgtRatePerPi;
-    const rateLabel = document.getElementById('walletRateLabel');
-    if (rateLabel) rateLabel.textContent = '1 π = ' + sgtRatePerPi + ' SGT';
     showToast(`Pengaturan disimpan! Rate: 1 Pi = ${sgtRatePerPi} SGT`, 'success');
 };
 
@@ -4467,10 +4167,11 @@ window._real_.distributeSGTManual = async function() {
     try {
         if (!db) throw new Error('Database tidak siap');
         
-        // STEP 1: Cari user by username — pakai lookupUserByUsername (tidak butuh index)
-        const targetUserData = await lookupUserByUsername(targetUser);
-        const usersSnap = targetUserData ? { empty: false, docs: [{ id: targetUserData.id, data: () => targetUserData }] } : { empty: true, docs: [] };
-
+        // STEP 1: Cari user by username
+        const usersSnap = await getDocs(
+            query(collection(db, 'users'), where('username', '==', targetUser))
+        );
+        
         if (usersSnap.empty) {
             showToast(`User @${targetUser} tidak ditemukan`, 'error');
             return;
@@ -4619,7 +4320,7 @@ window.autoBurnOnSpend = async function autoBurnOnSpend(amount) {
 window.loadSupplyStats = async function loadSupplyStats() {
     if (!db) return;
     try {
-        const snap = await firestoreGet(doc(db, 'sgt_config', 'supply'));
+        const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
         if (snap.exists()) {
             const d = snap.data();
             sgtCirculatingSupply = d.circulating || 0;
@@ -4672,23 +4373,13 @@ window.loadSupplyStats = async function loadSupplyStats() {
 // Load mint rate from Firestore on startup
 window.loadMintRateFromFirestore = async function loadMintRateFromFirestore() {
     try {
-        const snap = await firestoreGet(doc(db, 'sgt_config', 'supply'));
+        const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
         if (snap.exists() && snap.data().mintRate) {
             sgtRatePerPi = snap.data().mintRate;
-        } else {
-            sgtRatePerPi = 500;
-            await setDoc(doc(db, 'sgt_config', 'supply'), { mintRate: 500 }, { merge: true });
-            logDebug('[loadMintRate] Seeding default rate 500 ke Firestore');
+            const el = document.getElementById('currentMintRateDisplay');
+            if (el) el.textContent = sgtRatePerPi;
+            logDebug('Mint rate loaded: ' + sgtRatePerPi + ' SGT/Pi');
         }
-        const el = document.getElementById('currentMintRateDisplay');
-        if (el) el.textContent = sgtRatePerPi;
-        const rl = document.getElementById('walletRateLabel');
-        if (rl) rl.textContent = '1 π = ' + sgtRatePerPi + ' SGT';
-        const ai = document.getElementById('sgtAdminRate');
-        if (ai) ai.value = sgtRatePerPi;
-        const ah = document.getElementById('sgtAdminRateHint');
-        if (ah) ah.textContent = sgtRatePerPi;
-        logDebug('Mint rate loaded: ' + sgtRatePerPi + ' SGT/Pi');
     } catch(e) { logDebug('loadMintRateFromFirestore error: ' + e.message); }
 };
 
@@ -4763,12 +4454,11 @@ function listenUserSGTBalanceFixed(userId) {
     }
     
     logDebug(`[SGT-v3] Listener start: ${userId}`);
-    // PERBAIKAN: dipindah ke dalam callback agar tidak race condition
+    sgtListenerActive = true;
     
     unsubscribeSGT = onSnapshot(
         doc(db, 'users', userId),
         (docSnap) => {
-            sgtListenerActive = true; // PERBAIKAN: set setelah snapshot pertama tiba
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 const newBalance = data.sgtBalance || 0;
@@ -4781,7 +4471,7 @@ function listenUserSGTBalanceFixed(userId) {
                     // Sync ke localStorage
                     localStorage.setItem('sgt_balance_' + userId, sgtBalance.toString());
                     localStorage.setItem('sgt_transactions_' + userId, JSON.stringify(sgtTransactions));
-                    _sgtTxCache = null; _sgtTxCacheUid = null; // PERBAIKAN: invalidate cache saat balance berubah
+                    
                     updateSGTUI();
                     logDebug(`[SGT-v3] 🔔 Realtime update: ${sgtBalance} SGT`);
                 }
@@ -4820,15 +4510,20 @@ async function fallbackListenerByUsername(userId) {
     if (!currentUser?.username || !db) return;
     
     try {
-        // PERBAIKAN: Sederhanakan — tidak perlu wrapper snap palsu
-        const udata = await lookupUserByUsername(currentUser.username);
-        if (udata) {
-            sgtBalance = udata.sgtBalance || 0;
-            sgtTransactions = udata.sgtTransactions || [];
+        const snap = await getDocs(
+            query(collection(db, 'users'), where('username', '==', currentUser.username), limit(1))
+        );
+        
+        if (!snap.empty) {
+            const data = snap.docs[0].data();
+            sgtBalance = data.sgtBalance || 0;
+            sgtTransactions = data.sgtTransactions || [];
             updateSGTUI();
             logDebug(`[SGT-v3] Fallback loaded: ${sgtBalance} SGT`);
-            if (udata.id && udata.id !== userId && (udata.sgtBalance || 0) > 0) {
-                migrateUserData(udata.id, userId);
+            
+            // Auto-migrate jika perlu
+            if (snap.docs[0].id !== userId && data.sgtBalance > 0) {
+                migrateUserData(snap.docs[0].id, userId);
             }
         }
     } catch (e) {
@@ -4988,7 +4683,7 @@ window.openExchangeRateModal = function() {
     const existingModal = document.getElementById('exchangeRateModal');
     if (existingModal) existingModal.remove();
 
-    const currentSgtRate = (typeof sgtRatePerPi !== 'undefined') ? sgtRatePerPi : 500;
+    const currentSgtRate = (typeof sgtRatePerPi !== 'undefined') ? sgtRatePerPi : 100;
 
     const modal = document.createElement('div');
     modal.id = 'exchangeRateModal';
@@ -5288,11 +4983,6 @@ async function init() {
 
         updateUI();
         updateCartUI();
-
-        // PERBAIKAN: Tampilkan home view segera tanpa menunggu Firebase
-        // Ini mencegah "layar putih / muter-muter" saat Firebase lambat
-        switchView('home');
-
         await loadDataWithCache();
 
         if (!currentUser) {
@@ -5300,13 +4990,6 @@ async function init() {
         }
 
         logDebug("Initialization complete!");
-        // Cek apakah PI_SERVER_API_KEY sudah diisi
-        if (typeof PI_SERVER_API_KEY !== 'undefined' && !PI_SERVER_API_KEY) {
-            setTimeout(() => {
-                logDebug("⚠️ [CONFIG] PI_SERVER_API_KEY belum diisi! Pembayaran Pi tidak akan berfungsi.");
-                logDebug("⚠️ [CONFIG] Isi PI_SERVER_API_KEY di kode dengan Server API Key dari Pi Developer Portal");
-            }, 2000);
-        }
         loadSupplyStats().catch(e => logDebug("Supply stats init: " + e.message));
         loadMintRateFromFirestore().catch(()=>{});
     } catch (e) {
@@ -5331,7 +5014,7 @@ async function init() {
 
 // Verifikasi sesi user masih valid di Firestore (background check)
 async function verifyUserSession() {
-    if (!currentUser?.uid || !currentUser?.username || !db) return;
+    if (!currentUser?.uid || !db) return;
     try {
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
         if (userDoc.exists()) {
@@ -5350,26 +5033,8 @@ async function verifyUserSession() {
 function detectPiEnv() {
     try {
         const ua = navigator.userAgent || '';
-        // Log UA lengkap untuk debug — penting untuk tahu string Pi Browser versi baru
-        logDebug("[UA] " + ua.substring(0, 120));
-        logDebug("[Pi obj] window.Pi=" + (typeof window.Pi) + " | window.Pi?.version=" + (window.Pi?.version || 'n/a'));
-
-        // Deteksi Pi Browser — lebih luas karena versi baru berbasis Chromium
-        // dan mungkin tidak menyertakan "PiBrowser" di UA string
-        isPiBrowser = (
-            ua.includes('PiBrowser') ||
-            ua.includes('MinepiApp') ||
-            ua.includes('pi-browser') ||
-            ua.toLowerCase().includes('pibrowser') ||
-            typeof window.Pi !== 'undefined' ||
-            typeof window.Pi?.init === 'function' ||
-            window.__piSDKLoaded === true
-        );
-
-        logDebug("Environment: " + (isPiBrowser ? "Pi Browser ✅" : "External Browser ❌"));
-        if (!isPiBrowser) {
-            logDebug("[WARN] Pi payment TIDAK akan tersedia. Jika ini Pi Browser, laporkan UA di atas.");
-        }
+        isPiBrowser = ua.includes('PiBrowser') || typeof window.Pi !== 'undefined';
+        logDebug("Environment: " + (isPiBrowser ? "Pi Browser" : "External Browser"));
     } catch (e) {
         logDebug("Detect env error: " + e.message);
     }
@@ -5395,32 +5060,12 @@ async function initPiSDKRobust() {
 
     piInitPromise = new Promise(async (resolve) => {
 
-        // ── FAST PATH: skip hanya jika jelas-jelas bukan Pi Browser ──
-        // JANGAN gunakan UA saja — Pi Browser baru berbasis Chromium mungkin tidak kirim "PiBrowser" di UA
-        // window.Pi bisa di-inject SETELAH halaman load, jadi cek dulu beberapa detik
-        const ua = navigator.userAgent || '';
-        const uaIsPi = ua.includes('PiBrowser') || ua.includes('MinepiApp') ||
-                       ua.includes('pi-browser') || ua.toLowerCase().includes('pibrowser');
-        const isLocalhost = ['localhost','127.0.0.1'].includes(location.hostname);
-
-        // Jika UA tidak cocok DAN bukan localhost, polling window.Pi sampai 4 detik sebelum menyerah
-        if (!uaIsPi && !window.Pi) {
-            logDebug('[AUTH-v3] UA tidak match Pi Browser — polling window.Pi selama 4 detik...');
-            let waited = 0;
-            while (waited < 4000) {
-                await delay(500);
-                waited += 500;
-                if (window.Pi) {
-                    logDebug('[AUTH-v3] window.Pi ditemukan setelah ' + waited + 'ms ✅');
-                    isPiBrowser = true;
-                    break;
-                }
-            }
-            if (!window.Pi) {
-                logDebug('[AUTH-v3] window.Pi tidak tersedia setelah 4 detik — bukan Pi Browser');
-                resolve(false);
-                return;
-            }
+        // ── FAST PATH: kalau bukan Pi Browser, langsung skip ──
+        // Tidak perlu retry 5x × 2-10 detik = buang 34 detik percuma
+        if (!window.Pi && navigator.userAgent.indexOf('PiBrowser') === -1) {
+            logDebug('[AUTH-v3] Bukan Pi Browser — skip Pi SDK init');
+            resolve(false);
+            return;
         }
 
         while (piInitAttempts < MAX_PI_INIT_ATTEMPTS) {
@@ -5467,42 +5112,13 @@ async function initFirebase() {
             if (!app) app = initializeApp(firebaseConfig);
             if (!auth) auth = getAuth(app);
             if (!db) {
-                try {
-                    // Gunakan getFirestore default — paling kompatibel untuk mobile & Pi Browser
-                    // experimentalForceLongPolling dihapus karena sering sebabkan "client offline" di mobile
-                    db = getFirestore(app);
-                    functions = getFunctions(app, 'asia-southeast1'); // Jakarta region
-                    logDebug('[Firebase] Firestore init: default mode');
-                } catch (fsInitErr) {
-                    logDebug('[Firebase] Firestore default gagal, coba longPolling: ' + fsInitErr.message);
-                    try {
-                        db = initializeFirestore(app, {
-                            experimentalForceLongPolling: true,
-                            useFetchStreams: false
-                        });
-                        logDebug('[Firebase] Firestore init: longPolling fallback');
-                    } catch(e2) {
-                        db = null;
-                        logDebug('[Firebase] Firestore gagal total: ' + e2.message);
-                    }
-                }
-
-                // Pasang auto-reconnect saat koneksi kembali online
-                if (db) {
-                    window.addEventListener('online', async () => {
-                        logDebug('[Firebase] Koneksi kembali — reconnect Firestore...');
-                        try {
-                            await enableNetwork(db);
-                            logDebug('[Firebase] Firestore reconnect OK');
-                            showToast('Koneksi pulih — memuat ulang data...', 'success');
-                            setTimeout(() => loadDataFromFirebase(), 500);
-                        } catch(re) { logDebug('[Firebase] Reconnect error: ' + re.message); }
-                    });
-                    window.addEventListener('offline', () => {
-                        logDebug('[Firebase] Koneksi terputus — Firestore offline mode');
-                        showToast('Koneksi internet terputus. Data dari cache.', 'warning');
-                    });
-                }
+                // experimentalForceLongPolling: matikan WebChannel sepenuhnya
+                // → tidak ada lagi Listen/channel 404 atau ERR_QUIC
+                // AutoDetect sering tetap memilih WebChannel (yg bermasalah) → paksa long polling
+                db = initializeFirestore(app, {
+                    experimentalForceLongPolling: true,
+                    useFetchStreams: false
+                });
             }
             logDebug(`Firebase initialized OK (attempt ${attempt})`);
 
@@ -5552,25 +5168,14 @@ async function initFirebase() {
 }
 
 function showFirebaseSetupWarning(msg) {
-    logDebug('[Firebase Setup Warning] ' + msg);
-    // Tampilkan di UI sebagai banner yang bisa di-dismiss
-    const existingBanner = document.getElementById('firebaseWarnBanner');
-    if (existingBanner) return; // jangan dobel
+    if (isPiBrowser) return;
+    if (document.getElementById('_fbWarningBanner')) return;
     const banner = document.createElement('div');
-    banner.id = 'firebaseWarnBanner';
-    banner.style.cssText = 'position:fixed;bottom:70px;left:12px;right:12px;z-index:9998;background:#FCEBEB;border:1px solid #F7C1C1;border-radius:10px;padding:12px 14px;font-size:12px;color:#A32D2D;box-shadow:0 2px 8px rgba(0,0,0,0.1);';
-    banner.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
-            <div>
-                <strong>Koneksi Database Bermasalah</strong><br>
-                ${msg}<br>
-                <span style="font-size:11px;opacity:0.8;">Pastikan: (1) Firestore aktif, (2) Anonymous Auth aktif, (3) API Key tidak dibatasi domain di Google Cloud Console.</span>
-            </div>
-            <button onclick="document.getElementById('firebaseWarnBanner').remove()" style="background:none;border:none;color:#A32D2D;font-size:16px;cursor:pointer;flex-shrink:0;">×</button>
-        </div>
-    `;
-    document.body.appendChild(banner);
-    setTimeout(() => { if (banner.parentNode) banner.remove(); }, 15000);
+    banner.id = '_fbWarningBanner';
+    banner.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#FEF3C7;border:2px solid #F59E0B;color:#92400E;padding:10px 16px;border-radius:12px;font-size:12px;font-weight:700;z-index:9999;max-width:90%;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
+    banner.innerHTML = `<i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>${msg} <button onclick="this.parentElement.remove()" style="margin-left:8px;background:none;border:none;cursor:pointer;font-weight:900;color:#92400E;">\u2715</button>`;
+    if (document.body) document.body.appendChild(banner);
+    setTimeout(() => { if (banner.parentElement) banner.remove(); }, 15000);
 }
 
 // ============================================
@@ -5647,25 +5252,12 @@ window.saveUserAddress = async function() {
 // ============================================
 // CACHE & DATA LOADING
 // ============================================
-let _loadDataRetryCount = 0;
 async function loadDataWithCache() {
     if (!db) {
-        _loadDataRetryCount++;
-        logDebug("DB belum siap, retry " + _loadDataRetryCount + "/12...");
-        if (_loadDataRetryCount > 12) {
-            // Paksa render dari cache agar tidak blank selamanya
-            logDebug("[FALLBACK] DB tidak tersedia setelah 12 retry — render dari cache lokal");
-            try {
-                const cp = localStorage.getItem('sagatama_products_cache');
-                if (cp) { products = JSON.parse(cp); renderProducts?.(); renderFeaturedProducts?.(); renderHomeCategories?.(); }
-            } catch(e) {}
-            _loadDataRetryCount = 0;
-            return;
-        }
+        logDebug("DB belum siap, retry...");
         setTimeout(loadDataWithCache, 1000);
         return;
     }
-    _loadDataRetryCount = 0;
 
     const cachedProducts = localStorage.getItem('sagatama_products_cache');
     if (cachedProducts) {
@@ -5685,49 +5277,20 @@ function loadDataFromFirebase() {
     Object.values(unsubscribers).forEach(u => typeof u === 'function' && u());
     unsubscribers = {};
 
+    // Gunakan fungsi agar selalu cek real-time, bukan di-capture sekali saat awal
     const checkAdmin = () => currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
-
-    // === FALLBACK: Jika db tidak tersedia, load dari cache localStorage ===
-    if (!db) {
-        logDebug('[loadData] db null — load dari localStorage cache');
-        try {
-            const cachedP = localStorage.getItem('sagatama_products_cache');
-            if (cachedP) products = JSON.parse(cachedP);
-            const cachedO = localStorage.getItem('sagatama_orders_cache');
-            if (cachedO) { orders = JSON.parse(cachedO); myOrders = orders; }
-        } catch(e) {}
-        renderProducts?.();
-        renderOrders?.();
-        if (checkAdmin()) { updateAdminStats(); renderAdminRecentOrders?.(); }
-        return;
-    }
 
     try {
         const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
         unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
             products = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
-            renderProducts?.();
-            renderFeaturedProducts?.();
-            renderHomeCategories?.();
-            if (checkAdmin()) {
-                updateAdminStatCards(); // Update angka Produk segera
-                updateAdminStats();
-                renderAdminProducts?.();
-            }
-        }, async (err) => {
-            logDebug("Products error: " + err.message + " | code: " + err.code);
-            if (err.code === 'failed-precondition' || err.code === 'unimplemented') {
-                // Fallback: getDocs tanpa orderBy
-                try {
-                    const snap = await getDocs(collection(db, "products"));
-                    products = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-                        .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
-                    localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
-                    renderProducts?.(); if (checkAdmin()) { updateAdminStatCards(); updateAdminStats(); renderAdminProducts?.(); }
-                } catch(fe) { logDebug("Products fallback err: " + fe.message); }
-            }
-        });
+            renderProducts();
+            renderFeaturedProducts();
+            renderHomeCategories();
+            updateAdminStats();
+            if (checkAdmin()) renderAdminProducts();
+        }, (err) => logDebug("Products error: " + err.message + " | code: " + err.code));
     } catch (e) {
         logDebug("Products query error: " + e.message);
     }
@@ -5751,8 +5314,6 @@ function loadDataFromFirebase() {
         if (checkAdmin()) {
             orders = docs;
             myOrders = docs;
-            // Cache orders admin untuk fallback saat Firebase lambat
-            try { localStorage.setItem('sagatama_orders_cache', JSON.stringify(docs.slice(0, 100))); } catch(e) {}
         } else {
             orders = docs;
             myOrders = _filterMyOrders(docs);
@@ -5772,29 +5333,8 @@ function loadDataFromFirebase() {
         let ordersQuery;
         if (checkAdmin()) {
             ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(500));
-            unsubscribers.orders = onSnapshot(ordersQuery, _handleOrdersSnapshot, async (err) => {
-                logDebug("Orders admin error: " + err.message + " | code: " + err.code);
-                if (err.code === 'failed-precondition' || err.code === 'unimplemented') {
-                    // Index belum ada — fallback tanpa orderBy, sort di client
-                    logDebug("[Orders Admin] Fallback: query tanpa orderBy");
-                    try {
-                        const fallbackQ = query(collection(db, "orders"), limit(500));
-                        unsubscribers.orders_fallback = onSnapshot(fallbackQ, (snap) => {
-                            const docs = snap.docs.map(d => ({id: d.id, ...d.data()}));
-                            docs.sort((a,b) => {
-                                const ta = a.createdAt?.seconds || a.createdAt || 0;
-                                const tb = b.createdAt?.seconds || b.createdAt || 0;
-                                return tb - ta;
-                            });
-                            orders = docs; myOrders = docs;
-                            try { localStorage.setItem('sagatama_orders_cache', JSON.stringify(docs.slice(0, 100))); } catch(e) {}
-                            renderOrders?.(); renderAdminOrders?.(); renderAdminRecentOrders?.(); updateAdminStats?.();
-                        }, e2 => logDebug("Orders admin fallback2: " + e2.message));
-                    } catch(fe) { logDebug("Orders admin fallback err: " + fe.message); }
-                } else if (err.code === 'permission-denied') {
-                    showToast('Akses orders ditolak. Cek Firestore Security Rules.', 'error');
-                }
-            });
+            unsubscribers.orders = onSnapshot(ordersQuery, _handleOrdersSnapshot,
+                (err) => logDebug("Orders error: " + err.message + " | code: " + err.code));
         } else {
             const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid || null;
 
@@ -5953,63 +5493,37 @@ window.authenticatePi = async function() {
         loginBtn.style.pointerEvents = 'none';
     }
     
-    // Progress toast setiap 15 detik agar user tidak panik
-    const progressMsgs = [
-        'Menghubungkan ke Pi Network...',
-        'Masih menunggu respons Pi...',
-        'Hampir selesai, tunggu sebentar...',
-        'Memverifikasi akun Pi Anda...'
-    ];
-    let progressIdx = 0;
-    showToast(progressMsgs[progressIdx], 'info');
-    const progressInterval = setInterval(() => {
-        progressIdx = Math.min(progressIdx + 1, progressMsgs.length - 1);
-        showToast(progressMsgs[progressIdx], 'info');
-    }, 15000);
-
     try {
+        showToast('Menghubungkan ke Pi Network...', 'info');
+        
         const scopes = ['username', 'payments'];
         
         const onIncompletePaymentFound = async (payment) => {
-            logDebug("[AUTH-v4] Incomplete payment: " + payment?.identifier);
+            logDebug("[AUTH-v3] Incomplete payment: " + payment?.identifier);
             try { 
                 await handleIncompletePayment(payment); 
             } catch (err) {
-                logDebug("[AUTH-v4] Handle incomplete error: " + err.message);
+                logDebug("[AUTH-v3] Handle incomplete error: " + err.message);
             }
         };
         
-        // Timeout 60 detik — cukup untuk koneksi lambat
+        // PERBAIKAN: Timeout 30 detik (bukan 60) - user tidak sabar menunggu
         const authResult = await Promise.race([
             window.Pi.authenticate(scopes, onIncompletePaymentFound),
             new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout: Pi auth terlalu lama (60 detik)')), 60000)
+                setTimeout(() => reject(new Error('Timeout: Pi auth terlalu lama')), 30000)
             )
         ]);
         
-        clearInterval(progressInterval);
-
         if (!authResult?.user) {
             throw new Error('Auth result tidak valid - user object hilang');
         }
         
-        // Proses hasil auth — bungkus tersendiri agar error di sini
-        // tidak menyebabkan tombol login stuck
-        try {
-            await processPiAuthSuccess(authResult);
-        } catch (procErr) {
-            logDebug("[AUTH-v4] processPiAuthSuccess error: " + procErr.message);
-            // Restore tombol agar user bisa retry
-            if (loginBtn) {
-                if (originalBtnHTML) loginBtn.innerHTML = originalBtnHTML;
-                loginBtn.style.pointerEvents = 'auto';
-            }
-            showToast('Login berhasil tapi ada kendala memuat data. Coba lagi.', 'warning');
-        }
+        // Step 4: Proses hasil auth
+        await processPiAuthSuccess(authResult);
         
     } catch (error) {
-        clearInterval(progressInterval);
-        logDebug("[AUTH-v4] Auth error: " + error.message);
+        logDebug("[AUTH-v3] ❌ Auth error: " + error.message);
         handlePiAuthError(error, loginBtn, originalBtnHTML);
     }
 };
@@ -6033,138 +5547,102 @@ async function processPiAuthSuccess(authResult) {
     localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
     logDebug(`[AUTH-v3] User authenticated: @${currentUser.username} | UID: ${piUid}`);
     
-    // Step 5: Firebase Auth dengan retry 3x — penting untuk Firestore write
+    // Step 5: Firebase Auth - Anonymous sign in untuk Firestore write permission
     let firebaseUid = null;
-    if (auth) {
-        if (auth.currentUser) {
-            firebaseUid = auth.currentUser.uid;
-            logDebug('[AUTH-v4] Firebase sudah login: ' + firebaseUid);
-        } else {
-            // Retry hingga 3x dengan delay 2 detik
-            for (let attempt = 1; attempt <= 3; attempt++) {
-                try {
-                    const anonResult = await signInAnonymously(auth);
-                    firebaseUid = anonResult.user.uid;
-                    logDebug('[AUTH-v4] Firebase anonymous OK (attempt ' + attempt + '): ' + firebaseUid);
-                    break;
-                } catch (fbErr) {
-                    logDebug('[AUTH-v4] Firebase anon attempt ' + attempt + ' gagal: ' + fbErr.message);
-                    if (attempt < 3) {
-                        await new Promise(r => setTimeout(r, 2000));
-                    } else {
-                        // Tetap lanjut tapi warn user bahwa sinkronisasi terbatas
-                        logDebug('[AUTH-v4] Firebase anon gagal semua attempt — Firestore write mungkin terbatas');
-                        showToast('Peringatan: sinkronisasi data terbatas. Pastikan koneksi internet stabil.', 'warning');
-                    }
-                }
+    try {
+        if (auth) {
+            if (!auth.currentUser) {
+                const anonResult = await signInAnonymously(auth);
+                firebaseUid = anonResult.user.uid;
+                logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
+            } else {
+                firebaseUid = auth.currentUser.uid;
             }
         }
+    } catch (fbErr) {
+        logDebug("[AUTH-v3] Firebase anon warning (non-kritis): " + fbErr.message);
     }
 
-    // Simpan firebaseUid ke currentUser
+    // KRITIS: simpan firebaseUid ke currentUser agar query Firestore bisa pakai
     if (firebaseUid) {
         currentUser.firebaseUid = firebaseUid;
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
     }
 
-    // === SETIAP STEP DIBUNGKUS try/catch AGAR SATU GAGAL TIDAK BATALKAN LOGIN ===
-
-    // Step 6: Pastikan dokumen user ada di Firestore
-    try {
-        await ensureUserDocumentExists(piUid, currentUser.username, firebaseUid);
-    } catch(s6Err) {
-        logDebug('[AUTH] Step 6 skip: ' + s6Err.message);
+    // Step 6: Pastikan dokumen user ada di Firestore dengan UID yang benar
+    await ensureUserDocumentExists(piUid, currentUser.username, firebaseUid);
+    
+    // Step 7: Load SGT data dengan strategi multi-fallback
+    await loadSGTDataFixed();
+    
+    // Step 8: Start realtime listener untuk SGT
+    if (currentUser.uid) {
+        listenUserSGTBalanceFixed(currentUser.uid);
     }
-
-    // Step 7: Load SGT data
-    try {
-        await loadSGTDataFixed();
-    } catch(s7Err) {
-        logDebug('[AUTH] Step 7 skip: ' + s7Err.message);
-    }
-
-    // Step 8: Realtime SGT listener
-    try {
-        if (currentUser.uid) listenUserSGTBalanceFixed(currentUser.uid);
-    } catch(s8Err) {
-        logDebug('[AUTH] Step 8 skip: ' + s8Err.message);
-    }
-
-    // Update UI — ini harus selalu jalan
-    try { showSGTElements(true); } catch(e) {}
-    try { updateUI(); } catch(e) {}
-
-    // Tutup modal & tampilkan welcome DULU sebelum load data
+    
+    showSGTElements(true);
+    updateUI();
+    
+    // Refresh sosial module after login
+    if (typeof updateSosialUI === 'function') setTimeout(updateSosialUI, 500);
+    if (typeof updateAdminSosialBadge === 'function' && userRole === 'admin') setTimeout(updateAdminSosialBadge, 600);
+    
     closeModal('piAuthModal');
     closeModal('loginOptionsModal');
-    showToast('Selamat datang, @' + currentUser.username + '! 🎉', 'success');
-    window._piAuthRetryCount = 0; // PERBAIKAN: reset retry counter setelah berhasil
-    logDebug('[AUTH] Login sukses: @' + currentUser.username + ' | Pi UID: ' + piUid + ' | FB UID: ' + firebaseUid);
-
-    // Pindah ke home langsung agar user tidak menunggu
-    switchView('home');
-
-    // Load data & modul lain secara background (tidak block UI)
+    showToast(`Selamat datang, @${currentUser.username}! 🎉`, 'success');
+    logDebug("[AUTH-v3] Auth sukses: @" + currentUser.username);
+    
+    loadDataFromFirebase();
+    
+    // Re-filter myOrders setelah login berhasil — cover semua field ownership
+    if (orders.length > 0) {
+        const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
+        myOrders = orders.filter(o =>
+            o.firebaseUid === fbUid ||
+            o.customerUid === currentUser.uid ||
+            o.userId === fbUid ||
+            o.userId === currentUser.uid ||
+            o.customer === currentUser.username
+        );
+        renderOrders();
+    }
+    
+    // Init fase 3 modules
     setTimeout(() => {
-        try { loadDataFromFirebase(); } catch(e) {}
-        try {
-            const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
-            if (orders.length > 0) {
-                myOrders = orders.filter(o =>
-                    o.firebaseUid === fbUid ||
-                    o.customerUid === currentUser.uid ||
-                    o.userId === fbUid ||
-                    o.userId === currentUser.uid ||
-                    o.customer === currentUser.username
-                );
-                renderOrders();
-            }
-        } catch(e) {}
-        try { if (typeof initFase3 === 'function') initFase3(); } catch(e) {}
-        try { if (typeof updateSosialUI === 'function') updateSosialUI(); } catch(e) {}
-        try { if (typeof updateAdminSosialBadge === 'function') updateAdminSosialBadge(); } catch(e) {}
-    }, 300);
+        if (typeof initFase3 === 'function') initFase3();
+        if (typeof updateSosialUI === 'function') updateSosialUI();
+    }, 500);
+    
+    switchView('home');
 }
 
 function handlePiAuthError(error, loginBtn, originalHTML) {
-    // Restore tombol agar selalu bisa retry
+    // Restore tombol
     if (loginBtn) {
         if (originalHTML) loginBtn.innerHTML = originalHTML;
         loginBtn.style.pointerEvents = 'auto';
-        loginBtn.style.opacity = '1';
     }
-
-    // Reset SEMUA state Pi SDK agar retry bisa jalan bersih
+    
+    const msg = (error.message || '').toLowerCase();
+    
+    // Reset state untuk memungkinkan retry
     isPiSDKReady = false;
     piInitPromise = null;
     piInitAttempts = 0;
-
-    const msg = (error.message || '').toLowerCase();
-
-    if (msg.includes('consent') || msg.includes('cancel') || msg.includes('dibatalkan') || msg.includes('user cancel')) {
-        showToast('Login dibatalkan. Ketuk tombol Pi untuk coba lagi.', 'warning');
+    
+    if (msg.includes('consent') || msg.includes('cancel') || msg.includes('dibatalkan')) {
+        showToast('Login dibatalkan', 'warning');
     } else if (msg.includes('timeout') || msg.includes('terlalu lama')) {
-        showToast('Koneksi lambat. Silakan coba lagi.', 'error');
-        // PERBAIKAN: Batasi retry maksimal 3x agar tidak loop selamanya
-        if ((window._piAuthRetryCount = (window._piAuthRetryCount || 0) + 1) <= 3) {
-            setTimeout(() => authenticatePi(), 1500);
-        } else {
-            window._piAuthRetryCount = 0;
-            showToast('Gagal setelah 3 percobaan. Tutup & buka ulang Pi Browser.', 'error');
-        }
-    } else if (msg.includes('messaging') || msg.includes('promise') || msg.includes('timed out')) {
-        showToast('Pi Browser sedang sibuk. Coba lagi dalam 3 detik...', 'error');
-        if ((window._piAuthRetryCount = (window._piAuthRetryCount || 0) + 1) <= 3) {
-            setTimeout(() => authenticatePi(), 3000);
-        } else {
-            window._piAuthRetryCount = 0;
-            showToast('Pi Browser tidak merespons. Restart Pi Browser dan coba lagi.', 'error');
-        }
-    } else if (msg.includes('network') || msg.includes('fetch')) {
-        showToast('Tidak ada koneksi internet. Periksa jaringan lalu coba lagi.', 'error');
+        showToast('Koneksi timeout. Coba lagi.', 'error');
+        setTimeout(() => {
+            if (confirm('Login timeout. Coba lagi sekarang?')) {
+                authenticatePi();
+            }
+        }, 800);
+    } else if (msg.includes('messaging') || msg.includes('promise')) {
+        showToast('Pi SDK error. Refresh halaman dan coba lagi.', 'error');
     } else {
-        showToast('Gagal login. Silakan coba lagi.', 'error');
-        logDebug('[AUTH] Detail error: ' + error.message);
+        showToast('Gagal login: ' + error.message, 'error');
     }
 }
 
@@ -6276,90 +5754,58 @@ window.manualPiLogin = async function() {
 // ============================================
 // SECTION D: ENSURE USER DOCUMENT EXISTS - v3
 // ============================================
-
-// ============================================================
-// HELPER: Lookup user by username tanpa composite index
-// Pakai koleksi usernames/{username} → {uid} terlebih dahulu
-// Fallback ke query where('username') jika belum ada
-// ============================================================
-async function lookupUserByUsername(username) {
-    if (!db || !username) return null;
-    // Try 1: getDoc ke usernames/{username} — tidak butuh index
-    try {
-        const nameSnap = await getDoc(doc(db, 'usernames', username));
-        if (nameSnap.exists()) {
-            const uid = nameSnap.data().uid;
-            if (uid) {
-                const userSnap = await getDoc(doc(db, 'users', uid));
-                if (userSnap.exists()) {
-                    return { id: uid, ...userSnap.data() };
-                }
-            }
-        }
-    } catch(e) { logDebug('[lookupUser] usernames lookup skip: ' + e.message); }
-
-    // Try 2: fallback query where (butuh index, tapi ada try/catch)
-    try {
-        const snap = await getDocs(
-            query(collection(db, 'users'), where('username', '==', username), limit(1))
-        );
-        if (!snap.empty) {
-            const d = snap.docs[0];
-            // Simpan ke usernames untuk lookup berikutnya lebih cepat
-            setDoc(doc(db, 'usernames', username), {
-                uid: d.id, firebaseUid: d.data().firebaseUid || null
-            }, { merge: true }).catch(() => {});
-            return { id: d.id, ...d.data() };
-        }
-    } catch(e) { logDebug('[lookupUser] query fallback skip: ' + e.message); }
-
-    return null;
-}
-
 async function ensureUserDocumentExists(piUid, username, firebaseUid) {
-    if (!db) { logDebug('[ensureUser] db null, skip'); return; }
-
-    logDebug('[ensureUser] piUid=' + piUid + ' username=' + username);
-
+    if (!db) return;
+    
+    logDebug(`[SGT-v3] Ensure user doc: piUid=${piUid}, username=${username}`);
+    
     try {
-        const userRef  = doc(db, 'users', piUid);
+        const userRef = doc(db, 'users', piUid);
         const userSnap = await getDoc(userRef);
-
+        
         if (!userSnap.exists()) {
-            logDebug('[ensureUser] User baru — buat dokumen');
-
-            let oldBalance = 0, oldTransactions = [], oldDocsToMigrate = [];
-            try {
-                // Pakai lookupUserByUsername agar tidak butuh index
-                const oldUser = await lookupUserByUsername(username);
-                if (oldUser && oldUser.id !== piUid && (oldUser.sgtBalance || 0) > 0) {
-                    oldBalance = oldUser.sgtBalance;
-                    oldTransactions = oldUser.sgtTransactions || [];
-                    oldDocsToMigrate = [oldUser.id];
-                    logDebug('[ensureUser] Migrasi dari: ' + oldUser.id + ' | ' + oldBalance + ' SGT');
+            logDebug(`[SGT-v3] Dokumen baru: ${piUid}`);
+            
+            // Cari dokumen lama dengan username sama
+            const oldSnap = await getDocs(
+                query(collection(db, 'users'), where('username', '==', username), limit(10))
+            );
+            
+            let oldBalance = 0;
+            let oldTransactions = [];
+            let oldDocsToMigrate = [];
+            
+            oldSnap.forEach(oldDoc => {
+                if (oldDoc.id !== piUid) {
+                    const oldData = oldDoc.data();
+                    if ((oldData.sgtBalance || 0) > 0) {
+                        oldBalance += oldData.sgtBalance;
+                        oldTransactions.push(...(oldData.sgtTransactions || []));
+                        oldDocsToMigrate.push(oldDoc.id);
+                        logDebug(`[SGT-v3] Temukan dokumen lama ${oldDoc.id}: ${oldData.sgtBalance} SGT`);
+                    }
                 }
-            } catch(qErr) {
-                logDebug('[ensureUser] Migration lookup skip: ' + qErr.message);
-            }
-
-            // Buat dokumen user baru
+            });
+            
             const newData = {
-                username, uid: piUid, firebaseUid: firebaseUid || null,
+                username: username,
+                uid: piUid,
+                firebaseUid: firebaseUid,
                 authType: 'pi',
-                createdAt:  serverTimestamp(),
-                lastLogin:  serverTimestamp(),
+                createdAt: serverTimestamp(),
+                lastLogin: serverTimestamp(),
                 sgtBalance: oldBalance,
                 sgtTransactions: oldTransactions.slice(0, 200),
                 isNewUser: true
             };
+            
             await setDoc(userRef, newData);
-            // Simpan juga ke usernames/{username} → {uid} untuk lookup cepat tanpa index
-            setDoc(doc(db, 'usernames', username), {
-                uid: piUid, firebaseUid: firebaseUid || null, createdAt: serverTimestamp()
-            }).catch(() => {});
-            logDebug('[ensureUser] Dokumen user dibuat: ' + piUid);
+            logDebug(`[SGT-v3] Dokumen dibuat: ${piUid} | Balance: ${oldBalance}`);
 
-            // Welcome bonus 50 SGT untuk user benar-benar baru
+            // ══════════════════════════════════════════
+            // WELCOME BONUS: 50 SGT untuk user baru
+            // (hanya jika tidak ada data migrasi dari akun lama)
+            // ══════════════════════════════════════════
             if (oldBalance === 0 && oldDocsToMigrate.length === 0) {
                 const welcomeBonus = 50;
                 const welcomeTx = {
@@ -6367,43 +5813,57 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
                     description: '🎉 Bonus Selamat Datang - User Baru',
                     date: new Date().toISOString(), userId: piUid
                 };
-                // Update Firestore (non-blocking agar tidak delay login)
-                setDoc(userRef, { sgtBalance: welcomeBonus, sgtTransactions: [welcomeTx] }, { merge: true })
-                    .catch(e => logDebug('[Welcome] Firestore skip: ' + e.message));
-                // Update in-memory & localStorage langsung
-                sgtBalance = welcomeBonus;
-                sgtTransactions = [welcomeTx];
                 try {
-                    localStorage.setItem('sgt_balance_' + piUid, welcomeBonus.toString());
-                    localStorage.setItem('sgt_transactions_' + piUid, JSON.stringify([welcomeTx]));
-                } catch(le) {}
-                mintSGT(welcomeBonus, piUid).catch(() => {});
-                setTimeout(() => showToast('🎁 +' + welcomeBonus + ' SGT Bonus Selamat Datang!', 'success'), 1500);
+                    await setDoc(userRef, {
+                        sgtBalance: welcomeBonus,
+                        sgtTransactions: [welcomeTx]
+                    }, { merge: true });
+                    // Update in-memory state
+                    sgtBalance = welcomeBonus;
+                    sgtTransactions = [welcomeTx];
+                    // Simpan ke localStorage juga sebagai backup
+                    try {
+                        localStorage.setItem('sgt_balance_' + piUid, welcomeBonus.toString());
+                        localStorage.setItem('sgt_transactions_' + piUid, JSON.stringify([welcomeTx]));
+                    } catch(le) {}
+                    // Mint ke supply (non-blocking)
+                    mintSGT(welcomeBonus, piUid).catch(e => logDebug('[Welcome] mint skip: ' + e.message));
+                    logDebug(`[SGT-v3] Welcome bonus diberikan: ${welcomeBonus} SGT → ${username}`);
+                    // Toast akan muncul setelah auth selesai
+                    setTimeout(() => showToast(`🎁 +${welcomeBonus} SGT Bonus Selamat Datang!`, 'success'), 1500);
+                } catch(wErr) {
+                    logDebug('[SGT-v3] Welcome bonus error (non-kritis): ' + wErr.message);
+                    // Tetap set in-memory agar user bisa lihat balance lokal
+                    sgtBalance = welcomeBonus;
+                    sgtTransactions = [welcomeTx];
+                    try {
+                        localStorage.setItem('sgt_balance_' + piUid, welcomeBonus.toString());
+                        localStorage.setItem('sgt_transactions_' + piUid, JSON.stringify([welcomeTx]));
+                    } catch(le) {}
+                    setTimeout(() => showToast(`🎁 +${welcomeBonus} SGT Bonus Selamat Datang! (tersimpan lokal)`, 'success'), 1500);
+                }
             }
-
-            // Migrate dokumen lama (non-blocking)
+            
+            // Migrate: nolkan dokumen lama
             for (const oldDocId of oldDocsToMigrate) {
-                setDoc(doc(db, 'users', oldDocId), {
-                    sgtBalance: 0, migratedTo: piUid, migrationDate: serverTimestamp()
-                }, { merge: true }).catch(() => {});
+                await setDoc(doc(db, 'users', oldDocId), {
+                    sgtBalance: 0,
+                    migratedTo: piUid,
+                    migrationDate: serverTimestamp()
+                }, { merge: true });
+                logDebug(`[SGT-v3] Migrated: ${oldDocId} → ${piUid}`);
             }
-
+            
         } else {
-            // User sudah ada — update lastLogin saja (non-blocking)
-            setDoc(userRef, {
-                lastLogin:   serverTimestamp(),
-                firebaseUid: firebaseUid || userSnap.data().firebaseUid || null
-            }, { merge: true }).catch(e => logDebug('[ensureUser] lastLogin update skip: ' + e.message));
-            // Pastikan usernames/{username} ada (untuk akun lama sebelum fitur ini)
-            setDoc(doc(db, 'usernames', username), {
-                uid: piUid, firebaseUid: firebaseUid || null
-            }, { merge: true }).catch(() => {});
-            logDebug('[ensureUser] User exists, lastLogin updated');
+            await setDoc(userRef, {
+                lastLogin: serverTimestamp(),
+                firebaseUid: firebaseUid || null
+            }, { merge: true });
+            logDebug(`[SGT-v3] Dokumen exists, updated: ${piUid}`);
         }
-
+        
     } catch (e) {
-        // Error apapun di sini TIDAK boleh gagalkan login
-        logDebug('[ensureUser] Error (lanjut): ' + e.code + ' ' + e.message);
+        logDebug(`[SGT-v3] Error ensureUserDoc: ${e.message}`);
     }
 }
 
@@ -6638,18 +6098,8 @@ async function createPiPayment() {
         const btn = document.getElementById('btnProcessPayment');
         if (btn) {
             btn.disabled = false;
-            btn.style.opacity = '1';
-            btn.style.pointerEvents = 'auto';
             btn.innerHTML = '<i class="fas fa-lock"></i> Konfirmasi & Bayar';
         }
-        // Juga restore tombol checkout di cart
-        const chkBtn = document.getElementById('checkoutBtn');
-        if (chkBtn) {
-            chkBtn.disabled = false;
-            chkBtn.style.opacity = '1';
-            chkBtn.style.pointerEvents = 'auto';
-        }
-        logDebug('[PAY] Payment state reset — tombol aktif kembali');
     };
 
     try {
@@ -6681,48 +6131,44 @@ async function createPiPayment() {
         const callbacks = {
 
             onReadyForServerApproval: async (paymentId) => {
-                logDebug('[PAY] onReadyForServerApproval: ' + paymentId);
-
-                // Pastikan Firebase anonymous auth aktif sebelum approve
-                if (auth && !auth.currentUser) {
-                    try {
-                        await signInAnonymously(auth);
-                        logDebug('[PAY] Approve: Firebase anon login OK');
-                    } catch(ae) {
-                        logDebug('[PAY] Approve: Firebase anon gagal (lanjut): ' + ae.message);
-                    }
-                }
+                logDebug("APPROVAL: " + paymentId);
 
                 try {
                     const res = await approvePaymentOnServer(paymentId);
-                    // Approve selalu return success karena Firestore error tidak stop flow
-                    logDebug('[PAY] Approve OK: ' + JSON.stringify(res));
+
+                    if (!res || res.error) {
+                        throw new Error(res?.error || 'Approve gagal');
+                    }
+
+                    logDebug("Approve SUCCESS");
+
                 } catch (err) {
-                    // Jangan reset payment state! Biarkan Pi SDK lanjut ke complete
-                    // Approve hanya record-keeping, bukan validasi blockchain
-                    logDebug('[PAY] Approve catatan gagal (lanjut ke complete): ' + err.message);
+                    logDebug("Approve FAILED: " + err.message);
+                    showToast('Gagal verifikasi pembayaran', 'error');
+                    resetPaymentState();
                 }
             },
 
             onReadyForServerCompletion: async (paymentId, txid) => {
-                logDebug('[PAY] onReadyForServerCompletion: ' + paymentId + ' txid: ' + txid);
-                showToast('Memproses konfirmasi pembayaran...', 'info');
+                logDebug("COMPLETE: " + paymentId);
 
                 try {
-                    await completePaymentOnServer(paymentId, txid, cartSnapshot);
-                    // completePaymentOnServer sudah handle cart, toast, dan switchView
-                    // resetPaymentState juga sudah dipanggil di dalam
+                    const res = await completePaymentOnServer(paymentId, txid, cartSnapshot);
+
+                    if (!res || res.error) {
+                        throw new Error(res?.error || 'Complete gagal');
+                    }
+
+                    showToast('Pembayaran berhasil!', 'success');
+
+                    cart.length = 0;
+                    renderCart?.();
+
+                    resetPaymentState();
+
                 } catch (err) {
-                    logDebug('[PAY] Complete outer catch: ' + err.message);
-                    // Walau error, UI harus tetap bersih
-                    cart = [];
-                    saveCart?.();
-                    updateCartUI?.();
-                    pendingPayment = null;
-                    showToast('Transaksi Pi berhasil! Pesanan dicatat. Cek riwayat pesanan.', 'success');
-                    closeModal('paymentModal');
-                    setTimeout(() => switchView('orders'), 1800);
-                } finally {
+                    logDebug("Complete FAILED: " + err.message);
+                    showToast('Transaksi gagal disimpan', 'error');
                     resetPaymentState();
                 }
             },
@@ -6733,69 +6179,26 @@ async function createPiPayment() {
                 resetPaymentState();
             },
 
-            onError: (error, payment) => {
-                const errMsg = error?.message || String(error) || 'Unknown error';
-                logDebug('[PAY] onError: ' + errMsg);
+            onError: (error) => {
+                logDebug("ERROR: " + (error?.message || error));
 
-                const msg = errMsg.toLowerCase();
+                const msg = (error?.message || '').toLowerCase();
 
-                if (msg.includes('insufficient') || msg.includes('balance')) {
-                    showToast('Saldo Pi tidak cukup untuk transaksi ini.', 'error');
-                } else if (msg.includes('cancel') || msg.includes('user_cancel')) {
-                    showToast('Pembayaran dibatalkan.', 'warning');
-                } else if (msg.includes('network') || msg.includes('fetch')) {
-                    showToast('Koneksi terputus. Periksa internet lalu coba lagi.', 'error');
-                } else if (msg.includes('already') || msg.includes('duplicate')) {
-                    showToast('Pembayaran ini sudah pernah diproses.', 'warning');
-                } else if (msg.includes('pending') || msg.includes('failed to check') || msg.includes('cannot be prepared')) {
-                    // Ini error "Failed to check a pending payment"
-                    // Ada payment lama yang nyangkut di Pi SDK
-                    showToast('Ada pembayaran tertunda. Ketuk tombol di bawah untuk membersihkan.', 'warning');
-                    // Tampilkan tombol bersihkan
-                    const btn = document.getElementById('clearStuckPayBtn');
-                    if (btn) btn.style.display = 'block';
+                if (msg.includes('insufficient')) {
+                    showToast('Saldo tidak cukup', 'error');
+                } else if (msg.includes('cancel')) {
+                    showToast('Dibatalkan', 'warning');
                 } else {
-                    showToast('Pembayaran gagal. Coba lagi.', 'error');
-                    logDebug('[PAY] Detail error: ' + errMsg);
+                    showToast('Error pembayaran', 'error');
                 }
 
                 resetPaymentState();
             }
         };
 
-        // Sebelum createPayment, pastikan tidak ada incomplete payment
-        // dengan authenticate ulang — Pi SDK akan auto-trigger onIncompletePaymentFound
-        // jika ada payment lama yang nyangkut
-        logDebug('[PAY] Pre-check incomplete payments via authenticate...');
-        try {
-            await new Promise((resolve) => {
-                const checkTimeout = setTimeout(resolve, 8000); // max 8 detik
-                window.Pi.authenticate(['username', 'payments'], async (incompletePay) => {
-                    clearTimeout(checkTimeout);
-                    logDebug('[PAY] Pre-check: incomplete payment ditemukan, membersihkan...');
-                    showToast('Membersihkan pembayaran tertunda...', 'info');
-                    await handleIncompletePayment(incompletePay);
-                    showToast('Siap! Membuka konfirmasi pembayaran...', 'info');
-                    setTimeout(resolve, 500);
-                }).then((authResult) => {
-                    // Tidak ada incomplete payment — lanjut
-                    logDebug('[PAY] Pre-check: tidak ada incomplete payment');
-                    clearTimeout(checkTimeout);
-                    resolve();
-                }).catch((authErr) => {
-                    logDebug('[PAY] Pre-check auth skip (lanjut): ' + authErr.message);
-                    clearTimeout(checkTimeout);
-                    resolve();
-                });
-            });
-        } catch(preCheckErr) {
-            logDebug('[PAY] Pre-check skip (lanjut): ' + preCheckErr.message);
-        }
-
-        logDebug('[PAY] Memulai createPayment...');
         window.Pi.createPayment({
             amount: parseFloat(totalPi.toFixed(8)),
-            memo: `Sagatama Mart - ${cart.length} item${USE_SANDBOX ? ' [TESTNET]' : ''}`,
+            memo: `Sagatama Mart - ${cart.length} item`,
             metadata: orderMetadata
         }, callbacks);
 
@@ -6814,287 +6217,137 @@ async function createPiPayment() {
     }
 }
 
-// ============================================================
-// APPROVE PAYMENT — Firestore-based (tanpa backend server)
-// Pi SDK memvalidasi transaksi di blockchain, kita catat ke Firestore
-// ============================================================
-// ============================================================
-// PI PLATFORM API — approve & complete payment
-// Pi Network WAJIB menerima HTTP call ke Pi Platform API
-// agar pembayaran tidak "Kedaluwarsa"
-// Docs: https://github.com/pi-apps/pi-platform-docs/blob/master/payments.md
-// ============================================================
-
-// ⚠️ KONFIGURASI: Isi dengan Server API Key dari Pi Developer Portal
-// https://developers.minepi.com → App → API Keys → Server-Side Key
-// JANGAN hardcode di production — gunakan Vercel/Firebase env variable
-// Untuk sementara isi di sini agar pembayaran berfungsi
-const PI_SERVER_API_KEY = 'l7qurexyafoqorzaikws6xw7maokynqhbl7zswetejazo1k517hvhvbiipgia5qt'; // ← ISI SERVER API KEY DARI PI DEVELOPER PORTAL
-
-const PI_API_BASE = USE_SANDBOX
-    ? 'https://api.minepi.com/v2'
-    : 'https://api.minepi.com/v2';
-
-// ============================================================
-// FIREBASE CLOUD FUNCTION: piPaymentAction
-// Deploy function ini ke Firebase agar approve/complete berfungsi
-// Lihat komentar di bawah untuk cara deploy
-// ============================================================
-async function callPiPlatformAPI(endpoint, method = 'POST', body = null) {
-    // CARA 1: Via Firebase Cloud Function (DIREKOMENDASIKAN - aman, no CORS)
-    if (functions) {
-        try {
-            const piPaymentAction = httpsCallable(functions, 'piPaymentAction');
-            const result = await piPaymentAction({ endpoint, method, body });
-            logDebug('[Pi API] Cloud Function OK: ' + JSON.stringify(result.data).substring(0,120));
-            return { status: 200, data: result.data, ok: true };
-        } catch (fnErr) {
-            logDebug('[Pi API] Cloud Function error: ' + fnErr.message);
-            // Jika Function belum di-deploy (NOT_FOUND), lanjut ke cara 2
-            if (!fnErr.message?.includes('NOT_FOUND') && !fnErr.message?.includes('not found')) {
-                return { status: 500, data: { error: fnErr.message }, ok: false };
-            }
-            logDebug('[Pi API] Function belum di-deploy — coba direct fetch...');
-        }
-    }
-
-    // CARA 2: Direct fetch (hanya berfungsi jika Pi API mengizinkan CORS — biasanya TIDAK)
-    if (!PI_SERVER_API_KEY) {
-        logDebug('[Pi API] ⚠️ PI_SERVER_API_KEY kosong & Cloud Function tidak tersedia');
-        logDebug('[Pi API] → Deploy Firebase Function "piPaymentAction" untuk mengaktifkan pembayaran');
-        return null;
-    }
-    try {
-        const opts = {
-            method,
-            headers: {
-                'Authorization': 'Key ' + PI_SERVER_API_KEY,
-                'Content-Type': 'application/json'
-            }
-        };
-        if (body) opts.body = JSON.stringify(body);
-        const res = await fetch(PI_API_BASE + endpoint, opts);
-        const data = await res.json().catch(() => ({}));
-        logDebug('[Pi API] Direct fetch ' + method + ' ' + endpoint + ' → ' + res.status);
-        return { status: res.status, data, ok: res.ok };
-    } catch(e) {
-        logDebug('[Pi API] Direct fetch error (CORS?): ' + e.message);
-        return null;
-    }
-}
-
-/*
-================================================================
-CARA DEPLOY FIREBASE CLOUD FUNCTION (WAJIB untuk payment):
-================================================================
-1. Install Firebase CLI: npm install -g firebase-tools
-2. firebase login
-3. firebase init functions  (pilih project: portal-sagatama)
-4. Buat file functions/index.js dengan isi:
-
-const functions = require('firebase-functions');
-const axios = require('axios');
-
-const PI_SERVER_KEY = functions.config().pi.serverkey; // firebase functions:config:set pi.serverkey="KEY_KAMU"
-
-exports.piPaymentAction = functions.https.onCall(async (data) => {
-    const { endpoint, method, body } = data;
-    // Validasi endpoint hanya boleh payments
-    if (!endpoint.startsWith('/payments/')) throw new functions.https.HttpsError('invalid-argument', 'Invalid endpoint');
-    
-    const url = 'https://api.minepi.com/v2' + endpoint;
-    const resp = await axios({ method, url, data: body || {}, headers: {
-        'Authorization': 'Key ' + PI_SERVER_KEY
-    }});
-    return resp.data;
-});
-
-5. firebase functions:config:set pi.serverkey="ISI_SERVER_KEY_DARI_PI_DEVELOPER_PORTAL"
-6. firebase deploy --only functions
-================================================================
-*/
-
 async function approvePaymentOnServer(paymentId) {
-    logDebug('[PAY] Approve paymentId: ' + paymentId);
-
-    // LANGKAH 1: Panggil Pi Platform API /approve
-    // WAJIB — tanpa ini Pi Network timeout dan tampil "Pembayaran Kedaluwarsa"
-    const approveResult = await callPiPlatformAPI('/payments/' + paymentId + '/approve');
-    if (approveResult?.ok) {
-        logDebug('[PAY] ✅ Pi Platform API approve OK');
-    } else if (approveResult) {
-        logDebug('[PAY] ⚠️ Pi Platform API approve gagal: ' + JSON.stringify(approveResult.data));
-    }
-    // Jika PI_SERVER_API_KEY kosong, approveResult = null — lanjut tetap agar flow tidak stop
-
-    // LANGKAH 2: Record ke Firestore (untuk audit trail)
-    if (db) {
-        try {
-            const fbUid = auth?.currentUser?.uid || currentUser?.firebaseUid || '';
-            await setDoc(doc(db, 'payments', paymentId), {
-                paymentId,
-                status:      'pending_approval',
-                approvedAt:  serverTimestamp(),
-                customer:    currentUser?.username || 'unknown',
-                customerUid: currentUser?.uid || '',
-                firebaseUid: fbUid,
-                amount:      pendingPayment?.amount || 0,
-                items:       pendingPayment?.items?.map(i => ({
-                    id: i.id, name: i.name, qty: i.qty, pricePi: i.pricePi
-                })) || [],
-                network: USE_SANDBOX ? 'testnet' : 'mainnet'
-            }, { merge: true });
-            logDebug('[PAY] Firestore approve recorded OK');
-        } catch (fsErr) {
-            logDebug('[PAY] Firestore approve skip: ' + fsErr.code + ' ' + fsErr.message);
+    // Timeout 20 detik untuk approve — jika server tidak merespons segera
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    let response;
+    try {
+        response = await fetch('/api/payments/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentId }),
+            signal: controller.signal
+        });
+    } catch (fetchErr) {
+        if (fetchErr.name === 'AbortError') {
+            throw new Error('Server approve timeout (20s). Cek koneksi atau hubungi admin.');
         }
+        throw new Error('Tidak dapat menghubungi server approve: ' + fetchErr.message);
+    } finally {
+        clearTimeout(timeoutId);
     }
 
-    return { success: true, paymentId, source: approveResult?.ok ? 'pi_platform' : 'firestore_only' };
+    let result;
+    try { result = await response.json(); } catch { result = {}; }
+    if (!response.ok) throw new Error(result.error_message || result.error || `Server error ${response.status}`);
+
+    // Simpan ke pending_payments di Firestore untuk tracking (non-kritis)
+    if (db) {
+        addDoc(collection(db, 'pending_payments'), {
+            paymentId,
+            status: 'pending_approval',
+            createdAt: serverTimestamp(),
+            customer: currentUser?.username,
+            customerUid: currentUser?.uid,
+            amount: pendingPayment?.amount || 0
+        }).catch(e => logDebug("Pending payment save (non-kritis): " + e.message));
+    }
+    return result;
 }
 
-// ============================================================
-// COMPLETE PAYMENT — Firestore-based + timeout 30 detik
-// ============================================================
+/**
+ * PERBAIKAN: completePaymentOnServer sekarang menerima cartSnapshot
+ * Order disimpan ke Firestore SEBELUM cart dibersihkan
+ */
 async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
-    logDebug('[PAY] Complete paymentId: ' + paymentId + ' txid: ' + txid);
-
-    // Timeout 30 detik untuk complete
-    const completeTimeout = new Promise((_, rej) =>
-        setTimeout(() => rej(new Error('Complete payment timeout 30 detik')), 30000)
-    );
-
-    const doComplete = async () => {
-        // LANGKAH 1: Panggil Pi Platform API /complete (WAJIB untuk konfirmasi blockchain)
-        const completeResult = await callPiPlatformAPI('/payments/' + paymentId + '/complete', 'POST', { txid });
-        if (completeResult?.ok) {
-            logDebug('[PAY] ✅ Pi Platform API complete OK');
-        } else if (completeResult) {
-            logDebug('[PAY] ⚠️ Pi Platform API complete: ' + JSON.stringify(completeResult.data));
-        }
-
-        // LANGKAH 2: Update Firestore
-        if (db) {
-            try {
-                await setDoc(doc(db, 'payments', paymentId), {
-                    status: 'completed',
-                    txid,
-                    completedAt: serverTimestamp(),
-                    network: USE_SANDBOX ? 'testnet' : 'mainnet',
-                    piApiApproved: completeResult?.ok || false
-                }, { merge: true });
-                logDebug('[PAY] Firestore complete recorded OK');
-            } catch (fsErr) {
-                logDebug('[PAY] Firestore complete skip: ' + fsErr.message);
-            }
-        }
-        return { success: true, paymentId, txid };
-    };
-
-    // Step 1: Update status payments collection
-    let result;
-    try {
-        result = await Promise.race([doComplete(), completeTimeout]);
-    } catch(timeoutErr) {
-        logDebug('[PAY] doComplete error: ' + timeoutErr.message);
-        result = { success: false, error: timeoutErr.message };
-        // Lanjutkan walau timeout — txid sudah ada, order harus tetap disimpan
-    }
-    logDebug('[PAY] Complete step 1 selesai');
+    // Langkah 1: Konfirmasi ke server Pi
+    const response = await fetch('/api/payments/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId, txid })
+    });
+    if (!response.ok) throw new Error("Gagal konfirmasi ke server");
+    const result = await response.json();
+    logDebug("Server Pi mengonfirmasi selesai");
 
     const finalAmount = pendingPayment?.amount || 0;
-    const finalItems  = cartSnapshot || pendingPayment?.items || [];
-    const sgtEarned   = calculateSGTReward(finalAmount);
-    const orderId     = pendingPayment?.metadata?.orderId || ('ORD_' + Date.now());
+    const finalItems = cartSnapshot || pendingPayment?.items || [];
+    const sgtEarned = calculateSGTReward(finalAmount);
 
-    // Pastikan Firebase anonymous auth aktif sebelum write
-    // (ini sering jadi penyebab permission-denied)
-    if (auth && !auth.currentUser) {
-        logDebug('[PAY] Firebase tidak login — paksa signInAnonymously sebelum save order');
-        try { await signInAnonymously(auth); } catch(ae) { logDebug('[PAY] anon auth retry: ' + ae.message); }
-    }
-    const fbUidForOrder = auth?.currentUser?.uid || currentUser?.firebaseUid || '';
-
-    // Step 2: Simpan order — dengan retry jika permission-denied
+    // Langkah 2: Simpan order ke Firestore DULU
+    // KRITIS: simpan KEDUA UID — Pi UID & Firebase UID
+    // Firebase rules mengecek request.auth.uid = Firebase UID
+    const fbUidForOrder = currentUser?.firebaseUid || auth?.currentUser?.uid || null;
     const orderData = {
         paymentId,
         txid,
-        amount:          finalAmount,
-        items:           finalItems,
-        status:          'paid',
-        customer:        currentUser?.username || 'User',
-        customerUid:     currentUser?.uid || '',
-        firebaseUid:     fbUidForOrder,
-        userId:          fbUidForOrder || currentUser?.uid || '',
-        createdAt:       serverTimestamp(),
-        updatedAt:       serverTimestamp(),
-        metadata:        pendingPayment?.metadata || {},
+        amount: finalAmount,
+        items: finalItems,
+        status: 'paid',
+        customer: currentUser?.username || 'User',
+        customerUid: currentUser?.uid || '',      // Pi UID (untuk filter client)
+        firebaseUid: fbUidForOrder || '',          // Firebase UID (untuk Firestore rules)
+        userId: fbUidForOrder || currentUser?.uid || '', // fallback
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        metadata: pendingPayment?.metadata || {},
         sgtEarned,
         shippingAddress: currentUser?.address || null,
-        orderId,
+        orderId: pendingPayment?.metadata?.orderId || ('ORD_' + Date.now())
     };
 
-    try {
-        await saveOrderToFirebase(orderData, paymentId);
-        logDebug('[PAY] Order tersimpan: ' + paymentId);
-    } catch (saveErr) {
-        logDebug('[PAY] saveOrder error: ' + saveErr.message + ' | ' + saveErr.code);
-        // Simpan ke localStorage sebagai backup agar tidak hilang
-        try {
-            const backupKey = 'sagatama_order_backup_' + paymentId;
-            localStorage.setItem(backupKey, JSON.stringify({ ...orderData, _backup: true, _backupAt: Date.now() }));
-            logDebug('[PAY] Order di-backup ke localStorage: ' + backupKey);
-        } catch(lsErr) {}
-        // Tetap lanjut — jangan gagalkan UI karena Firestore error
-    }
+    await saveOrderToFirebase(orderData, paymentId);
+    logDebug("Order berhasil disimpan: " + paymentId);
 
-    // Step 3: Escrow (non-kritis, jangan sampai blokir flow)
+    // Simpan escrow record ke Firestore
     try {
         await EscrowService.saveEscrowRecord(paymentId, {
-            orderId, paymentId, txid,
-            buyerUid:      fbUidForOrder || currentUser?.uid,
+            orderId: orderData.orderId || paymentId.substring(0, 8),
+            paymentId,
+            txid,
+            buyerUid: fbUidForOrder || currentUser?.uid,
             buyerUsername: currentUser?.username,
-            amount:        finalAmount,
-            status:        'escrow_active',
+            amount: finalAmount,
+            status: 'escrow_active',
+            contractId: ESCROW_CONFIG.CONTRACT_ID,
         });
-        if (db) await setDoc(doc(db, 'orders', paymentId), {
-            escrowStatus:      'active',
-            escrowContractId:  ESCROW_CONFIG.CONTRACT_ID,
-            escrowNetwork:     ESCROW_CONFIG.NETWORK,
-        }, { merge: true }).catch(() => {});
+        // Tandai order sebagai escrow aktif
+        await setDoc(doc(db, 'orders', paymentId), {
+            escrowStatus: 'active',
+            escrowContractId: ESCROW_CONFIG.CONTRACT_ID,
+            escrowNetwork: ESCROW_CONFIG.NETWORK,
+        }, { merge: true });
     } catch(escrowErr) {
-        logDebug('[PAY] Escrow skip (non-kritis): ' + escrowErr.message);
+        logDebug('Escrow record error (non-kritis): ' + escrowErr.message);
     }
 
-    // Step 4: Award SGT
-    let actualSGT = 0;
-    try {
-        actualSGT = await awardSGT(finalAmount, 'Reward pesanan #' + orderId);
-    } catch(sgtErr) {
-        logDebug('[PAY] SGT award error (non-kritis): ' + sgtErr.message);
-    }
+    // Langkah 3: Award SGT (tiered, hard-cap-safe, fee-pool-funded)
+    const orderId = pendingPayment?.metadata?.orderId || paymentId.substring(0, 8);
+    const actualSGT = await awardSGT(finalAmount, `Reward pesanan #${orderId}`);
 
-    // Step 5: Bersihkan cart & update UI — SELALU dijalankan
+    // Langkah 4: Bersihkan cart
     cart = [];
     saveCart();
     updateCartUI();
     pendingPayment = null;
 
-    const sgtMsg = actualSGT > 0 ? ' +' + actualSGT + ' SGT 🎉' : '';
-    showToast('Pembayaran Berhasil!' + sgtMsg, 'success');
+    // Langkah 5: Update UI
+    showToast('Pembayaran Berhasil! +' + actualSGT + ' SGT dikreditkan 🎉', 'success');
     closeModal('paymentModal');
-    setTimeout(() => switchView('orders'), 1800);
 
-    // Step 6: Hapus pending_payments (non-kritis)
+    setTimeout(() => switchView('orders'), 2000);
+
+    // Hapus pending_payments
     try {
-        if (db) {
-            const q  = query(collection(db, "pending_payments"), where("paymentId", "==", paymentId));
-            const qs = await getDocs(q);
-            await Promise.all(qs.docs.map(d => deleteDoc(d.ref)));
-        }
-    } catch (e) { logDebug('[PAY] Hapus pending skip: ' + e.message); }
+        const q = query(collection(db, "pending_payments"), where("paymentId", "==", paymentId));
+        const qs = await getDocs(q);
+        await Promise.all(qs.docs.map(d => deleteDoc(d.ref)));
+    } catch (e) {
+        logDebug("Hapus pending error (non-kritis): " + e.message);
+    }
 
-    return result || { success: true, paymentId, txid };
+    return result;
 }
 
 /**
@@ -7168,165 +6421,57 @@ function listenSGTTransactions(userId) {
 // ============================================
 // HANDLE INCOMPLETE PAYMENT
 // ============================================
-// ============================================================
-// CLEAR STUCK PAYMENT — untuk user yang kena "Failed to check pending payment"
-// Panggil Pi.authenticate ulang → Pi akan trigger onIncompletePaymentFound
-// kita complete/cancel payment lama → lock dilepas → bisa bayar lagi
-// ============================================================
-window.clearStuckPayment = async function() {
-    showToast('Membersihkan pembayaran tertunda...', 'info');
-    document.getElementById('clearStuckPayBtn').style.display = 'none';
-    try {
-        // Re-authenticate akan trigger onIncompletePaymentFound otomatis
-        // Di sana kita akan complete/cancel payment lama
-        const scopes = ['username', 'payments'];
-        await window.Pi.authenticate(scopes, async (payment) => {
-            logDebug('[CLEAR] Clearing stuck payment: ' + payment?.identifier);
-            await handleIncompletePayment(payment);
-            showToast('Pembayaran tertunda dibersihkan! Silakan coba bayar lagi.', 'success');
-        });
-    } catch(e) {
-        logDebug('[CLEAR] clearStuckPayment error: ' + e.message);
-        showToast('Gagal membersihkan. Coba tutup Pi Browser dan buka ulang.', 'error');
-    }
-};
-
 async function handleIncompletePayment(payment) {
-    // ============================================================
-    // PENTING: Pi SDK memanggil callback ini dan MENUNGGU kita
-    // memanggil payment.complete(txid) ATAU payment.cancel()
-    // Jika tidak dipanggil → Pi SDK tetap anggap ada payment pending
-    // → error "Failed to check a pending payment" saat buat payment baru
-    // ============================================================
-    logDebug('[PAY] handleIncompletePayment: ' + payment?.identifier);
+    logDebug("Handling incomplete payment: " + payment?.identifier);
     if (!payment?.identifier) return;
 
-    const pid = payment.identifier;
-    const txid = payment?.transaction?.txid || null;
-
     try {
-        // Cek Firestore apakah sudah pernah di-complete
-        let alreadyDone = false;
-        if (db) {
-            try {
-                const paySnap = await getDoc(doc(db, 'payments', pid));
-                if (paySnap.exists()) {
-                    const st = paySnap.data().status;
-                    if (st === 'completed' || st === 'paid') {
-                        alreadyDone = true;
-                        logDebug('[PAY] Incomplete sudah selesai di Firestore');
-                    }
-                }
-            } catch (e) {
-                const existingOrder = orders.find(o => o.paymentId === pid);
-                if (existingOrder?.status === 'completed' || existingOrder?.status === 'paid') {
-                    alreadyDone = true;
-                }
+        const existingOrder = orders.find(o => o.paymentId === payment.identifier);
+        if (existingOrder?.status === 'completed' || existingOrder?.status === 'paid') {
+            logDebug("Payment sudah diproses");
+            if (payment?.transaction?.txid) {
+                await completePaymentOnServer(payment.identifier, payment.transaction.txid, []);
             }
+            return;
         }
 
-        if (txid) {
-            // Ada txid = transaksi SUDAH di blockchain Pi
-            // WAJIB panggil payment.complete(txid) ke Pi SDK agar payment dianggap selesai
-            logDebug('[PAY] Incomplete punya txid — complete ke Pi SDK: ' + txid);
-
-            // Update Firestore
-            if (db) {
-                try {
-                    await setDoc(doc(db, 'payments', pid), {
-                        status: 'completed', txid,
-                        completedAt: serverTimestamp(),
-                        source: 'incomplete_recovery'
-                    }, { merge: true });
-                } catch(e) { logDebug('[PAY] Firestore incomplete update skip: ' + e.message); }
-            }
-
-            // Simpan order jika belum ada
-            if (!alreadyDone && db) {
-                const amount = parseFloat(payment.amount) || 0;
-                const fbUid  = auth?.currentUser?.uid || currentUser?.firebaseUid || '';
+        if (payment?.transaction?.txid) {
+            if (!existingOrder) {
                 const orderData = {
-                    paymentId: pid, txid, amount,
-                    items:       payment.metadata?.items || [],
-                    status:      'paid',
-                    customer:    currentUser?.username || 'User',
+                    paymentId: payment.identifier,
+                    txid: payment.transaction.txid,
+                    amount: parseFloat(payment.amount) || 0,
+                    items: payment.metadata?.items || [],
+                    status: 'paid',
+                    customer: currentUser?.username || 'User',
                     customerUid: currentUser?.uid || '',
-                    firebaseUid: fbUid,
-                    userId:      fbUid || currentUser?.uid || '',
-                    createdAt:   serverTimestamp(),
-                    updatedAt:   serverTimestamp(),
-                    metadata:    payment.metadata || {},
-                    sgtEarned:   calculateSGTReward(amount),
-                    source:      'incomplete_recovery'
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                    metadata: payment.metadata || {},
+                    sgtEarned: calculateSGTReward(parseFloat(payment.amount) || 0)
                 };
-                await saveOrderToFirebase(orderData, pid)
-                    .catch(e => logDebug('[PAY] saveOrder incomplete skip: ' + e.message));
-
-                // Award SGT sekali saja
-                const awarded = sgtTransactions.some(t =>
-                    t.description?.includes(pid.substring(0, 8))
-                );
-                if (!awarded) {
-                    awardSGT(parseFloat(payment.amount) || 0, 'Recovery #' + pid.substring(0, 8))
-                        .catch(e => logDebug('[PAY] SGT recovery skip: ' + e.message));
-                }
-                showToast('Pembayaran pending berhasil diselesaikan!', 'success');
+                await saveOrderToFirebase(orderData, payment.identifier);
             }
-
-            // KRITIS: beritahu Pi SDK bahwa payment ini selesai
-            // Ini yang membebaskan lock sehingga payment baru bisa dibuat
-            try {
-                await payment.complete(txid);
-                logDebug('[PAY] payment.complete() dipanggil ke Pi SDK OK');
-            } catch(completeErr) {
-                logDebug('[PAY] payment.complete() error (mungkin sudah selesai): ' + completeErr.message);
-            }
-
+            await completePaymentOnServer(payment.identifier, payment.transaction.txid, payment.metadata?.items || []);
+            showToast('Pembayaran pending berhasil diselesaikan!', 'success');
         } else {
-            // Tidak ada txid = payment belum dikonfirmasi user di Pi Browser
-            // WAJIB panggil payment.cancel() agar Pi SDK hapus lock-nya
-            logDebug('[PAY] Incomplete tanpa txid — cancel ke Pi SDK');
-
-            // Update Firestore
-            if (db) {
-                await setDoc(doc(db, 'payments', pid), {
-                    status: 'cancelled', cancelledAt: serverTimestamp(), source: 'incomplete_no_txid'
-                }, { merge: true }).catch(() => {});
-            }
-
-            // KRITIS: beritahu Pi SDK untuk cancel payment ini
-            try {
-                await payment.cancel();
-                logDebug('[PAY] payment.cancel() dipanggil ke Pi SDK OK');
-            } catch(cancelErr) {
-                logDebug('[PAY] payment.cancel() error (mungkin sudah cancel): ' + cancelErr.message);
-            }
+            await cancelPaymentOnServer(payment.identifier);
         }
-
         pendingPayment = null;
-
     } catch (err) {
-        logDebug('[PAY] handleIncomplete outer error: ' + err.message);
-        // Terakhir: coba cancel agar lock Pi SDK dilepas
-        try { await payment.cancel(); } catch (e) {
-            logDebug('[PAY] Emergency cancel error: ' + e.message);
-        }
+        logDebug("Handle incomplete error: " + err.message);
+        try { await cancelPaymentOnServer(payment.identifier); } catch (e) {}
     }
 }
 
 async function cancelPaymentOnServer(paymentId) {
-    logDebug('[PAY] Cancel paymentId: ' + paymentId);
-    if (db) {
-        try {
-            await setDoc(doc(db, 'payments', paymentId), {
-                status: 'cancelled',
-                cancelledAt: serverTimestamp()
-            }, { merge: true });
-        } catch (e) {
-            logDebug('[PAY] Cancel Firestore skip: ' + e.message);
-        }
-    }
-    logDebug('[PAY] Payment cancelled recorded: ' + paymentId);
+    const response = await fetch('/api/payments/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId })
+    });
+    if (!response.ok) throw new Error("Gagal cancel payment");
+    logDebug("Payment cancelled: " + paymentId);
     return true;
 }
 
@@ -7393,22 +6538,7 @@ window.switchView = function(view) {
             case 'orders': renderOrders(); break;
             case 'account': renderAccount(); break;
             case 'wallet': renderWallet(); loadSupplyStats().catch(()=>{}); break;
-            case 'admin-dashboard':
-            renderAdminDashboard();
-            loadSupplyStats().catch(()=>{});
-            // Clear previous interval kalau ada
-            if (window._adminRefreshInterval) clearInterval(window._adminRefreshInterval);
-            // Auto-refresh setiap 30 detik selama di dashboard
-            window._adminRefreshInterval = setInterval(() => {
-                const currentView = document.querySelector('.view-section.active')?.id || '';
-                if (currentView.includes('admin-dashboard') || document.getElementById('adminDashboardView')?.style.display !== 'none') {
-                    updateAdminStats();
-                    updateSGTAdminStats();
-                } else {
-                    clearInterval(window._adminRefreshInterval);
-                }
-            }, 30000);
-            break;
+            case 'admin-dashboard': renderAdminDashboard(); loadSupplyStats().catch(()=>{}); break;
             case 'admin-products':
                 currentAdminProductFilter = 'all';
                 // Coba ambil dari cache dulu kalau products kosong
@@ -7728,12 +6858,7 @@ async function renderSGTSosialHistory() {
             </div>`;
         }).join('');
     } catch(e) {
-        if (e.message && e.message.includes('offline') && db) {
-            logDebug('[Sosial] Offline — coba reconnect lalu skip render');
-            enableNetwork(db).catch(() => {});
-        } else {
-            logDebug('renderSGTSosialHistory error: ' + e.message);
-        }
+        logDebug('renderSGTSosialHistory error: ' + e.message);
     }
 }
 
@@ -8085,45 +7210,12 @@ function renderAccount() {
         </button>`;
 }
 
-
-// Update 4 stat card utama (Produk, Menunggu, Selesai, Pi Terjual) dari data lokal
-function updateAdminStatCards() {
-    const upd = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined) el.innerText = v; };
-    upd('statTotalProducts', products.length || 0);
-    const pending   = orders.filter(o => ['pending','paid','processing'].includes(o.status)).length;
-    const completed = orders.filter(o => ['completed','shipped'].includes(o.status)).length;
-    const revenue   = orders.filter(o => ['completed','shipped','paid'].includes(o.status))
-                            .reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
-    upd('statPendingOrders',   pending);
-    upd('statCompletedOrders', completed);
-    upd('statTotalRevenue',    revenue.toFixed(8));
-}
-
 function renderAdminDashboard() {
     if (!(currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin')) { switchView('home'); return; }
-
-    // === LOAD DARI CACHE DULU agar angka tidak 0 saat Firebase lambat ===
-    if (products.length === 0) {
-        try {
-            const cached = localStorage.getItem('sagatama_products_cache');
-            if (cached) { products = JSON.parse(cached); logDebug('[Admin] Products dari cache: ' + products.length); }
-        } catch(e) {}
-    }
-    if (orders.length === 0) {
-        try {
-            const cached = localStorage.getItem('sagatama_orders_cache');
-            if (cached) { orders = JSON.parse(cached); logDebug('[Admin] Orders dari cache: ' + orders.length); }
-        } catch(e) {}
-    }
-
-    updateAdminStatCards(); // Tampilkan angka dari cache SEGERA
     updateAdminStats();
     renderAdminRecentOrders();
-
-    // Retry bertahap — Firebase butuh waktu untuk kirim data
-    setTimeout(() => { updateAdminStatCards(); updateAdminStats(); renderAdminRecentOrders(); }, 1500);
-    setTimeout(() => { updateAdminStatCards(); updateAdminStats(); updateSGTAdminStats(true); }, 4000);
-    setTimeout(() => { updateAdminStatCards(); updateAdminStats(); updateSGTAdminStats(true); loadSupplyStats().catch(()=>{}); }, 8000);
+    // Retry setelah Firebase kirim data (antisipasi race condition saat pertama login)
+    setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); }, 2000);
 }
 
 function updateAdminStats() {
@@ -8133,60 +7225,16 @@ function updateAdminStats() {
     upd('statPendingOrders', orders.filter(o => ['pending','paid','processing'].includes(o.status)).length);
     upd('statCompletedOrders', orders.filter(o => ['completed','shipped'].includes(o.status)).length);
     upd('statTotalRevenue', totalRevenue.toFixed(8));
-    updateAdminStatCards();
-
-    // Tampilkan status koneksi Firebase di dashboard
-    const statusEl = document.getElementById('adminDbStatus');
-    if (statusEl) {
-        if (db) {
-            const src = (products.length > 0 || orders.length > 0) ? 'Firestore' : 'Cache';
-            statusEl.innerHTML = '<span style="color:#0F6E56;">● Live</span> ' + src + ' &nbsp;|&nbsp; Produk: ' + products.length + ' &nbsp;|&nbsp; Pesanan: ' + orders.length +
-                ' &nbsp;<button onclick="window.manualAdminRefresh()" style="background:#E1F5EE;border:none;color:#0F6E56;font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;font-weight:600;">↻ Refresh</button>';
-        } else {
-            statusEl.innerHTML = '<span style="color:#A32D2D;">● Offline</span> — Data dari cache lokal &nbsp;<button onclick="window.reconnectFirestore()" style="background:#FCEBEB;border:none;color:#A32D2D;font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;font-weight:600;">↻ Hubungkan ulang</button>';
-        }
-    }
-
     // Update SGT stats dari Firestore secara async
     updateSGTAdminStats();
 }
 
-
-window.reconnectFirestore = async function() {
-    showToast('Mencoba menghubungkan ulang...', 'info');
-    try {
-        if (db) {
-            await enableNetwork(db);
-            logDebug('[Reconnect] enableNetwork OK');
-        } else {
-            await initFirebase();
-        }
-        await new Promise(r => setTimeout(r, 800));
-        loadDataFromFirebase();
-        loadSupplyStats().catch(() => {});
-        showToast('Berhasil terhubung kembali!', 'success');
-        updateAdminStats();
-    } catch(e) {
-        logDebug('[Reconnect] Gagal: ' + e.message);
-        showToast('Masih offline. Cek koneksi internet.', 'error');
-    }
-};
-
-window.manualAdminRefresh = function() {
-    logDebug('[Admin] Manual refresh dipanggil');
-    updateAdminStats();
-    updateSGTAdminStats(true);
-    loadSupplyStats().catch(()=>{});
-    if (db) loadDataFromFirebase();
-    showToast('Memuat ulang data...', 'info');
-};
-
-let _sgtAdminStatsLastRun = 0;   // 0 = belum pernah jalan, tidak akan di-throttle
+let _sgtAdminStatsLastRun = 0;
 let _sgtAdminStatsRunning = false;
-async function updateSGTAdminStats(forceRefresh = false) {
-    const now = Date.now(); const THROTTLE_MS = 30_000; // 30 detik, lebih responsif
+async function updateSGTAdminStats() {
+    const now = Date.now(); const THROTTLE_MS = 60_000;
     if (_sgtAdminStatsRunning) { logDebug('[SGT-Stats] Skipped: running'); return; }
-    if (!forceRefresh && now - _sgtAdminStatsLastRun < THROTTLE_MS) { logDebug('[SGT-Stats] Skipped: throttled'); return; }
+    if (now - _sgtAdminStatsLastRun < THROTTLE_MS) { logDebug('[SGT-Stats] Skipped: throttled'); return; }
     _sgtAdminStatsRunning = true; _sgtAdminStatsLastRun = now;
     try {
         if (!db) { _sgtAdminStatsRunning = false; return; }
@@ -8258,8 +7306,6 @@ async function updateSGTAdminStats(forceRefresh = false) {
         upd('admin-total-distributed', totalDistributed.toLocaleString() + ' SGT');
         upd('admin-total-burned', totalBurned.toLocaleString() + ' SGT');
         upd('statTotalSGTIssued', totalDistributed.toLocaleString());
-        // Juga update stat cards utama dari array lokal (pastikan tidak 0)
-        updateAdminStatCards();
 
         // Render log distribusi (ambil 20 terbaru)
         const tbody = document.getElementById('sgt-logs-body');
@@ -8732,25 +7778,9 @@ window.processPayment = async function() {
     if (btn?.disabled) return;
 
     // Guard: pastikan hanya berjalan di Pi Browser
-    // Jika belum ready, coba re-detect dulu (Pi Browser baru inject window.Pi lambat)
-    if (!isPiBrowser || !isPiSDKReady) {
-        logDebug('[Payment] Belum siap — coba re-detect Pi env... isPiBrowser=' + isPiBrowser + ' isPiSDKReady=' + isPiSDKReady);
-        // Re-detect: cek window.Pi langsung
-        if (typeof window.Pi !== 'undefined' && typeof window.Pi.init === 'function') {
-            logDebug('[Payment] window.Pi tersedia! Coba re-init SDK...');
-            isPiBrowser = true;
-            try {
-                await window.Pi.init({ version: "2.0", sandbox: USE_SANDBOX });
-                isPiSDKReady = true;
-                logDebug('[Payment] Re-init SDK berhasil ✅');
-            } catch(e) {
-                logDebug('[Payment] Re-init SDK gagal: ' + e.message);
-            }
-        }
-    }
     if (!isPiBrowser || !isPiSDKReady) {
         showToast('Pembayaran Pi hanya tersedia di Pi Browser. Gunakan aplikasi Pi Browser untuk bertransaksi.', 'warning');
-        logDebug('[Payment] Ditolak setelah re-check: isPiBrowser=' + isPiBrowser + ' isPiSDKReady=' + isPiSDKReady);
+        logDebug('[Payment] Ditolak: bukan Pi Browser atau SDK belum siap. isPiBrowser=' + isPiBrowser + ' isPiSDKReady=' + isPiSDKReady);
         // Tampilkan info di modal jika ada
         const paymentNote = document.getElementById('paymentNotPiBrowserNote');
         if (paymentNote) paymentNote.style.display = 'block';
@@ -9024,7 +8054,6 @@ window.saveProduct = async function() {
             const tIdx = products.findIndex(p => p.id === tempId);
             if (tIdx !== -1) products[tIdx].id = docRef.id;
             localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
-            localStorage.removeItem('sagatama_products_cache'); // PERBAIKAN: hapus cache
             showToast('Produk berhasil ditambahkan! ✅', 'success');
             return;
         }
@@ -9045,7 +8074,6 @@ window.deleteProduct = async function(id) {
     if (!confirm('Hapus produk ini? Tidak dapat dibatalkan.')) return;
     try {
         await deleteDoc(doc(db, 'products', id));
-        localStorage.removeItem('sagatama_products_cache'); // PERBAIKAN: hapus cache agar produk lama tidak tampil
         showToast('Produk dihapus!', 'success');
         renderAdminProducts();
     } catch (error) {
@@ -9281,12 +8309,9 @@ window.switchAdminSosialTab = function(tab, btn) {
 };
 
 // Auto-load beasiswa & bansos saat admin membuka view sosial
-// PERBAIKAN: Gunakan hook system, bukan override chain yang bisa infinite loop
-window.addSwitchViewHook = window.addSwitchViewHook || function(fn) {
-    window._switchViewHooks = window._switchViewHooks || [];
-    window._switchViewHooks.push(fn);
-};
-window.addSwitchViewHook(function(view) {
+window._origSwitchView = window.switchView;
+window.switchView = function(view) {
+    if (typeof window._origSwitchView === 'function') window._origSwitchView(view);
     const isAdminSession = currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
     if (view === 'admin-sgt-sosial' && isAdminSession) {
         // Load tab pertama (beasiswa) secara otomatis
@@ -9295,12 +8320,6 @@ window.addSwitchViewHook(function(view) {
             updateAdminSosialBadge();
         }, 200);
     }
-});
-// Register hook ke switchView utama
-const _origSwitchView9 = window.switchView;
-window.switchView = function(view) {
-    if (typeof _origSwitchView9 === 'function') _origSwitchView9(view);
-    (window._switchViewHooks || []).forEach(h => { try { h(view); } catch(e) {} });
 };
 
 // ---- DANA POOL MANAGEMENT ----
@@ -9499,7 +8518,7 @@ window.submitBeasiswa = async function() {
     } catch(e) {
         logDebug('submitBeasiswa error: ' + e.message + ' | code: ' + e.code);
         let errMsg = e.message;
-        if (e.code === 'permission-denied') errMsg = 'Akses ditolak. Pastikan Anonymous Auth aktif di Firebase Console dan Firestore rules sudah benar. Coba logout lalu login ulang.';
+        if (e.code === 'permission-denied') errMsg = 'Akses ditolak. Aktifkan Anonymous Auth di Firebase Console atau coba login ulang.';
         else if (e.code === 'unavailable' || (e.message||'').includes('offline')) errMsg = 'Tidak ada koneksi internet. Periksa jaringan dan coba lagi.';
         else if (e.code === 'not-found') errMsg = 'Database tidak ditemukan. Hubungi admin untuk mengaktifkan Firestore.';
         showToast('Gagal kirim beasiswa: ' + errMsg, 'error');
@@ -9576,7 +8595,7 @@ window.submitBantuan = async function() {
     } catch(e) {
         logDebug('submitBantuan error: ' + e.message + ' | code: ' + e.code);
         let errMsg = e.message;
-        if (e.code === 'permission-denied') errMsg = 'Akses ditolak. Pastikan Anonymous Auth aktif di Firebase Console dan Firestore rules sudah benar. Coba logout lalu login ulang.';
+        if (e.code === 'permission-denied') errMsg = 'Akses ditolak. Aktifkan Anonymous Auth di Firebase Console atau coba login ulang.';
         else if (e.code === 'unavailable' || (e.message||'').includes('offline')) errMsg = 'Tidak ada koneksi internet. Periksa jaringan dan coba lagi.';
         else if (e.code === 'not-found') errMsg = 'Database tidak ditemukan. Hubungi admin untuk mengaktifkan Firestore.';
         showToast('Gagal kirim bantuan sosial: ' + errMsg, 'error');
@@ -9763,10 +8782,8 @@ window.adminDistribusiSGT = async function() {
     if (!username||!jumlah||jumlah<1) { showToast('Lengkapi data distribusi', 'error'); return; }
 
     try {
-        // Pakai lookupUserByUsername — tidak butuh index
-        const _lookupResult = await lookupUserByUsername(username);
-        const snap = _lookupResult ? { empty: false, docs: [{ id: _lookupResult.id, data: () => _lookupResult }] } : { empty: true, docs: [] };
-        const _ignored = await getDocs(q);
+        const q = query(collection(db,'users'), where('username','==',username), limit(1));
+        const snap = await getDocs(q);
         if (snap.empty) { showToast('User @'+username+' tidak ditemukan', 'error'); return; }
         const userDoc = snap.docs[0];
         const curBal = userDoc.data().sgtBalance || 0;
@@ -10501,21 +9518,19 @@ async function checkExpiredProposals() {
         const now = new Date();
         const snap = await getDocs(query(collection(db,'vote_proposals'),
             where('status','==','active'), where('deadline','<=',now), limit(20)));
-        // PERBAIKAN: gunakan Promise.allSettled agar forEach tidak buang Promise
-        await Promise.allSettled(snap.docs.map(async d => {
-            try {
-                const p = d.data();
-                const total = (p.votesSetuju||0)+(p.votesTolak||0);
-                const pct   = total>0 ? (p.votesSetuju||0)/total*100 : 0;
-                const result= pct>=60 ? 'approved' : 'rejected';
-                await updateDoc(doc(db,'vote_proposals',d.id), { status:'closed', result, closedAt:serverTimestamp() });
-                if (result==='approved') {
-                    const sgtNeeded = {sembako:300,kesehatan:500,darurat:1000,pendidikan:500}[p.jenis]||300;
-                    await addDanaToPool('bansos_disbursed', sgtNeeded);
-                    logDebug('Proposal disetujui komunitas: '+p.nama+' ('+sgtNeeded+' SGT)');
-                }
-            } catch(e) { logDebug('checkExpiredProposals item error: ' + e.message); }
-        }));
+        snap.forEach(async d => {
+            const p = d.data();
+            const total = (p.votesSetuju||0)+(p.votesTolak||0);
+            const pct   = total>0 ? (p.votesSetuju||0)/total*100 : 0;
+            const result= pct>=60 ? 'approved' : 'rejected';
+            await updateDoc(doc(db,'vote_proposals',d.id), { status:'closed', result, closedAt:serverTimestamp() });
+            // If approved, auto-disburse from Baitul Maal
+            if (result==='approved') {
+                const sgtNeeded = {sembako:300,kesehatan:500,darurat:1000,pendidikan:500}[p.jenis]||300;
+                await addDanaToPool('bansos_disbursed', sgtNeeded);
+                logDebug('Proposal disetujui komunitas: '+p.nama+' ('+sgtNeeded+' SGT)');
+            }
+        });
     } catch(e) {}
 }
 // Run check every 5 minutes
@@ -10662,7 +9677,6 @@ if (typeof window._registerReal === 'function') {
         checkNewBadges: window.checkNewBadges,
         initFase3: window.initFase3,
         resetSupplyToken: window.resetSupplyToken,   // ← defined above, inside module
-        updateAdminStatus: window.updateAdminStatus, // PERBAIKAN: daftarkan agar tidak stuck di deferred queue
     });
 } // end if (_registerReal)
 
@@ -10688,12 +9702,6 @@ window.updateMintRate = async function() {
     } catch(e) {}
     const el = document.getElementById('currentMintRateDisplay');
     if (el) el.textContent = val;
-    // Update label rate di wallet user
-    const rateLabel = document.getElementById('walletRateLabel');
-    if (rateLabel) rateLabel.textContent = '1 π = ' + val + ' SGT';
-    // Update input di admin modal agar sinkron
-    const rateInput = document.getElementById('sgtAdminRate');
-    if (rateInput) rateInput.value = val;
     showToast(`✅ Rate mint diubah ke ${val} SGT/Pi`, 'success');
     logDebug('Mint rate updated to: ' + val);
 };
@@ -10730,11 +9738,6 @@ window.openModal = function(id) {
             const rateLbl = document.getElementById('currentMintRateDisplay');
             if (rateEl) rateEl.value = sgtRatePerPi;
             if (rateLbl) rateLbl.textContent = sgtRatePerPi;
-            // Sinkronkan juga input sgtAdminRate dan hint-nya
-            const adminRateEl = document.getElementById('sgtAdminRate');
-            const adminRateHint = document.getElementById('sgtAdminRateHint');
-            if (adminRateEl) adminRateEl.value = sgtRatePerPi;
-            if (adminRateHint) adminRateHint.textContent = sgtRatePerPi;
         }).catch(()=>{});
     }
 };
