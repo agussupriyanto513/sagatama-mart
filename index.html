@@ -5861,57 +5861,68 @@ async function processPiAuthSuccess(authResult) {
         }
     }
 
-    // KRITIS: simpan firebaseUid ke currentUser agar query Firestore bisa pakai
+    // Simpan firebaseUid ke currentUser
     if (firebaseUid) {
         currentUser.firebaseUid = firebaseUid;
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
     }
 
-    // Step 6: Pastikan dokumen user ada di Firestore dengan UID yang benar
-    await ensureUserDocumentExists(piUid, currentUser.username, firebaseUid);
-    
-    // Step 7: Load SGT data dengan strategi multi-fallback
-    await loadSGTDataFixed();
-    
-    // Step 8: Start realtime listener untuk SGT
-    if (currentUser.uid) {
-        listenUserSGTBalanceFixed(currentUser.uid);
+    // === SETIAP STEP DIBUNGKUS try/catch AGAR SATU GAGAL TIDAK BATALKAN LOGIN ===
+
+    // Step 6: Pastikan dokumen user ada di Firestore
+    try {
+        await ensureUserDocumentExists(piUid, currentUser.username, firebaseUid);
+    } catch(s6Err) {
+        logDebug('[AUTH] Step 6 skip: ' + s6Err.message);
     }
-    
-    showSGTElements(true);
-    updateUI();
-    
-    // Refresh sosial module after login
-    if (typeof updateSosialUI === 'function') setTimeout(updateSosialUI, 500);
-    if (typeof updateAdminSosialBadge === 'function' && userRole === 'admin') setTimeout(updateAdminSosialBadge, 600);
-    
+
+    // Step 7: Load SGT data
+    try {
+        await loadSGTDataFixed();
+    } catch(s7Err) {
+        logDebug('[AUTH] Step 7 skip: ' + s7Err.message);
+    }
+
+    // Step 8: Realtime SGT listener
+    try {
+        if (currentUser.uid) listenUserSGTBalanceFixed(currentUser.uid);
+    } catch(s8Err) {
+        logDebug('[AUTH] Step 8 skip: ' + s8Err.message);
+    }
+
+    // Update UI — ini harus selalu jalan
+    try { showSGTElements(true); } catch(e) {}
+    try { updateUI(); } catch(e) {}
+
+    // Tutup modal & tampilkan welcome DULU sebelum load data
     closeModal('piAuthModal');
     closeModal('loginOptionsModal');
-    showToast(`Selamat datang, @${currentUser.username}! 🎉`, 'success');
-    logDebug("[AUTH-v3] Auth sukses: @" + currentUser.username);
-    
-    loadDataFromFirebase();
-    
-    // Re-filter myOrders setelah login berhasil — cover semua field ownership
-    if (orders.length > 0) {
-        const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
-        myOrders = orders.filter(o =>
-            o.firebaseUid === fbUid ||
-            o.customerUid === currentUser.uid ||
-            o.userId === fbUid ||
-            o.userId === currentUser.uid ||
-            o.customer === currentUser.username
-        );
-        renderOrders();
-    }
-    
-    // Init fase 3 modules
-    setTimeout(() => {
-        if (typeof initFase3 === 'function') initFase3();
-        if (typeof updateSosialUI === 'function') updateSosialUI();
-    }, 500);
-    
+    showToast('Selamat datang, @' + currentUser.username + '! 🎉', 'success');
+    logDebug('[AUTH] Login sukses: @' + currentUser.username + ' | Pi UID: ' + piUid + ' | FB UID: ' + firebaseUid);
+
+    // Pindah ke home langsung agar user tidak menunggu
     switchView('home');
+
+    // Load data & modul lain secara background (tidak block UI)
+    setTimeout(() => {
+        try { loadDataFromFirebase(); } catch(e) {}
+        try {
+            const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
+            if (orders.length > 0) {
+                myOrders = orders.filter(o =>
+                    o.firebaseUid === fbUid ||
+                    o.customerUid === currentUser.uid ||
+                    o.userId === fbUid ||
+                    o.userId === currentUser.uid ||
+                    o.customer === currentUser.username
+                );
+                renderOrders();
+            }
+        } catch(e) {}
+        try { if (typeof initFase3 === 'function') initFase3(); } catch(e) {}
+        try { if (typeof updateSosialUI === 'function') updateSosialUI(); } catch(e) {}
+        try { if (typeof updateAdminSosialBadge === 'function') updateAdminSosialBadge(); } catch(e) {}
+    }, 300);
 }
 
 function handlePiAuthError(error, loginBtn, originalHTML) {
@@ -6055,57 +6066,53 @@ window.manualPiLogin = async function() {
 // SECTION D: ENSURE USER DOCUMENT EXISTS - v3
 // ============================================
 async function ensureUserDocumentExists(piUid, username, firebaseUid) {
-    if (!db) return;
-    
-    logDebug(`[SGT-v3] Ensure user doc: piUid=${piUid}, username=${username}`);
-    
+    if (!db) { logDebug('[ensureUser] db null, skip'); return; }
+
+    logDebug('[ensureUser] piUid=' + piUid + ' username=' + username);
+
     try {
-        const userRef = doc(db, 'users', piUid);
+        const userRef  = doc(db, 'users', piUid);
         const userSnap = await getDoc(userRef);
-        
+
         if (!userSnap.exists()) {
-            logDebug(`[SGT-v3] Dokumen baru: ${piUid}`);
-            
-            // Cari dokumen lama dengan username sama
-            const oldSnap = await getDocs(
-                query(collection(db, 'users'), where('username', '==', username), limit(10))
-            );
-            
-            let oldBalance = 0;
-            let oldTransactions = [];
-            let oldDocsToMigrate = [];
-            
-            oldSnap.forEach(oldDoc => {
-                if (oldDoc.id !== piUid) {
-                    const oldData = oldDoc.data();
-                    if ((oldData.sgtBalance || 0) > 0) {
-                        oldBalance += oldData.sgtBalance;
-                        oldTransactions.push(...(oldData.sgtTransactions || []));
-                        oldDocsToMigrate.push(oldDoc.id);
-                        logDebug(`[SGT-v3] Temukan dokumen lama ${oldDoc.id}: ${oldData.sgtBalance} SGT`);
+            logDebug('[ensureUser] User baru — buat dokumen');
+
+            // FIX: query username pakai try/catch tersendiri
+            // failed-precondition (index belum ada) tidak boleh gagalkan login
+            let oldBalance = 0, oldTransactions = [], oldDocsToMigrate = [];
+            try {
+                const oldSnap = await getDocs(
+                    query(collection(db, 'users'), where('username', '==', username), limit(5))
+                );
+                oldSnap.forEach(oldDoc => {
+                    if (oldDoc.id !== piUid) {
+                        const d = oldDoc.data();
+                        if ((d.sgtBalance || 0) > 0) {
+                            oldBalance += d.sgtBalance;
+                            oldTransactions.push(...(d.sgtTransactions || []));
+                            oldDocsToMigrate.push(oldDoc.id);
+                        }
                     }
-                }
-            });
-            
+                });
+            } catch(qErr) {
+                // Index belum ada / query gagal — skip migrasi, tetap lanjut buat user
+                logDebug('[ensureUser] Query username skip (lanjut): ' + qErr.message);
+            }
+
+            // Buat dokumen user baru
             const newData = {
-                username: username,
-                uid: piUid,
-                firebaseUid: firebaseUid,
+                username, uid: piUid, firebaseUid: firebaseUid || null,
                 authType: 'pi',
-                createdAt: serverTimestamp(),
-                lastLogin: serverTimestamp(),
+                createdAt:  serverTimestamp(),
+                lastLogin:  serverTimestamp(),
                 sgtBalance: oldBalance,
                 sgtTransactions: oldTransactions.slice(0, 200),
                 isNewUser: true
             };
-            
             await setDoc(userRef, newData);
-            logDebug(`[SGT-v3] Dokumen dibuat: ${piUid} | Balance: ${oldBalance}`);
+            logDebug('[ensureUser] Dokumen user dibuat: ' + piUid);
 
-            // ══════════════════════════════════════════
-            // WELCOME BONUS: 50 SGT untuk user baru
-            // (hanya jika tidak ada data migrasi dari akun lama)
-            // ══════════════════════════════════════════
+            // Welcome bonus 50 SGT untuk user benar-benar baru
             if (oldBalance === 0 && oldDocsToMigrate.length === 0) {
                 const welcomeBonus = 50;
                 const welcomeTx = {
@@ -6113,57 +6120,39 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
                     description: '🎉 Bonus Selamat Datang - User Baru',
                     date: new Date().toISOString(), userId: piUid
                 };
+                // Update Firestore (non-blocking agar tidak delay login)
+                setDoc(userRef, { sgtBalance: welcomeBonus, sgtTransactions: [welcomeTx] }, { merge: true })
+                    .catch(e => logDebug('[Welcome] Firestore skip: ' + e.message));
+                // Update in-memory & localStorage langsung
+                sgtBalance = welcomeBonus;
+                sgtTransactions = [welcomeTx];
                 try {
-                    await setDoc(userRef, {
-                        sgtBalance: welcomeBonus,
-                        sgtTransactions: [welcomeTx]
-                    }, { merge: true });
-                    // Update in-memory state
-                    sgtBalance = welcomeBonus;
-                    sgtTransactions = [welcomeTx];
-                    // Simpan ke localStorage juga sebagai backup
-                    try {
-                        localStorage.setItem('sgt_balance_' + piUid, welcomeBonus.toString());
-                        localStorage.setItem('sgt_transactions_' + piUid, JSON.stringify([welcomeTx]));
-                    } catch(le) {}
-                    // Mint ke supply (non-blocking)
-                    mintSGT(welcomeBonus, piUid).catch(e => logDebug('[Welcome] mint skip: ' + e.message));
-                    logDebug(`[SGT-v3] Welcome bonus diberikan: ${welcomeBonus} SGT → ${username}`);
-                    // Toast akan muncul setelah auth selesai
-                    setTimeout(() => showToast(`🎁 +${welcomeBonus} SGT Bonus Selamat Datang!`, 'success'), 1500);
-                } catch(wErr) {
-                    logDebug('[SGT-v3] Welcome bonus error (non-kritis): ' + wErr.message);
-                    // Tetap set in-memory agar user bisa lihat balance lokal
-                    sgtBalance = welcomeBonus;
-                    sgtTransactions = [welcomeTx];
-                    try {
-                        localStorage.setItem('sgt_balance_' + piUid, welcomeBonus.toString());
-                        localStorage.setItem('sgt_transactions_' + piUid, JSON.stringify([welcomeTx]));
-                    } catch(le) {}
-                    setTimeout(() => showToast(`🎁 +${welcomeBonus} SGT Bonus Selamat Datang! (tersimpan lokal)`, 'success'), 1500);
-                }
+                    localStorage.setItem('sgt_balance_' + piUid, welcomeBonus.toString());
+                    localStorage.setItem('sgt_transactions_' + piUid, JSON.stringify([welcomeTx]));
+                } catch(le) {}
+                mintSGT(welcomeBonus, piUid).catch(() => {});
+                setTimeout(() => showToast('🎁 +' + welcomeBonus + ' SGT Bonus Selamat Datang!', 'success'), 1500);
             }
-            
-            // Migrate: nolkan dokumen lama
+
+            // Migrate dokumen lama (non-blocking)
             for (const oldDocId of oldDocsToMigrate) {
-                await setDoc(doc(db, 'users', oldDocId), {
-                    sgtBalance: 0,
-                    migratedTo: piUid,
-                    migrationDate: serverTimestamp()
-                }, { merge: true });
-                logDebug(`[SGT-v3] Migrated: ${oldDocId} → ${piUid}`);
+                setDoc(doc(db, 'users', oldDocId), {
+                    sgtBalance: 0, migratedTo: piUid, migrationDate: serverTimestamp()
+                }, { merge: true }).catch(() => {});
             }
-            
+
         } else {
-            await setDoc(userRef, {
-                lastLogin: serverTimestamp(),
-                firebaseUid: firebaseUid || null
-            }, { merge: true });
-            logDebug(`[SGT-v3] Dokumen exists, updated: ${piUid}`);
+            // User sudah ada — update lastLogin saja (non-blocking)
+            setDoc(userRef, {
+                lastLogin:   serverTimestamp(),
+                firebaseUid: firebaseUid || userSnap.data().firebaseUid || null
+            }, { merge: true }).catch(e => logDebug('[ensureUser] lastLogin update skip: ' + e.message));
+            logDebug('[ensureUser] User exists, lastLogin updated');
         }
-        
+
     } catch (e) {
-        logDebug(`[SGT-v3] Error ensureUserDoc: ${e.message}`);
+        // Error apapun di sini TIDAK boleh gagalkan login
+        logDebug('[ensureUser] Error (lanjut): ' + e.code + ' ' + e.message);
     }
 }
 
