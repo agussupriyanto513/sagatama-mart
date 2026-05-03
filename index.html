@@ -4807,18 +4807,9 @@ async function fallbackListenerByUsername(userId) {
             sgtBalance = udata.sgtBalance || 0;
             sgtTransactions = udata.sgtTransactions || [];
             updateSGTUI();
+            logDebug(`[SGT-v3] Fallback loaded: ${sgtBalance} SGT`);
             if (udata.id && udata.id !== userId && (udata.sgtBalance || 0) > 0) {
                 migrateUserData(udata.id, userId);
-            }
-        }
-        // PERBAIKAN dummy — simpan agar blok try tidak kosong
-        const _unused = true;
-        if (_unused) return; // early return setelah udata block
-            logDebug(`[SGT-v3] Fallback loaded: ${sgtBalance} SGT`);
-            
-            // Auto-migrate jika perlu
-            if (snap.docs[0].id !== userId && data.sgtBalance > 0) {
-                migrateUserData(snap.docs[0].id, userId);
             }
         }
     } catch (e) {
