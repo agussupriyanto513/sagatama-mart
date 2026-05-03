@@ -6357,6 +6357,7 @@ let paymentInProgress = false;
 
 async function createPiPayment() {
     if (paymentInProgress) {
+        // Jika sudah lebih dari 5 menit, paksa reset (bisa stuck karena error sebelumnya)
         showToast('Transaksi sedang diproses...', 'warning');
         return;
     }
@@ -6376,6 +6377,17 @@ async function createPiPayment() {
         return;
     }
 
+    // Paksa cancel pendingPayment lama yang mungkin masih tersimpan di state
+    if (pendingPayment) {
+        logDebug('[PAY] Ada pendingPayment tersisa, paksa cancel sebelum buat baru...');
+        try {
+            if (pendingPayment.paymentId) {
+                await cancelPaymentOnServer(pendingPayment.paymentId);
+            }
+        } catch(e) {}
+        pendingPayment = null;
+    }
+
     paymentInProgress = true;
 
     if (paymentTimeout) {
@@ -6383,36 +6395,6 @@ async function createPiPayment() {
         paymentTimeout = null;
     }
 
-    // ── WAJIB: Selesaikan/batalkan transaksi pending sebelum buat yang baru ──
-    // Pi SDK akan throw "Failed to check a pending payment" jika ini dilewati
-    try {
-        logDebug('[PAY] Checking for incomplete payments...');
-        await window.Pi.openIncompletePayment({
-            onReadyForServerCompletion: async (paymentId, txid) => {
-                logDebug('[PAY] Incomplete payment found, completing: ' + paymentId);
-                try {
-                    await completePaymentOnServer(paymentId, txid, []);
-                } catch (e) {
-                    logDebug('[PAY] Complete incomplete payment error (ignored): ' + e.message);
-                }
-            },
-            onCancel: async (paymentId) => {
-                logDebug('[PAY] Incomplete payment cancelled: ' + paymentId);
-                try {
-                    await cancelPaymentOnServer(paymentId);
-                } catch (e) {
-                    logDebug('[PAY] Cancel incomplete payment error (ignored): ' + e.message);
-                }
-            },
-            onError: (error, payment) => {
-                logDebug('[PAY] Incomplete payment check error (ignored): ' + (error?.message || error));
-            }
-        });
-        logDebug('[PAY] Incomplete payment check done ✅');
-    } catch (incErr) {
-        // Jika tidak ada incomplete payment atau Pi SDK tidak support, lanjut saja
-        logDebug('[PAY] openIncompletePayment skip: ' + (incErr?.message || incErr));
-    }
 
     const resetPaymentState = () => {
         paymentInProgress = false;
@@ -8576,10 +8558,17 @@ window.deleteProduct = async function(id) {
     if (!confirm('Hapus produk ini? Tidak dapat dibatalkan.')) return;
     try {
         await deleteDoc(doc(db, 'products', id));
+        // Hapus dari array lokal & update cache agar produk lama tidak muncul lagi
+        products = products.filter(p => p.id !== id);
+        try {
+            localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+        } catch(e) {}
         showToast('Produk dihapus!', 'success');
+        renderProducts();
+        renderFeaturedProducts();
         renderAdminProducts();
     } catch (error) {
-        showToast('Gagal menghapus produk', 'error');
+        showToast('Gagal menghapus produk: ' + (error?.message || error), 'error');
     }
 };
 
@@ -10185,6 +10174,26 @@ if (typeof window._registerReal === 'function') {
 // Helper untuk akses sgtBalance dari inline HTML onclick
 // (variabel module tidak bisa diakses langsung dari onclick="...")
 window._getSgtBalance = function() { return sgtBalance || 0; };
+
+// ── Utility: Reset paksa jika payment stuck (bisa dipanggil dari console) ──
+window._resetPaymentState = function() {
+    paymentInProgress = false;
+    pendingPayment = null;
+    const btn = document.getElementById('btnProcessPayment');
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.style.pointerEvents = 'auto'; btn.innerHTML = '<i class="fas fa-lock"></i> Konfirmasi & Bayar'; }
+    const chkBtn = document.getElementById('checkoutBtn');
+    if (chkBtn) { chkBtn.disabled = false; chkBtn.style.opacity = '1'; chkBtn.style.pointerEvents = 'auto'; }
+    if (typeof showToast === 'function') showToast('Payment state direset', 'info');
+    console.log('[Sagatama] Payment state berhasil direset');
+};
+
+// ── Utility: Hapus cache produk lama dari localStorage ──
+window._clearProductsCache = function() {
+    localStorage.removeItem('sagatama_products_cache');
+    console.log('[Sagatama] Cache produk dihapus. Refresh halaman untuk muat ulang.');
+    if (typeof showToast === 'function') showToast('Cache produk dihapus, memuat ulang...', 'info');
+    setTimeout(() => location.reload(), 1500);
+};
 
 // ============================================================
 // Additional functions exposed to window (outside module gate)
