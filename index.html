@@ -5299,6 +5299,13 @@ async function init() {
         }
 
         logDebug("Initialization complete!");
+        // Cek apakah PI_SERVER_API_KEY sudah diisi
+        if (typeof PI_SERVER_API_KEY !== 'undefined' && !PI_SERVER_API_KEY) {
+            setTimeout(() => {
+                logDebug("⚠️ [CONFIG] PI_SERVER_API_KEY belum diisi! Pembayaran Pi tidak akan berfungsi.");
+                logDebug("⚠️ [CONFIG] Isi PI_SERVER_API_KEY di kode dengan Server API Key dari Pi Developer Portal");
+            }, 2000);
+        }
         loadSupplyStats().catch(e => logDebug("Supply stats init: " + e.message));
         loadMintRateFromFirestore().catch(()=>{});
     } catch (e) {
@@ -6809,13 +6816,62 @@ async function createPiPayment() {
 // APPROVE PAYMENT — Firestore-based (tanpa backend server)
 // Pi SDK memvalidasi transaksi di blockchain, kita catat ke Firestore
 // ============================================================
+// ============================================================
+// PI PLATFORM API — approve & complete payment
+// Pi Network WAJIB menerima HTTP call ke Pi Platform API
+// agar pembayaran tidak "Kedaluwarsa"
+// Docs: https://github.com/pi-apps/pi-platform-docs/blob/master/payments.md
+// ============================================================
+
+// ⚠️ KONFIGURASI: Isi dengan Server API Key dari Pi Developer Portal
+// https://developers.minepi.com → App → API Keys → Server-Side Key
+// JANGAN hardcode di production — gunakan Vercel/Firebase env variable
+// Untuk sementara isi di sini agar pembayaran berfungsi
+const PI_SERVER_API_KEY = ''; // ← ISI SERVER API KEY DARI PI DEVELOPER PORTAL
+
+const PI_API_BASE = USE_SANDBOX
+    ? 'https://api.minepi.com/v2'
+    : 'https://api.minepi.com/v2';
+
+async function callPiPlatformAPI(endpoint, method = 'POST', body = null) {
+    if (!PI_SERVER_API_KEY) {
+        logDebug('[Pi API] ⚠️ PI_SERVER_API_KEY kosong — skip Pi Platform API call');
+        logDebug('[Pi API] → Isi PI_SERVER_API_KEY di kode untuk mengaktifkan pembayaran');
+        return null;
+    }
+    try {
+        const opts = {
+            method,
+            headers: {
+                'Authorization': 'Key ' + PI_SERVER_API_KEY,
+                'Content-Type': 'application/json'
+            }
+        };
+        if (body) opts.body = JSON.stringify(body);
+        const res = await fetch(PI_API_BASE + endpoint, opts);
+        const data = await res.json().catch(() => ({}));
+        logDebug('[Pi API] ' + method + ' ' + endpoint + ' → ' + res.status + ' ' + JSON.stringify(data).substring(0,100));
+        return { status: res.status, data, ok: res.ok };
+    } catch(e) {
+        logDebug('[Pi API] fetch error: ' + e.message);
+        return null;
+    }
+}
+
 async function approvePaymentOnServer(paymentId) {
     logDebug('[PAY] Approve paymentId: ' + paymentId);
 
-    // PENTING: approvePaymentOnServer TIDAK BOLEH THROW
-    // Pi SDK menunggu callback ini selesai, lalu lanjut ke complete
-    // Kalau ini throw, Pi SDK akan stop dan user tidak bisa bayar
-    
+    // LANGKAH 1: Panggil Pi Platform API /approve
+    // WAJIB — tanpa ini Pi Network timeout dan tampil "Pembayaran Kedaluwarsa"
+    const approveResult = await callPiPlatformAPI('/payments/' + paymentId + '/approve');
+    if (approveResult?.ok) {
+        logDebug('[PAY] ✅ Pi Platform API approve OK');
+    } else if (approveResult) {
+        logDebug('[PAY] ⚠️ Pi Platform API approve gagal: ' + JSON.stringify(approveResult.data));
+    }
+    // Jika PI_SERVER_API_KEY kosong, approveResult = null — lanjut tetap agar flow tidak stop
+
+    // LANGKAH 2: Record ke Firestore (untuk audit trail)
     if (db) {
         try {
             const fbUid = auth?.currentUser?.uid || currentUser?.firebaseUid || '';
@@ -6832,16 +6888,13 @@ async function approvePaymentOnServer(paymentId) {
                 })) || [],
                 network: USE_SANDBOX ? 'testnet' : 'mainnet'
             }, { merge: true });
-            logDebug('[PAY] Approve recorded OK');
+            logDebug('[PAY] Firestore approve recorded OK');
         } catch (fsErr) {
-            // Tidak throw — hanya log, Pi SDK tetap lanjut ke onReadyForServerCompletion
-            logDebug('[PAY] Approve Firestore skip (lanjut): ' + fsErr.code + ' ' + fsErr.message);
+            logDebug('[PAY] Firestore approve skip: ' + fsErr.code + ' ' + fsErr.message);
         }
-    } else {
-        logDebug('[PAY] Approve: db null, skip Firestore (lanjut)');
     }
 
-    return { success: true, paymentId, source: 'firestore' };
+    return { success: true, paymentId, source: approveResult?.ok ? 'pi_platform' : 'firestore_only' };
 }
 
 // ============================================================
@@ -6856,18 +6909,27 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     );
 
     const doComplete = async () => {
-        // Update status di Firestore payments collection
+        // LANGKAH 1: Panggil Pi Platform API /complete (WAJIB untuk konfirmasi blockchain)
+        const completeResult = await callPiPlatformAPI('/payments/' + paymentId + '/complete', 'POST', { txid });
+        if (completeResult?.ok) {
+            logDebug('[PAY] ✅ Pi Platform API complete OK');
+        } else if (completeResult) {
+            logDebug('[PAY] ⚠️ Pi Platform API complete: ' + JSON.stringify(completeResult.data));
+        }
+
+        // LANGKAH 2: Update Firestore
         if (db) {
             try {
                 await setDoc(doc(db, 'payments', paymentId), {
                     status: 'completed',
                     txid,
                     completedAt: serverTimestamp(),
-                    network: USE_SANDBOX ? 'testnet' : 'mainnet'
+                    network: USE_SANDBOX ? 'testnet' : 'mainnet',
+                    piApiApproved: completeResult?.ok || false
                 }, { merge: true });
-                logDebug('[PAY] Payment completed recorded to Firestore');
+                logDebug('[PAY] Firestore complete recorded OK');
             } catch (fsErr) {
-                logDebug('[PAY] Firestore complete record skip: ' + fsErr.message);
+                logDebug('[PAY] Firestore complete skip: ' + fsErr.message);
             }
         }
         return { success: true, paymentId, txid };
