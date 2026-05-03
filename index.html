@@ -6383,6 +6383,37 @@ async function createPiPayment() {
         paymentTimeout = null;
     }
 
+    // ── WAJIB: Selesaikan/batalkan transaksi pending sebelum buat yang baru ──
+    // Pi SDK akan throw "Failed to check a pending payment" jika ini dilewati
+    try {
+        logDebug('[PAY] Checking for incomplete payments...');
+        await window.Pi.openIncompletePayment({
+            onReadyForServerCompletion: async (paymentId, txid) => {
+                logDebug('[PAY] Incomplete payment found, completing: ' + paymentId);
+                try {
+                    await completePaymentOnServer(paymentId, txid, []);
+                } catch (e) {
+                    logDebug('[PAY] Complete incomplete payment error (ignored): ' + e.message);
+                }
+            },
+            onCancel: async (paymentId) => {
+                logDebug('[PAY] Incomplete payment cancelled: ' + paymentId);
+                try {
+                    await cancelPaymentOnServer(paymentId);
+                } catch (e) {
+                    logDebug('[PAY] Cancel incomplete payment error (ignored): ' + e.message);
+                }
+            },
+            onError: (error, payment) => {
+                logDebug('[PAY] Incomplete payment check error (ignored): ' + (error?.message || error));
+            }
+        });
+        logDebug('[PAY] Incomplete payment check done ✅');
+    } catch (incErr) {
+        // Jika tidak ada incomplete payment atau Pi SDK tidak support, lanjut saja
+        logDebug('[PAY] openIncompletePayment skip: ' + (incErr?.message || incErr));
+    }
+
     const resetPaymentState = () => {
         paymentInProgress = false;
         pendingPayment = null;
