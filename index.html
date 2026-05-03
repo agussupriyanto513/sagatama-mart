@@ -165,8 +165,19 @@ TINDAKAN WAJIB SETELAH DEPLOY:
     <script>
     (function loadPiSDK() {
         var ua = navigator.userAgent || '';
-        var isPiBrowser = ua.includes('PiBrowser') || ua.includes('MinepiApp');
-        if (!isPiBrowser) return; // PERBAIKAN: jangan load Pi SDK di luar Pi Browser apapun hostname-nya
+        var host = window.location.hostname;
+
+        // Hanya skip di localhost/dev untuk mencegah error di browser biasa
+        // Di production (vercel/firebase hosting), selalu coba load SDK
+        // karena Pi Browser versi baru berbasis Chromium mungkin tidak punya "PiBrowser" di UA
+        var isLocalDev = (host === 'localhost' || host === '127.0.0.1');
+        var looksLikePi = ua.includes('PiBrowser') || ua.includes('MinepiApp') ||
+                          ua.includes('pi-browser') || ua.toLowerCase().includes('pibrowser') ||
+                          typeof window.Pi !== 'undefined';
+
+        // Skip hanya jika localhost DAN tidak ada tanda-tanda Pi Browser
+        if (isLocalDev && !looksLikePi) return;
+
         var urls = ['https://sdk.minepi.com/pi-sdk.js', 'https://cdn.minepi.com/pi-sdk.js'];
         var attempts = 0;
         function tryLoad(i) {
@@ -175,6 +186,13 @@ TINDAKAN WAJIB SETELAH DEPLOY:
             var s = document.createElement('script');
             s.src = urls[i];
             s.async = true;
+            s.onload = function() {
+                // Pi SDK berhasil load — set flag global agar detectPiEnv tahu
+                window.__piSDKLoaded = true;
+                // Trigger re-detect jika fungsi sudah tersedia
+                if (typeof window.detectPiEnv === 'function') window.detectPiEnv();
+                if (typeof window.initPiSDK === 'function') window.initPiSDK();
+            };
             s.onerror = function() { setTimeout(function(){ tryLoad(i+1); }, 500); };
             document.head.appendChild(s);
         }
@@ -3839,8 +3857,8 @@ async function firestoreGetDocs(queryRef, retries = 2) {
 }
 
 async function loadSGTDataFixed() {
-    if (!currentUser) {
-        logDebug('[SGT-v3] No currentUser');
+    if (!currentUser || !currentUser.uid) {
+        logDebug('[SGT-v3] No currentUser or uid — skip SGT load');
         return;
     }
     
@@ -5305,7 +5323,7 @@ async function init() {
 
 // Verifikasi sesi user masih valid di Firestore (background check)
 async function verifyUserSession() {
-    if (!currentUser?.uid || !db) return;
+    if (!currentUser?.uid || !currentUser?.username || !db) return;
     try {
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
         if (userDoc.exists()) {
@@ -5324,8 +5342,26 @@ async function verifyUserSession() {
 function detectPiEnv() {
     try {
         const ua = navigator.userAgent || '';
-        isPiBrowser = ua.includes('PiBrowser') || typeof window.Pi !== 'undefined';
-        logDebug("Environment: " + (isPiBrowser ? "Pi Browser" : "External Browser"));
+        // Log UA lengkap untuk debug — penting untuk tahu string Pi Browser versi baru
+        logDebug("[UA] " + ua.substring(0, 120));
+        logDebug("[Pi obj] window.Pi=" + (typeof window.Pi) + " | window.Pi?.version=" + (window.Pi?.version || 'n/a'));
+
+        // Deteksi Pi Browser — lebih luas karena versi baru berbasis Chromium
+        // dan mungkin tidak menyertakan "PiBrowser" di UA string
+        isPiBrowser = (
+            ua.includes('PiBrowser') ||
+            ua.includes('MinepiApp') ||
+            ua.includes('pi-browser') ||
+            ua.toLowerCase().includes('pibrowser') ||
+            typeof window.Pi !== 'undefined' ||
+            typeof window.Pi?.init === 'function' ||
+            window.__piSDKLoaded === true
+        );
+
+        logDebug("Environment: " + (isPiBrowser ? "Pi Browser ✅" : "External Browser ❌"));
+        if (!isPiBrowser) {
+            logDebug("[WARN] Pi payment TIDAK akan tersedia. Jika ini Pi Browser, laporkan UA di atas.");
+        }
     } catch (e) {
         logDebug("Detect env error: " + e.message);
     }
@@ -5351,12 +5387,32 @@ async function initPiSDKRobust() {
 
     piInitPromise = new Promise(async (resolve) => {
 
-        // ── FAST PATH: kalau bukan Pi Browser, langsung skip ──
-        // Tidak perlu retry 5x × 2-10 detik = buang 34 detik percuma
-        if (!window.Pi && navigator.userAgent.indexOf('PiBrowser') === -1) {
-            logDebug('[AUTH-v3] Bukan Pi Browser — skip Pi SDK init');
-            resolve(false);
-            return;
+        // ── FAST PATH: skip hanya jika jelas-jelas bukan Pi Browser ──
+        // JANGAN gunakan UA saja — Pi Browser baru berbasis Chromium mungkin tidak kirim "PiBrowser" di UA
+        // window.Pi bisa di-inject SETELAH halaman load, jadi cek dulu beberapa detik
+        const ua = navigator.userAgent || '';
+        const uaIsPi = ua.includes('PiBrowser') || ua.includes('MinepiApp') ||
+                       ua.includes('pi-browser') || ua.toLowerCase().includes('pibrowser');
+        const isLocalhost = ['localhost','127.0.0.1'].includes(location.hostname);
+
+        // Jika UA tidak cocok DAN bukan localhost, polling window.Pi sampai 4 detik sebelum menyerah
+        if (!uaIsPi && !window.Pi) {
+            logDebug('[AUTH-v3] UA tidak match Pi Browser — polling window.Pi selama 4 detik...');
+            let waited = 0;
+            while (waited < 4000) {
+                await delay(500);
+                waited += 500;
+                if (window.Pi) {
+                    logDebug('[AUTH-v3] window.Pi ditemukan setelah ' + waited + 'ms ✅');
+                    isPiBrowser = true;
+                    break;
+                }
+            }
+            if (!window.Pi) {
+                logDebug('[AUTH-v3] window.Pi tidak tersedia setelah 4 detik — bukan Pi Browser');
+                resolve(false);
+                return;
+            }
         }
 
         while (piInitAttempts < MAX_PI_INIT_ATTEMPTS) {
@@ -8558,9 +8614,25 @@ window.processPayment = async function() {
     if (btn?.disabled) return;
 
     // Guard: pastikan hanya berjalan di Pi Browser
+    // Jika belum ready, coba re-detect dulu (Pi Browser baru inject window.Pi lambat)
+    if (!isPiBrowser || !isPiSDKReady) {
+        logDebug('[Payment] Belum siap — coba re-detect Pi env... isPiBrowser=' + isPiBrowser + ' isPiSDKReady=' + isPiSDKReady);
+        // Re-detect: cek window.Pi langsung
+        if (typeof window.Pi !== 'undefined' && typeof window.Pi.init === 'function') {
+            logDebug('[Payment] window.Pi tersedia! Coba re-init SDK...');
+            isPiBrowser = true;
+            try {
+                await window.Pi.init({ version: "2.0", sandbox: USE_SANDBOX });
+                isPiSDKReady = true;
+                logDebug('[Payment] Re-init SDK berhasil ✅');
+            } catch(e) {
+                logDebug('[Payment] Re-init SDK gagal: ' + e.message);
+            }
+        }
+    }
     if (!isPiBrowser || !isPiSDKReady) {
         showToast('Pembayaran Pi hanya tersedia di Pi Browser. Gunakan aplikasi Pi Browser untuk bertransaksi.', 'warning');
-        logDebug('[Payment] Ditolak: bukan Pi Browser atau SDK belum siap. isPiBrowser=' + isPiBrowser + ' isPiSDKReady=' + isPiSDKReady);
+        logDebug('[Payment] Ditolak setelah re-check: isPiBrowser=' + isPiBrowser + ' isPiSDKReady=' + isPiSDKReady);
         // Tampilkan info di modal jika ada
         const paymentNote = document.getElementById('paymentNotPiBrowserNote');
         if (paymentNote) paymentNote.style.display = 'block';
