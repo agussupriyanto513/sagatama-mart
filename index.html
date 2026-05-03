@@ -5763,11 +5763,24 @@ window.authenticatePi = async function() {
         const scopes = ['username', 'payments'];
         
         const onIncompletePaymentFound = async (payment) => {
-            logDebug("[AUTH-v4] Incomplete payment: " + payment?.identifier);
-            try { 
-                await handleIncompletePayment(payment); 
+            logDebug("[AUTH-v4] Incomplete payment found: " + payment?.identifier);
+            if (!payment?.identifier) return;
+            try {
+                if (payment?.transaction?.txid) {
+                    logDebug("[AUTH-v4] Incomplete HAS txid — completing");
+                    await completePaymentOnServer(payment.identifier, payment.transaction.txid, payment.metadata?.items || []);
+                    showToast("Pesanan sebelumnya berhasil dipulihkan!", "success");
+                } else {
+                    logDebug("[AUTH-v4] Incomplete NO txid — cancelling");
+                    await cancelPaymentOnServer(payment.identifier);
+                }
+                pendingPayment = null;
+                paymentInProgress = false;
+                logDebug("[AUTH-v4] Incomplete payment resolved OK");
             } catch (err) {
-                logDebug("[AUTH-v4] Handle incomplete error: " + err.message);
+                logDebug("[AUTH-v4] Handle incomplete error (ignored): " + err.message);
+                pendingPayment = null;
+                paymentInProgress = false;
             }
         };
         
@@ -6520,6 +6533,10 @@ async function createPiPayment() {
                 resetPaymentState();
             }
         };
+
+        logDebug("[PAY] Calling Pi.createPayment...");
+        // Beri jeda 300ms agar Pi SDK selesai bersihkan state incomplete
+        await new Promise(r => setTimeout(r, 300));
 
         window.Pi.createPayment({
             amount: parseFloat(totalPi.toFixed(8)),
