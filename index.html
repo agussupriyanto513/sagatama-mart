@@ -3386,7 +3386,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit, enableNetwork, disableNetwork } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 // ============================================
 // ERROR HANDLER GLOBAL
@@ -3755,6 +3755,51 @@ async function loadSGTData() {
 // ============================================
 // SGT LOAD FIXED - Multi-Strategy Fallback (v3)
 // ============================================
+
+// ============================================================
+// FIRESTORE ONLINE HELPER — auto-reconnect sebelum fetch
+// Jika Firestore offline, coba enableNetwork dulu lalu retry
+// ============================================================
+async function firestoreGet(docRef, retries = 2) {
+    for (let i = 0; i <= retries; i++) {
+        try {
+            return await getDoc(docRef);
+        } catch(e) {
+            const isOffline = e.message && (
+                e.message.includes('offline') ||
+                e.message.includes('Failed to get document') ||
+                e.code === 'unavailable'
+            );
+            if (isOffline && i < retries && db) {
+                logDebug('[Firestore] Offline terdeteksi, reconnect attempt ' + (i+1));
+                try { await enableNetwork(db); await new Promise(r => setTimeout(r, 1000)); } catch(re) {}
+            } else {
+                throw e;
+            }
+        }
+    }
+}
+
+async function firestoreGetDocs(queryRef, retries = 2) {
+    for (let i = 0; i <= retries; i++) {
+        try {
+            return await getDocs(queryRef);
+        } catch(e) {
+            const isOffline = e.message && (
+                e.message.includes('offline') ||
+                e.message.includes('Failed to get document') ||
+                e.code === 'unavailable'
+            );
+            if (isOffline && i < retries && db) {
+                logDebug('[Firestore] Offline getDocs, reconnect attempt ' + (i+1));
+                try { await enableNetwork(db); await new Promise(r => setTimeout(r, 1000)); } catch(re) {}
+            } else {
+                throw e;
+            }
+        }
+    }
+}
+
 async function loadSGTDataFixed() {
     if (!currentUser) {
         logDebug('[SGT-v3] No currentUser');
@@ -4502,7 +4547,7 @@ window.autoBurnOnSpend = async function autoBurnOnSpend(amount) {
 window.loadSupplyStats = async function loadSupplyStats() {
     if (!db) return;
     try {
-        const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        const snap = await firestoreGet(doc(db, 'sgt_config', 'supply'));
         if (snap.exists()) {
             const d = snap.data();
             sgtCirculatingSupply = d.circulating || 0;
@@ -4555,11 +4600,10 @@ window.loadSupplyStats = async function loadSupplyStats() {
 // Load mint rate from Firestore on startup
 window.loadMintRateFromFirestore = async function loadMintRateFromFirestore() {
     try {
-        const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        const snap = await firestoreGet(doc(db, 'sgt_config', 'supply'));
         if (snap.exists() && snap.data().mintRate) {
             sgtRatePerPi = snap.data().mintRate;
         } else {
-            // Dokumen belum ada atau mintRate belum diset — seed default 500
             sgtRatePerPi = 500;
             await setDoc(doc(db, 'sgt_config', 'supply'), { mintRate: 500 }, { merge: true });
             logDebug('[loadMintRate] Seeding default rate 500 ke Firestore');
@@ -5306,15 +5350,39 @@ async function initFirebase() {
             if (!auth) auth = getAuth(app);
             if (!db) {
                 try {
-                    // Coba dengan long polling dulu (lebih stabil di beberapa jaringan)
-                    db = initializeFirestore(app, {
-                        experimentalForceLongPolling: true,
-                        useFetchStreams: false
-                    });
+                    // Gunakan getFirestore default — paling kompatibel untuk mobile & Pi Browser
+                    // experimentalForceLongPolling dihapus karena sering sebabkan "client offline" di mobile
+                    db = getFirestore(app);
+                    logDebug('[Firebase] Firestore init: default mode');
                 } catch (fsInitErr) {
-                    logDebug('[Firebase] Firestore longPolling gagal, fallback ke default: ' + fsInitErr.message);
-                    // Fallback: getFirestore default tanpa custom settings
-                    try { db = getFirestore(app); } catch(e2) { db = null; }
+                    logDebug('[Firebase] Firestore default gagal, coba longPolling: ' + fsInitErr.message);
+                    try {
+                        db = initializeFirestore(app, {
+                            experimentalForceLongPolling: true,
+                            useFetchStreams: false
+                        });
+                        logDebug('[Firebase] Firestore init: longPolling fallback');
+                    } catch(e2) {
+                        db = null;
+                        logDebug('[Firebase] Firestore gagal total: ' + e2.message);
+                    }
+                }
+
+                // Pasang auto-reconnect saat koneksi kembali online
+                if (db) {
+                    window.addEventListener('online', async () => {
+                        logDebug('[Firebase] Koneksi kembali — reconnect Firestore...');
+                        try {
+                            await enableNetwork(db);
+                            logDebug('[Firebase] Firestore reconnect OK');
+                            showToast('Koneksi pulih — memuat ulang data...', 'success');
+                            setTimeout(() => loadDataFromFirebase(), 500);
+                        } catch(re) { logDebug('[Firebase] Reconnect error: ' + re.message); }
+                    });
+                    window.addEventListener('offline', () => {
+                        logDebug('[Firebase] Koneksi terputus — Firestore offline mode');
+                        showToast('Koneksi internet terputus. Data dari cache.', 'warning');
+                    });
                 }
             }
             logDebug(`Firebase initialized OK (attempt ${attempt})`);
@@ -7408,7 +7476,12 @@ async function renderSGTSosialHistory() {
             </div>`;
         }).join('');
     } catch(e) {
-        logDebug('renderSGTSosialHistory error: ' + e.message);
+        if (e.message && e.message.includes('offline') && db) {
+            logDebug('[Sosial] Offline — coba reconnect lalu skip render');
+            enableNetwork(db).catch(() => {});
+        } else {
+            logDebug('renderSGTSosialHistory error: ' + e.message);
+        }
     }
 }
 
@@ -7818,13 +7891,34 @@ function updateAdminStats() {
             statusEl.innerHTML = '<span style="color:#0F6E56;">● Live</span> ' + src + ' &nbsp;|&nbsp; Produk: ' + products.length + ' &nbsp;|&nbsp; Pesanan: ' + orders.length +
                 ' &nbsp;<button onclick="window.manualAdminRefresh()" style="background:#E1F5EE;border:none;color:#0F6E56;font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;font-weight:600;">↻ Refresh</button>';
         } else {
-            statusEl.innerHTML = '<span style="color:#A32D2D;">● Offline</span> — Data dari cache lokal &nbsp;<button onclick="initFirebase().then(loadDataFromFirebase)" style="background:#FCEBEB;border:none;color:#A32D2D;font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;font-weight:600;">Hubungkan ulang</button>';
+            statusEl.innerHTML = '<span style="color:#A32D2D;">● Offline</span> — Data dari cache lokal &nbsp;<button onclick="window.reconnectFirestore()" style="background:#FCEBEB;border:none;color:#A32D2D;font-size:10px;padding:2px 8px;border-radius:10px;cursor:pointer;font-weight:600;">↻ Hubungkan ulang</button>';
         }
     }
 
     // Update SGT stats dari Firestore secara async
     updateSGTAdminStats();
 }
+
+
+window.reconnectFirestore = async function() {
+    showToast('Mencoba menghubungkan ulang...', 'info');
+    try {
+        if (db) {
+            await enableNetwork(db);
+            logDebug('[Reconnect] enableNetwork OK');
+        } else {
+            await initFirebase();
+        }
+        await new Promise(r => setTimeout(r, 800));
+        loadDataFromFirebase();
+        loadSupplyStats().catch(() => {});
+        showToast('Berhasil terhubung kembali!', 'success');
+        updateAdminStats();
+    } catch(e) {
+        logDebug('[Reconnect] Gagal: ' + e.message);
+        showToast('Masih offline. Cek koneksi internet.', 'error');
+    }
+};
 
 window.manualAdminRefresh = function() {
     logDebug('[Admin] Manual refresh dipanggil');
