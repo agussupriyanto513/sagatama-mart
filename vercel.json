@@ -1,36 +1,28 @@
 {
   "version": 2,
-  "buildCommand": null,
-  "outputDirectory": "public",
-  "functions": {
-    "api/payments/approve.js": {
-      "maxDuration": 30
-    },
-    "api/payments/complete.js": {
-      "maxDuration": 30
-    },
-    "api/payments/cancel.js": {
-      "maxDuration": 30
-    }
-  },
-  "routes": [
+  "builds": [
     {
-      "src": "/api/payments/(.*)",
-      "dest": "/api/payments/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/public/$1"
+      "src": "api/payments/*.js",
+      "use": "@vercel/node",
+      "config": { "maxLambdaSize": "15mb" }
     }
   ],
-  "headers": [
+  "routes": [
     {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
-      ]
+      "src": "/api/payments/approve",
+      "dest": "/api/payments/approve.js"
+    },
+    {
+      "src": "/api/payments/complete",
+      "dest": "/api/payments/complete.js"
+    },
+    {
+      "src": "/api/payments/cancel",
+      "dest": "/api/payments/cancel.js"
+    },
+    {
+      "src": "/",
+      "dest": "/login.html"
     }
   ]
 }
