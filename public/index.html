@@ -3522,6 +3522,33 @@ let orders = [];
 let myOrders = [];
 let cart = JSON.parse(localStorage.getItem('sagatama_cart') || '[]');
 let currentUser = null;
+
+// ============================================
+// FIRESTORE CACHE LAYER — hemat reads
+// ============================================
+const _fsCache = {};
+const _CACHE_TTL = {
+    supply:   5 * 60 * 1000,   // sgt_config/supply: 5 menit
+    fee_pool: 5 * 60 * 1000,   // sgt_config/fee_pool: 5 menit
+    products: 10 * 60 * 1000,  // products collection: 10 menit
+};
+
+async function _cachedGetDoc(cacheKey, docRef, ttlMs) {
+    const now = Date.now();
+    if (_fsCache[cacheKey] && (now - _fsCache[cacheKey].ts) < ttlMs) {
+        logDebug('[Cache] HIT: ' + cacheKey);
+        return _fsCache[cacheKey].snap;
+    }
+    logDebug('[Cache] MISS: ' + cacheKey + ' — fetching Firestore');
+    const snap = await getDoc(docRef);
+    _fsCache[cacheKey] = { snap, ts: now };
+    return snap;
+}
+
+function _invalidateCache(cacheKey) {
+    delete _fsCache[cacheKey];
+    logDebug('[Cache] INVALIDATED: ' + cacheKey);
+}
 // Proxy agar window.currentUser selalu sinkron dengan currentUser lokal
 Object.defineProperty(window, 'currentUser', {
     get: function() { return currentUser; },
@@ -3729,7 +3756,7 @@ async function loadSGTDataFixed() {
     
     // Load mint rate dari Firestore dulu agar rate selalu sinkron dengan admin
     try {
-        const rateSnap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        const rateSnap = await _cachedGetDoc('supply', doc(db, 'sgt_config', 'supply'), _CACHE_TTL.supply);
         if (rateSnap.exists() && rateSnap.data().mintRate) {
             sgtRatePerPi = rateSnap.data().mintRate;
             localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
@@ -3930,7 +3957,7 @@ function _renderSGTLocal(container) {
 window.mintSGT = async function mintSGT(amount, recipientUserId) {
     if (!db) return false;
     try {
-        const configSnap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        const configSnap = await _cachedGetDoc('supply', doc(db, 'sgt_config', 'supply'), _CACHE_TTL.supply);
         const supply = configSnap.exists() ? (configSnap.data().circulating || 0) : 0;
         if (supply + amount > SGT_HARD_CAP) {
             const remaining = Math.max(0, SGT_HARD_CAP - supply);
@@ -3942,6 +3969,7 @@ window.mintSGT = async function mintSGT(amount, recipientUserId) {
             hardCap: SGT_HARD_CAP,
             updatedAt: serverTimestamp()
         }, { merge: true });
+        _invalidateCache('supply'); // data berubah, paksa fetch ulang
         sgtCirculatingSupply = supply + amount;
         return amount;
     } catch(e) { logDebug('mintSGT error: ' + e.message); return false; }
@@ -3953,7 +3981,7 @@ window.mintSGT = async function mintSGT(amount, recipientUserId) {
 window.burnSGTFromSupply = async function burnSGTFromSupply(amount, reason) {
     if (!db || amount <= 0) return;
     try {
-        const configSnap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        const configSnap = await _cachedGetDoc('supply', doc(db, 'sgt_config', 'supply'), _CACHE_TTL.supply);
         const supply = configSnap.exists() ? (configSnap.data().circulating || 0) : 0;
         const burned  = configSnap.exists() ? (configSnap.data().totalBurned  || 0) : 0;
         await setDoc(doc(db, 'sgt_config', 'supply'), {
@@ -3962,6 +3990,7 @@ window.burnSGTFromSupply = async function burnSGTFromSupply(amount, reason) {
             lastBurnAt: serverTimestamp(),
             lastBurnReason: reason || 'auto'
         }, { merge: true });
+        _invalidateCache('supply'); // data berubah, paksa fetch ulang
         sgtCirculatingSupply = Math.max(0, supply - amount);
         sgtTotalBurned = burned + amount;
         logDebug('Burned ' + amount + ' SGT. Reason: ' + reason);
@@ -4379,7 +4408,7 @@ window.autoBurnOnSpend = async function autoBurnOnSpend(amount) {
 window.loadSupplyStats = async function loadSupplyStats() {
     if (!db) return;
     try {
-        const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        const snap = await _cachedGetDoc('supply', doc(db, 'sgt_config', 'supply'), _CACHE_TTL.supply);
         if (snap.exists()) {
             const d = snap.data();
             sgtCirculatingSupply = d.circulating || 0;
@@ -4396,7 +4425,7 @@ window.loadSupplyStats = async function loadSupplyStats() {
             });
             logDebug('Initialized sgt_config/supply document');
         }
-        const feeSnap = await getDoc(doc(db, 'sgt_config', 'fee_pool'));
+        const feeSnap = await _cachedGetDoc('fee_pool', doc(db, 'sgt_config', 'fee_pool'), _CACHE_TTL.fee_pool);
         if (feeSnap.exists()) {
             sgtFeePool = feeSnap.data().total || 0;
         } else {
@@ -4432,7 +4461,7 @@ window.loadSupplyStats = async function loadSupplyStats() {
 // Load mint rate from Firestore on startup
 window.loadMintRateFromFirestore = async function loadMintRateFromFirestore() {
     try {
-        const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        const snap = await _cachedGetDoc('supply', doc(db, 'sgt_config', 'supply'), _CACHE_TTL.supply);
         if (snap.exists() && snap.data().mintRate) {
             sgtRatePerPi = snap.data().mintRate;
             const el = document.getElementById('currentMintRateDisplay');
@@ -5339,17 +5368,30 @@ function loadDataFromFirebase() {
     // Gunakan fungsi agar selalu cek real-time, bukan di-capture sekali saat awal
     const checkAdmin = () => currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
 
+    // Products: gunakan getDocs + cache 10 menit (hemat reads vs onSnapshot)
     try {
-        const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
-        unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
+        const _productsCache = localStorage.getItem('sagatama_products_cache');
+        const _productsCacheTime = parseInt(localStorage.getItem('sagatama_products_cache_time') || '0');
+        const _cacheAge = Date.now() - _productsCacheTime;
+
+        if (_productsCache && _cacheAge < _CACHE_TTL.products) {
+            // Cache masih valid, skip fetch Firestore
+            logDebug('[Cache] Products HIT (age: ' + Math.round(_cacheAge/1000) + 's)');
+        } else {
+            // Cache expired atau belum ada, fetch Firestore
+            logDebug('[Cache] Products MISS — fetching Firestore');
+            const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
+            const snapshot = await getDocs(productsQuery);
             products = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
-            renderProducts();
-            renderFeaturedProducts();
-            renderHomeCategories();
-            updateAdminStats();
-            if (checkAdmin()) renderAdminProducts();
-        }, (err) => logDebug("Products error: " + err.message + " | code: " + err.code));
+            localStorage.setItem('sagatama_products_cache_time', Date.now().toString());
+            logDebug('[Cache] Products cached: ' + products.length + ' items');
+        }
+        renderProducts();
+        renderFeaturedProducts();
+        renderHomeCategories();
+        updateAdminStats();
+        if (checkAdmin()) renderAdminProducts();
     } catch (e) {
         logDebug("Products query error: " + e.message);
     }
@@ -7618,7 +7660,7 @@ async function updateAnalyticsSupplyStats() {
         
         if (!db) return;
         
-        const supplySnap = await getDoc(doc(db, 'sgt_config', 'supply'));
+        const supplySnap = await _cachedGetDoc('supply', doc(db, 'sgt_config', 'supply'), _CACHE_TTL.supply);
         if (supplySnap.exists()) {
             const data = supplySnap.data();
             const circulating = data.circulating || 0;
@@ -8253,6 +8295,7 @@ window.saveProduct = async function() {
             if (localIdx !== -1) {
                 products[localIdx] = { ...products[localIdx], ...data, updatedAt: { seconds: Date.now()/1000 } };
                 localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+                localStorage.setItem('sagatama_products_cache_time', Date.now().toString());
                 renderAdminProducts(); // Render langsung tanpa tunggu Firestore
             }
             await updateDoc(doc(db, 'products', editingProductId), data);
@@ -8263,6 +8306,7 @@ window.saveProduct = async function() {
             const newProduct = { id: tempId, ...data, createdAt: { seconds: Date.now()/1000 } };
             products.unshift(newProduct);
             localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+            localStorage.setItem('sagatama_products_cache_time', Date.now().toString());
             renderAdminProducts();
             closeModal('productFormModal');
             editingProductId = null;
@@ -8274,6 +8318,7 @@ window.saveProduct = async function() {
             const tIdx = products.findIndex(p => p.id === tempId);
             if (tIdx !== -1) products[tIdx].id = docRef.id;
             localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+            localStorage.setItem('sagatama_products_cache_time', Date.now().toString());
             showToast('Produk berhasil ditambahkan! ✅', 'success');
             return;
         }
