@@ -6433,7 +6433,6 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     }
 
     // Langkah 3: Award SGT (tiered, hard-cap-safe, fee-pool-funded)
-    const orderId = pendingPayment?.metadata?.orderId || paymentId.substring(0, 8);
     const actualSGT = await awardSGT(finalAmount, `Reward pesanan #${orderId}`);
 
     // Langkah 4: Bersihkan cart
