@@ -3018,6 +3018,33 @@
                 </div>
             </div>
 
+            <!-- Alamat Pengiriman -->
+            <div id="paymentAddressBox" style="border-radius:12px; margin-bottom:16px; border:2px solid #E5E7EB; overflow:hidden;">
+                <div style="background:#F3F4F6; padding:10px 14px; display:flex; align-items:center; justify-content:space-between;">
+                    <p style="font-size:12px; font-weight:700; color:#374151;">
+                        <i class="fas fa-map-marker-alt" style="color:#8B5CF6; margin-right:6px;"></i>ALAMAT PENGIRIMAN
+                    </p>
+                    <button onclick="closeModal('paymentModal'); switchView('profile');" style="font-size:11px; color:#8B5CF6; font-weight:700; background:none; border:none; cursor:pointer; padding:0;">
+                        Ubah <i class="fas fa-pencil-alt" style="margin-left:3px;"></i>
+                    </button>
+                </div>
+                <!-- Jika alamat sudah ada -->
+                <div id="paymentAddressFilled" style="padding:12px 14px; display:none;">
+                    <p style="font-size:13px; font-weight:700; color:#1F2937;" id="payAddrName"></p>
+                    <p style="font-size:12px; color:#6B7280; margin-top:2px;" id="payAddrPhone"></p>
+                    <p style="font-size:12px; color:#6B7280; margin-top:4px; line-height:1.5;" id="payAddrFull"></p>
+                </div>
+                <!-- Jika alamat belum diisi -->
+                <div id="paymentAddressEmpty" style="padding:14px; text-align:center; display:none;">
+                    <i class="fas fa-exclamation-circle" style="color:#EF4444; font-size:24px; margin-bottom:6px;"></i>
+                    <p style="font-size:13px; font-weight:700; color:#EF4444; margin-bottom:6px;">Alamat pengiriman belum diisi!</p>
+                    <p style="font-size:12px; color:#6B7280; margin-bottom:10px;">Lengkapi alamat di profil sebelum melanjutkan pembayaran.</p>
+                    <button onclick="closeModal('paymentModal'); switchView('profile');" style="background:linear-gradient(135deg,#8B5CF6,#7C3AED); color:white; border:none; padding:10px 20px; border-radius:10px; font-weight:700; cursor:pointer; font-size:13px; font-family:inherit;">
+                        <i class="fas fa-user" style="margin-right:6px;"></i>Isi Alamat Sekarang
+                    </button>
+                </div>
+            </div>
+
             <div style="background:#F9FAFB; padding:16px; border-radius:12px; margin-bottom:16px;">
                 <p style="font-size:12px; font-weight:700; color:#374151; margin-bottom:12px;">Detail Pesanan:</p>
                 <div id="paymentItems" style="max-height:150px; overflow-y:auto;"></div>
@@ -6293,15 +6320,67 @@ async function approvePaymentOnServer(paymentId) {
  * Order disimpan ke Firestore SEBELUM cart dibersihkan
  */
 async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
-    // Langkah 1: Konfirmasi ke server Pi
+    const finalItems  = cartSnapshot || pendingPayment?.items || [];
+    const orderId     = pendingPayment?.metadata?.orderId || ('ORD_' + Date.now());
+
+    // Langkah 1: Konfirmasi ke server + kurangi stok via backend
     const response = await fetch('/api/payments/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId, txid })
+        body: JSON.stringify({
+            paymentId,
+            txid,
+            orderId,            // ← wajib untuk atomic transaction di server
+            items: finalItems.map(i => ({
+                productId: i.id || i.productId,
+                quantity:  i.qty || i.quantity || 1,
+                name:      i.name,
+                pricePi:   i.pricePi
+            }))
+        })
     });
-    if (!response.ok) throw new Error("Gagal konfirmasi ke server");
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Gagal konfirmasi ke server');
+    }
     const result = await response.json();
     logDebug("Server Pi mengonfirmasi selesai");
+
+    // Langkah 1b: Kurangi stok di Firestore client-side (optimistic update)
+    // Backend sudah kurangi stok via runTransaction — ini hanya sync UI lokal
+    if (db && finalItems.length > 0) {
+        try {
+            await runTransaction(db, async (t) => {
+                // Baca semua produk dulu (batch read sebelum write)
+                const productRefs  = finalItems.map(i => doc(db, 'products', i.id || i.productId));
+                const productSnaps = await Promise.all(productRefs.map(ref => t.get(ref)));
+
+                productSnaps.forEach((snap, idx) => {
+                    if (!snap.exists()) return;
+                    const item        = finalItems[idx];
+                    const qty         = item.qty || item.quantity || 1;
+                    const currentStock = snap.data().stock || 0;
+                    const newStock    = Math.max(0, currentStock - qty);
+                    t.update(productRefs[idx], {
+                        stock: newStock,
+                        updatedAt: serverTimestamp()
+                    });
+                });
+            });
+            logDebug('[Stock] Stok berhasil dikurangi secara atomic');
+
+            // Update array products di memori agar UI langsung sinkron
+            finalItems.forEach(item => {
+                const pid = item.id || item.productId;
+                const qty = item.qty || item.quantity || 1;
+                const p   = products.find(x => x.id === pid);
+                if (p) p.stock = Math.max(0, (p.stock || 0) - qty);
+            });
+            renderProducts();
+        } catch (stockErr) {
+            logDebug('[Stock] Gagal kurangi stok (non-kritis, server sudah handle): ' + stockErr.message);
+        }
+    }
 
     const finalAmount = pendingPayment?.amount || 0;
     const finalItems = cartSnapshot || pendingPayment?.items || [];
@@ -6325,7 +6404,7 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
         updatedAt: serverTimestamp(),
         metadata: pendingPayment?.metadata || {},
         sgtEarned,
-        shippingAddress: currentUser?.address || null,
+        shippingAddress: currentUser?.address || null,  // sudah divalidasi wajib di processPayment
         orderId: pendingPayment?.metadata?.orderId || ('ORD_' + Date.now())
     };
 
@@ -7121,6 +7200,15 @@ function renderOrders() {
                 <p style="font-size:12px;color:#9CA3AF;">${formatDate(o.createdAt)}</p>
                 <p style="font-weight:800;color:#8B5CF6;font-size:16px;">π ${o.amount?.toFixed(8) || '0.0000'}</p>
             </div>
+            ${o.txid ? `<div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
+                <i class="fas fa-check-circle" style="color:#059669;font-size:11px;"></i>
+                <p style="font-size:11px;color:#059669;font-weight:600;">Terverifikasi blockchain</p>
+                <a href="https://blockexplorer.minepi.com/tx/${o.txid}" target="_blank"
+                   onclick="event.stopPropagation()"
+                   style="margin-left:auto;font-size:10px;color:#059669;font-weight:700;background:#ECFDF5;padding:3px 8px;border-radius:10px;text-decoration:none;">
+                   TxID <i class="fas fa-external-link-alt" style="font-size:8px;"></i>
+                </a>
+            </div>` : ''}
             ${typeof getEscrowBadge === 'function' ? getEscrowBadge(o) : ''}
         </div>`).join('');
 }
@@ -7780,9 +7868,9 @@ window.openPayment = function() {
     const sgtReward = calculateSGTReward(totalPi);
 
     const amountEl = document.getElementById('paymentAmount');
-    const itemsEl = document.getElementById('paymentItems');
-    const sgtEl = document.getElementById('paymentSGTReward');
-    const btn = document.getElementById('btnProcessPayment');
+    const itemsEl  = document.getElementById('paymentItems');
+    const sgtEl    = document.getElementById('paymentSGTReward');
+    const btn      = document.getElementById('btnProcessPayment');
 
     if (amountEl) amountEl.innerText = 'π ' + totalPi.toFixed(8);
     if (sgtEl) sgtEl.innerText = '+' + sgtReward + ' SGT';
@@ -7798,7 +7886,41 @@ window.openPayment = function() {
             </div>`;
         }).join('');
     }
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi'; }
+
+    // ── Render blok alamat pengiriman ──────────────────────────────
+    const addr        = currentUser.address || null;
+    const hasAddress  = addr && addr.receiverName && addr.phoneNumber && addr.fullAddress && addr.city;
+    const filledBox   = document.getElementById('paymentAddressFilled');
+    const emptyBox    = document.getElementById('paymentAddressEmpty');
+    const addrBorder  = document.getElementById('paymentAddressBox');
+
+    if (hasAddress) {
+        if (filledBox) {
+            document.getElementById('payAddrName').textContent  = addr.receiverName;
+            document.getElementById('payAddrPhone').textContent = addr.phoneNumber;
+            document.getElementById('payAddrFull').textContent  =
+                addr.fullAddress + ', ' + addr.city + (addr.postalCode ? ' ' + addr.postalCode : '');
+            filledBox.style.display = 'block';
+        }
+        if (emptyBox)   emptyBox.style.display   = 'none';
+        if (addrBorder) addrBorder.style.borderColor = '#D1D5DB';
+        // Tombol bayar aktif
+        if (btn) {
+            btn.disabled  = false;
+            btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi';
+        }
+    } else {
+        if (filledBox)  filledBox.style.display  = 'none';
+        if (emptyBox)   emptyBox.style.display   = 'block';
+        if (addrBorder) addrBorder.style.borderColor = '#EF4444';
+        // Nonaktifkan tombol bayar sampai alamat diisi
+        if (btn) {
+            btn.disabled  = true;
+            btn.innerHTML = '<i class="fas fa-map-marker-alt" style="margin-right:8px;"></i>Isi Alamat Dulu';
+        }
+    }
+    // ──────────────────────────────────────────────────────────────
+
     // Tampilkan/sembunyikan note Pi Browser berdasarkan environment
     const pbNote = document.getElementById('paymentNotPiBrowserNote');
     if (pbNote) pbNote.style.display = (!isPiBrowser || !isPiSDKReady) ? 'block' : 'none';
@@ -7808,6 +7930,15 @@ window.openPayment = function() {
 window.processPayment = async function() {
     const btn = document.getElementById('btnProcessPayment');
     if (btn?.disabled) return;
+
+    // Guard: alamat pengiriman wajib diisi sebelum bayar
+    const addr = currentUser?.address;
+    if (!addr || !addr.receiverName || !addr.phoneNumber || !addr.fullAddress || !addr.city) {
+        showToast('Lengkapi alamat pengiriman di profil terlebih dahulu!', 'warning');
+        closeModal('paymentModal');
+        switchView('profile');
+        return;
+    }
 
     // Guard: pastikan hanya berjalan di Pi Browser
     if (!isPiBrowser || !isPiSDKReady) {
@@ -7918,47 +8049,106 @@ window.showProductDetail = function(id) {
 window.showOrderDetail = function(id) {
     const o = orders.find(x => x.id === id);
     if (!o) return;
-    const modal = document.getElementById('orderDetailModal');
+    const modal   = document.getElementById('orderDetailModal');
     const content = document.getElementById('orderDetailContent');
     if (!modal || !content) return;
     const isAdmin = currentUser?.role === 'admin';
-    const sa = o.shippingAddress;
+    const sa      = o.shippingAddress;
+
+    // ── Status timeline ────────────────────────────────────────────
+    const allStatuses = ['pending','paid','processing','shipped','completed'];
+    const currentIdx  = allStatuses.indexOf(o.status);
+    const statusLabels = { pending:'Menunggu', paid:'Dibayar', processing:'Diproses', shipped:'Dikirim', completed:'Selesai' };
+    const timelineHtml = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding:0 4px;">
+            ${allStatuses.map((s, i) => {
+                const done    = i <= currentIdx;
+                const active  = i === currentIdx;
+                const color   = done ? '#8B5CF6' : '#D1D5DB';
+                const bgColor = active ? '#8B5CF6' : done ? '#EDE9FE' : '#F3F4F6';
+                const txtColor = active ? 'white' : done ? '#8B5CF6' : '#9CA3AF';
+                return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;position:relative;">
+                    ${i > 0 ? `<div style="position:absolute;top:12px;left:-50%;width:100%;height:2px;background:${i <= currentIdx ? '#8B5CF6' : '#E5E7EB'};z-index:0;"></div>` : ''}
+                    <div style="width:24px;height:24px;border-radius:50%;background:${bgColor};border:2px solid ${color};display:flex;align-items:center;justify-content:center;z-index:1;font-size:10px;color:${txtColor};font-weight:800;">
+                        ${done && !active ? '<i class="fas fa-check" style="font-size:9px;"></i>' : i+1}
+                    </div>
+                    <p style="font-size:9px;color:${done ? '#8B5CF6' : '#9CA3AF'};font-weight:${active ? '800' : '600'};margin-top:4px;text-align:center;">${statusLabels[s]}</p>
+                </div>`;
+            }).join('')}
+        </div>`;
+
+    // ── TxID + Blockexplorer ────────────────────────────────────────
+    const txidHtml = o.txid ? `
+        <div style="background:#ECFDF5;border-radius:12px;padding:16px;margin-bottom:16px;border:1.5px solid #6EE7B7;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <p style="font-size:11px;color:#059669;font-weight:700;"><i class="fas fa-check-circle" style="margin-right:6px;"></i>Transaksi Terverifikasi di Blockchain</p>
+                <a href="https://blockexplorer.minepi.com/tx/${o.txid}"
+                   target="_blank"
+                   style="font-size:11px;color:#059669;font-weight:700;text-decoration:none;background:#D1FAE5;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:4px;">
+                   Lihat <i class="fas fa-external-link-alt" style="font-size:9px;"></i>
+                </a>
+            </div>
+            <p style="font-size:10px;color:#065F46;font-family:monospace;word-break:break-all;background:#D1FAE5;padding:10px;border-radius:8px;line-height:1.6;">${o.txid}</p>
+            <button onclick="navigator.clipboard.writeText('${o.txid}').then(()=>showToast('TxID disalin!','success'))"
+                style="margin-top:8px;width:100%;background:none;border:1px solid #6EE7B7;color:#059669;padding:8px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
+                <i class="fas fa-copy" style="margin-right:6px;"></i>Salin TxID
+            </button>
+        </div>` : `
+        <div style="background:#FEF9EE;border-radius:12px;padding:12px 16px;margin-bottom:16px;border:1.5px solid #FDE68A;">
+            <p style="font-size:12px;color:#92400E;font-weight:600;">
+                <i class="fas fa-clock" style="margin-right:6px;"></i>TxID belum tersedia — menunggu konfirmasi blockchain.
+            </p>
+        </div>`;
+
     content.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
             <h3 style="font-size:20px;font-weight:800;color:#1F2937;">Detail Pesanan</h3>
             <button onclick="closeModal('orderDetailModal')" style="background:#F3F4F6;border:none;width:36px;height:36px;border-radius:50%;cursor:pointer;"><i class="fas fa-times"></i></button>
         </div>
-        <div style="text-align:center;margin-bottom:20px;">
-            <span class="badge badge-${o.status}">${getStatusLabel(o.status)}</span>
-            <p style="font-size:12px;color:#9CA3AF;margin-top:8px;">#${o.orderId || o.id.substring(0,8).toUpperCase()}</p>
-        </div>
-        ${sa ? `<div style="background:#F0FDF4;border-radius:12px;padding:16px;margin-bottom:16px;">
-            <p style="font-size:12px;font-weight:700;color:#065F46;margin-bottom:8px;"><i class="fas fa-truck" style="margin-right:6px;"></i>Alamat Pengiriman</p>
-            <p style="font-size:13px;color:#374151;line-height:1.6;"><strong>${sa.receiverName}</strong><br>${sa.phoneNumber}<br>${sa.fullAddress}<br>${sa.city}${sa.postalCode ? ', '+sa.postalCode : ''}</p>
-        </div>` : ''}
-        <div style="background:#F9FAFB;padding:16px;border-radius:12px;margin-bottom:20px;">
+        <p style="font-size:12px;color:#9CA3AF;margin-bottom:16px;text-align:center;">#${o.orderId || o.id.substring(0,8).toUpperCase()}</p>
+
+        ${timelineHtml}
+
+        ${txidHtml}
+
+        ${sa ? `<div style="background:#F0FDF4;border-radius:12px;padding:16px;margin-bottom:16px;border:1px solid #D1FAE5;">
+            <p style="font-size:12px;font-weight:700;color:#065F46;margin-bottom:8px;"><i class="fas fa-map-marker-alt" style="margin-right:6px;"></i>Alamat Pengiriman</p>
+            <p style="font-size:13px;color:#374151;line-height:1.8;">
+                <strong>${sa.receiverName}</strong><br>
+                <i class="fas fa-phone" style="font-size:10px;color:#6B7280;margin-right:4px;"></i>${sa.phoneNumber}<br>
+                ${sa.fullAddress}<br>
+                ${sa.city}${sa.postalCode ? ', ' + sa.postalCode : ''}
+            </p>
+        </div>` : `<div style="background:#FEF9EE;border-radius:12px;padding:12px 16px;margin-bottom:16px;">
+            <p style="font-size:12px;color:#92400E;"><i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>Alamat pengiriman tidak tersedia.</p>
+        </div>`}
+
+        <div style="background:#F9FAFB;padding:16px;border-radius:12px;margin-bottom:16px;">
+            <p style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px;">Item Pesanan:</p>
             ${o.items?.map(item => {
-                const iTotal = (parseFloat(item.pricePi) || 0) * item.qty;
-                return `<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #E5E7EB;">
-                    <div><p style="font-weight:600;color:#1F2937;font-size:14px;">${item.name}</p><p style="font-size:12px;color:#6B7280;">x${item.qty}</p></div>
+                const iTotal = (parseFloat(item.pricePi) || 0) * (item.qty || item.quantity || 1);
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #E5E7EB;">
+                    <div>
+                        <p style="font-weight:600;color:#1F2937;font-size:14px;">${item.name}</p>
+                        <p style="font-size:12px;color:#6B7280;">x${item.qty || item.quantity || 1}</p>
+                    </div>
                     <p style="font-weight:700;color:#8B5CF6;">π ${iTotal.toFixed(8)}</p>
                 </div>`;
-            }).join('') || '<p style="color:#9CA3AF;">Tidak ada item</p>'}
+            }).join('') || '<p style="color:#9CA3AF;text-align:center;">Tidak ada item</p>'}
         </div>
-        <div style="background:linear-gradient(135deg,#F5F3FF,#ffffff);padding:20px;border-radius:16px;border:2px solid #8B5CF6;margin-bottom:16px;">
+
+        <div style="background:linear-gradient(135deg,#F5F3FF,#ffffff);padding:16px;border-radius:16px;border:2px solid #8B5CF6;margin-bottom:16px;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-weight:700;color:#1F2937;">Total</span>
-                <span style="font-size:32px;font-weight:800;color:#8B5CF6;">π ${o.amount?.toFixed(8) || '0.0000'}</span>
+                <span style="font-weight:700;color:#1F2937;">Total Pembayaran</span>
+                <span style="font-size:28px;font-weight:800;color:#8B5CF6;">π ${o.amount?.toFixed(8) || '0.00000000'}</span>
             </div>
+            ${o.sgtEarned ? `<p style="font-size:12px;color:#D97706;font-weight:700;margin-top:6px;text-align:right;"><i class="fas fa-gift" style="margin-right:4px;"></i>+${o.sgtEarned} SGT didapatkan</p>` : ''}
         </div>
-        ${o.txid ? `<div style="background:#ECFDF5;border-radius:12px;padding:16px;margin-bottom:16px;">
-            <p style="font-size:11px;color:#059669;font-weight:600;margin-bottom:8px;">TX Hash</p>
-            <p style="font-size:12px;color:#065F46;font-family:monospace;word-break:break-all;background:#D1FAE5;padding:10px;border-radius:8px;">${o.txid}</p>
-        </div>` : ''}
+
         ${isAdmin && ['paid','processing','shipped'].includes(o.status) ? `<div style="display:flex;gap:10px;flex-wrap:wrap;">
-            ${o.status==='paid' ? `<button onclick="updateOrderStatus('${o.id}','processing');closeModal('orderDetailModal');" class="btn-primary">Proses Pesanan</button>` : ''}
-            ${o.status==='processing' ? `<button onclick="updateOrderStatus('${o.id}','shipped');closeModal('orderDetailModal');" class="btn-primary" style="background:#3B82F6;">Kirim Pesanan</button>` : ''}
-            ${o.status==='shipped' ? `<button onclick="updateOrderStatus('${o.id}','completed');closeModal('orderDetailModal');" class="btn-primary" style="background:#059669;">Selesaikan</button>` : ''}
+            ${o.status==='paid'        ? `<button onclick="updateOrderStatus('${o.id}','processing');closeModal('orderDetailModal');" class="btn-primary">Proses Pesanan</button>` : ''}
+            ${o.status==='processing'  ? `<button onclick="updateOrderStatus('${o.id}','shipped');closeModal('orderDetailModal');" class="btn-primary" style="background:#3B82F6;">Kirim Pesanan</button>` : ''}
+            ${o.status==='shipped'     ? `<button onclick="updateOrderStatus('${o.id}','completed');closeModal('orderDetailModal');" class="btn-primary" style="background:#059669;">Selesaikan</button>` : ''}
             ${o.escrowStatus === 'active' ? `
             <button onclick="adminRefundEscrow('${o.id}');closeModal('orderDetailModal');"
                 style="background:linear-gradient(135deg,#EF4444,#DC2626);color:white;border:none;padding:12px 16px;border-radius:12px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;width:100%;margin-top:6px;">
@@ -7973,7 +8163,7 @@ window.showOrderDetail = function(id) {
                 </div>
                 <div>
                     <p style="font-weight:800;color:#065F46;font-size:13px;">Dana Aman di Escrow Blockchain</p>
-                    <p style="font-size:11px;color:#059669;">π \${o.amount?.toFixed(4) || '0'} tersimpan di smart contract</p>
+                    <p style="font-size:11px;color:#059669;">π ${o.amount?.toFixed(4) || '0'} tersimpan di smart contract</p>
                 </div>
             </div>
             <button onclick="buyerReleaseEscrow('${o.id}');closeModal('orderDetailModal');"
