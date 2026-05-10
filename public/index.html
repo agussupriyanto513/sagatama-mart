@@ -6383,7 +6383,6 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     }
 
     const finalAmount = pendingPayment?.amount || 0;
-    const finalItems = cartSnapshot || pendingPayment?.items || [];
     const sgtEarned = calculateSGTReward(finalAmount);
 
     // Langkah 2: Simpan order ke Firestore DULU
