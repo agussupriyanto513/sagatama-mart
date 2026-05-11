@@ -1,21 +1,15 @@
 {
   "version": 2,
+  "functions": {
+    "api/payments/*.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
   "routes": [
     {
-      "src": "/api/payments/approve",
-      "dest": "/api/payments/approve.js"
-    },
-    {
-      "src": "/api/payments/complete",
-      "dest": "/api/payments/complete.js"
-    },
-    {
-      "src": "/api/payments/cancel",
-      "dest": "/api/payments/cancel.js"
-    },
-    {
-      "src": "/api/payments/create",
-      "dest": "/api/payments/create.js"
+      "src": "/api/payments/(.*)",
+      "dest": "/api/payments/$1.js"
     },
     {
       "src": "/validation-key.txt",
