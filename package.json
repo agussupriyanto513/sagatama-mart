@@ -1,13 +1,5 @@
 {
   "name": "pi-app",
   "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "firebase-admin": "^11.0.0",
-    "node-fetch": "^2.6.9"
-  },
-  "engines": {
-    "node": "24.x"
-  }
+  "private": true
 }
