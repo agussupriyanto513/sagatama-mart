@@ -2,16 +2,28 @@
   "version": 2,
   "routes": [
     {
-      "src": "/api/payments/(.*)",
-      "dest": "/api/payments/$1.js"
+      "src": "/api/payments/approve",
+      "dest": "/api/payments/approve.js"
+    },
+    {
+      "src": "/api/payments/complete",
+      "dest": "/api/payments/complete.js"
+    },
+    {
+      "src": "/api/payments/cancel",
+      "dest": "/api/payments/cancel.js"
+    },
+    {
+      "src": "/api/payments/create",
+      "dest": "/api/payments/create.js"
     },
     {
       "src": "/validation-key.txt",
-      "dest": "/validation-key.txt"
+      "dest": "/public/validation-key.txt"
     },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/public/index.html"
     }
   ]
 }
