@@ -1,11 +1,5 @@
 {
   "version": 2,
-  "functions": {
-    "api/payments/*.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
   "routes": [
     {
       "src": "/api/payments/(.*)",
@@ -17,7 +11,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/public/index.html"
+      "dest": "/index.html"
     }
   ]
 }
