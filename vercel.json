@@ -6,6 +6,10 @@
       "dest": "/api/payments/$1.js"
     },
     {
+      "src": "/validation-key.txt",
+      "dest": "/validation-key.txt"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
