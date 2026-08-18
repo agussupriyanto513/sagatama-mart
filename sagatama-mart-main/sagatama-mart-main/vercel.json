@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "routes": [
+    {
+      "src": "/api/payments/(.*)",
+      "dest": "/api/payments/$1.js"
+    },
+    {
+      "src": "/validation-key.txt",
+      "dest": "/public/validation-key.txt"
+    },
+    {
+      "src": "/sagatama-block-puzzle-v3-firebase.html",
+      "dest": "/public/sagatama-block-puzzle-v3-firebase.html"
+    },
+    {
+      "src": "/logo-sagatama.png",
+      "dest": "/public/logo-sagatama.png"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}
