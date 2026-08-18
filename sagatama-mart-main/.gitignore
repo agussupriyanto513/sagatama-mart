@@ -1,5 +1,0 @@
-.vercel
-.env
-node_modules
-*-key.json
-migration-report.json
