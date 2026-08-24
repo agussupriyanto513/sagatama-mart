@@ -2869,7 +2869,6 @@
         </button>
         <button class="nav-item" onclick="switchView('products'); setTimeout(() => filterByCategory('Mewah'), 100)" id="nav-mewah">
             <i class="fas fa-gem" style="font-size:18px; margin-bottom:3px;"></i>
-            <span>Mewah</span>
         </button>
         <button class="nav-item" onclick="switchView('account')" id="nav-account">
             <i class="fas fa-user" style="font-size:18px; margin-bottom:3px;"></i>
@@ -8511,7 +8510,8 @@ window.filterByCategory = function(cat, btn) {
     document.querySelectorAll('#categoryTabs .tab').forEach(t => t.classList.remove('active'));
     if (btn) btn.classList.add('active');
     else document.querySelectorAll('#categoryTabs .tab').forEach(tab => {
-        if (tab.innerText === cat || (cat === 'all' && tab.innerText === 'Semua')) tab.classList.add('active');
+        const tabText = tab.innerText.trim().replace(/^[^\w]+\s*/u, ''); // buang emoji/simbol di depan
+        if (tabText === cat || (cat === 'all' && tabText === 'Semua')) tab.classList.add('active');
     });
     renderProducts();
 };
