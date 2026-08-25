@@ -1,3 +1,5 @@
+import { getFirebaseApp, admin } from '../../firebase-init.js';
+
 export default async function handler(req, res) {
   // CORS — izinkan request dari GitHub Pages atau domain manapun
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -7,7 +9,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { paymentId } = req.body;
+  const { paymentId, uid } = req.body;
 
   if (!paymentId) {
     return res.status(400).json({ error: 'paymentId diperlukan' });
@@ -17,6 +19,32 @@ export default async function handler(req, res) {
     console.error('[approve] PI_API_KEY tidak ditemukan di environment!');
     return res.status(500).json({ error: 'Server config error: PI_API_KEY missing' });
   }
+
+  // ===== CEK MEMBER (BARU) =====
+  // Hanya berjalan kalau uid dikirim frontend. Kalau frontend belum
+  // diupdate untuk kirim uid, pengecekan ini otomatis dilewati (supaya
+  // tidak mendadak memblokir semua orang sebelum frontend siap).
+  if (uid) {
+    try {
+      getFirebaseApp();
+      const db = admin.firestore();
+      const memberDoc = await db.collection('members').doc(uid).get();
+      const isMember = memberDoc.exists && memberDoc.data().status === 'active';
+
+      if (!isMember) {
+        console.log('[approve] DITOLAK — bukan member aktif:', uid);
+        return res.status(403).json({
+          error: 'not_a_member',
+          error_message: 'Anda belum terdaftar sebagai member. Hubungi admin untuk didaftarkan.'
+        });
+      }
+    } catch (memberErr) {
+      // Kalau pengecekan member gagal karena error teknis (bukan karena
+      // memang bukan member), jangan blokir transaksi — cukup catat log.
+      console.error('[approve] Gagal cek member (dilewati, transaksi tetap lanjut):', memberErr.message);
+    }
+  }
+  // ===== AKHIR CEK MEMBER =====
 
   try {
     const response = await fetch(
