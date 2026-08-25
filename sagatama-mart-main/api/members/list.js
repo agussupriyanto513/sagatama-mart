@@ -1,5 +1,5 @@
 // api/members/list.js
-import { getDb } from '../utils/checkMember.js';
+import { getDb } from '../../member-utils.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {

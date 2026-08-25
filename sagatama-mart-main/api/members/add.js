@@ -1,5 +1,5 @@
 // api/members/add.js
-import { getDb } from '../utils/checkMember.js';
+import { getDb } from '../../member-utils.js';
 import { admin } from '../../firebase-init.js';
 
 export default async function handler(req, res) {

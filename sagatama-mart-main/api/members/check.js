@@ -1,5 +1,5 @@
 // api/members/check.js
-import { checkMemberStatus } from '../utils/checkMember.js';
+import { checkMemberStatus } from '../../member-utils.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
