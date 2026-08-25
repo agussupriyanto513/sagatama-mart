@@ -2,16 +2,8 @@
   "version": 2,
   "routes": [
     {
-      "src": "/api/sgt/(.*)",
-      "dest": "/api/sgt/$1.js"
-    },
-    {
       "src": "/api/payments/(.*)",
       "dest": "/api/payments/$1.js"
-    },
-    {
-      "src": "/api/orders/(.*)",
-      "dest": "/api/orders/$1.js"
     },
     {
       "src": "/validation-key.txt",
@@ -24,6 +16,10 @@
     {
       "src": "/logo-sagatama.png",
       "dest": "/public/logo-sagatama.png"
+    },
+    {
+      "src": "/admin-members.html",
+      "dest": "/public/admin-members.html"
     },
     {
       "src": "/(.*)",
