@@ -18,6 +18,10 @@
       "dest": "/public/validation-key.txt"
     },
     {
+      "src": "/admin-members.html",
+      "dest": "/public/admin-members.html"
+    }
+    {
       "src": "/sagatama-block-puzzle-v3-firebase.html",
       "dest": "/public/sagatama-block-puzzle-v3-firebase.html"
     },
