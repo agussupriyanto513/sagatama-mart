@@ -1,13 +1,7 @@
 // api/members/remove.js
-//
-// Endpoint khusus admin untuk menghapus member dari whitelist,
-// ATAU cukup mengubah status jadi 'blocked' (lebih aman, riwayat tetap ada).
-// POST dengan header: x-admin-secret: <ADMIN_SECRET>
-// Body: { uid: string, mode?: 'delete'|'block' }  (default: 'delete')
+import { getDb } from '../utils/checkMember.js';
 
-const { getDb } = require('../utils/checkMember');
-
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'method_not_allowed' });
   }
@@ -35,6 +29,6 @@ module.exports = async (req, res) => {
     return res.status(200).json({ success: true, uid, deleted: true });
   } catch (err) {
     console.error('[members/remove] ERROR:', err);
-    return res.status(500).json({ error: 'internal_error' });
+    return res.status(500).json({ error: 'internal_error', detail: err.message });
   }
-};
+}
