@@ -18,6 +18,10 @@
       "dest": "/public/logo-sagatama.png"
     },
     {
+      "src": "/admin-members.html",
+      "dest": "/public/admin-members.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
