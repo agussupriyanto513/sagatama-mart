@@ -19,7 +19,7 @@
     },
     {
       "src": "/admin-members.html",
-      "dest": "/admin-members.html"
+      "dest": "/public/admin-members.html"
     },
     {
       "src": "/(.*)",
