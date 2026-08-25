@@ -1,12 +1,7 @@
 // api/members/list.js
-//
-// Endpoint khusus admin (dipanggil dari admin-members.html) untuk
-// menampilkan seluruh daftar member.
-// GET dengan header: x-admin-secret: <ADMIN_SECRET>
+import { getDb } from '../utils/checkMember.js';
 
-const { getDb } = require('../utils/checkMember');
-
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'method_not_allowed' });
   }
@@ -28,6 +23,6 @@ module.exports = async (req, res) => {
     return res.status(200).json({ members });
   } catch (err) {
     console.error('[members/list] ERROR:', err);
-    return res.status(500).json({ error: 'internal_error' });
+    return res.status(500).json({ error: 'internal_error', detail: err.message });
   }
-};
+}
