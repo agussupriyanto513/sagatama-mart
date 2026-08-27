@@ -17,6 +17,14 @@
       "dest": "/api/payments/$1.js"
     },
     {
+      "src": "/api/orders/(.*)",
+      "dest": "/api/orders/$1.js"
+    },
+    {
+      "src": "/api/sgt/(.*)",
+      "dest": "/api/sgt/$1.js"
+    },
+    {
       "src": "/validation-key.txt",
       "dest": "/public/validation-key.txt"
     },
