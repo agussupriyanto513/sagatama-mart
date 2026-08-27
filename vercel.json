@@ -29,16 +29,8 @@
       "dest": "/public/validation-key.txt"
     },
     {
-      "src": "/sagatama-block-puzzle-v3-firebase.html",
-      "dest": "/public/sagatama-block-puzzle-v3-firebase.html"
-    },
-    {
       "src": "/logo-sagatama.png",
       "dest": "/public/logo-sagatama.png"
-    },
-    {
-      "src": "/admin-members.html",
-      "dest": "/public/admin-members.html"
     },
     {
       "src": "/(.*)",
