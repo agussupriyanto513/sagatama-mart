@@ -9896,23 +9896,20 @@ async function createPiPayment() {
 
             onReadyForServerApproval: async (paymentId) => {
                 logDebug("APPROVAL: " + paymentId);
-
+                alert('DEBUG paymentId dari Pi SDK:\n"' + paymentId + '"\nPanjang: ' + paymentId.length);
                 try {
                     const res = await approvePaymentOnServer(paymentId);
-
                     if (!res || res.error) {
                         throw new Error(res?.error || 'Approve gagal');
                     }
-
                     logDebug("Approve SUCCESS");
-
                 } catch (err) {
                     logDebug("Approve FAILED: " + err.message);
                     showToast('Gagal verifikasi pembayaran', 'error');
                     resetPaymentState();
                 }
             },
-
+			
             onReadyForServerCompletion: async (paymentId, txid) => {
                 logDebug("COMPLETE: " + paymentId);
 
