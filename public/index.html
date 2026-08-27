@@ -9896,13 +9896,27 @@ async function createPiPayment() {
 
             onReadyForServerApproval: async (paymentId) => {
                 logDebug("APPROVAL: " + paymentId);
-                alert('DEBUG paymentId dari Pi SDK:\n"' + paymentId + '"\nPanjang: ' + paymentId.length);
+
+                // ⚠️ SEMENTARA UNTUK DEBUGGING — HAPUS SETELAH SELESAI CEK ⚠️
+                try {
+                    const dbg = document.createElement('div');
+                    dbg.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:#111;color:#0f0;padding:16px;font-family:monospace;font-size:14px;word-break:break-all;border-bottom:4px solid red;';
+                    dbg.innerHTML = '<b>DEBUG paymentId dari Pi SDK:</b><br>"' + paymentId + '"<br>Panjang: ' + paymentId.length +
+                        '<br><button style="margin-top:8px;padding:8px 16px;" onclick="this.parentElement.remove()">Tutup</button>';
+                    document.body.appendChild(dbg);
+                } catch (dbgErr) {
+                    logDebug("DEBUG overlay gagal: " + dbgErr.message);
+                }
+
                 try {
                     const res = await approvePaymentOnServer(paymentId);
+
                     if (!res || res.error) {
                         throw new Error(res?.error || 'Approve gagal');
                     }
+
                     logDebug("Approve SUCCESS");
+
                 } catch (err) {
                     logDebug("Approve FAILED: " + err.message);
                     showToast('Gagal verifikasi pembayaran', 'error');
