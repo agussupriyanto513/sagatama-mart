@@ -9896,16 +9896,19 @@ async function createPiPayment() {
 
             onReadyForServerApproval: async (paymentId) => {
                 logDebug("APPROVAL: " + paymentId);
-                alert('DEBUG paymentId dari Pi SDK:\n"' + paymentId + '"\nPanjang: ' + paymentId.length);
+
                 try {
                     const res = await approvePaymentOnServer(paymentId);
+
                     if (!res || res.error) {
                         throw new Error(res?.error || 'Approve gagal');
                     }
+
                     logDebug("Approve SUCCESS");
+
                 } catch (err) {
                     logDebug("Approve FAILED: " + err.message);
-                    showToast('Gagal verifikasi pembayaran', 'error');
+                    showToast(err.message || 'Gagal verifikasi pembayaran', 'error');
                     resetPaymentState();
                 }
             },
@@ -10015,20 +10018,25 @@ async function approvePaymentOnServer(paymentId) {
     try { result = await response.json(); } catch { result = {}; }
 
     if (!response.ok) {
-        // App Wallet Misconfigured atau wallet multisig pending → lanjutkan lokal
-        logDebug('[approve] Server error ' + response.status + ': ' + (result.error || '') + ' → mode lokal');
+        // Pi Network menolak approve (App/Key salah, payment tidak ditemukan,
+        // sudah expired, dll). Ini BUKAN kasus "server tidak terjangkau", jadi
+        // TIDAK boleh dianggap sukses lokal — kalau Pi menolak approve, order
+        // tidak pernah benar-benar disetujui di sisi Pi, jadi pembeli belum
+        // membayar apa pun. Catat sebagai gagal supaya tidak ada order/SGT
+        // yang lolos padahal pembayarannya ditolak.
+        logDebug('[approve] Server/Pi menolak approve ' + response.status + ': ' + (result.error || JSON.stringify(result.detail || {})));
         if (db) {
             addDoc(collection(db, 'pending_payments'), {
                 paymentId,
-                status: 'approved_local',
-                note: 'Wallet multisig pending review — server error ' + response.status,
+                status: 'approve_rejected',
+                note: 'Pi menolak approve — status ' + response.status + ': ' + (result.error || ''),
                 createdAt: serverTimestamp(),
                 customer: currentUser?.username,
                 customerUid: currentUser?.uid,
                 amount: pendingPayment?.amount || 0
             }).catch(() => {});
         }
-        return { ok: true, local: true };
+        return { error: result.error || ('Pi menolak pembayaran (status ' + response.status + ')') };
     }
 
     // Simpan ke pending_payments di Firestore untuk tracking
