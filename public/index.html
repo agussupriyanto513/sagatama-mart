@@ -1275,7 +1275,12 @@
                 grid-template-columns: repeat(4, 1fr);
             }
         }
-        
+        @media (min-width: 1440px) {
+            .product-grid {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+
          /* Hero Section */
         .hero-section {
             position: relative;
@@ -1690,7 +1695,7 @@
                 </div>
                 <button onclick="switchView('products')" style="color:#D4AF37; font-size:12px; font-weight:700; border:none; background:none; cursor:pointer;">Lihat Semua <i class="fas fa-arrow-right" style="margin-left:4px;"></i></button>
             </div>
-            <div id="featuredProducts" style="display:grid; grid-template-columns:repeat(2, 1fr); gap:22px 16px;">
+            <div id="featuredProducts" class="product-grid">
                 <!-- Loading skeleton -->
                 <div class="skeleton" style="height:200px; border-radius:16px;"></div>
                 <div class="skeleton" style="height:200px; border-radius:16px;"></div>
@@ -1761,7 +1766,7 @@
                         </div>
                         <div style="text-align:right;">
                             <div style="background:rgba(255,255,255,0.15); padding:4px 12px; border-radius:20px; font-size:10px; font-weight:800; color:#FCD34D; border:1px solid rgba(255,215,77,0.3);">LIVE</div>
-                            <p id="walletRateLabel" style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:4px;">1 π = 100 SGT</p>
+                            <p id="walletRateLabel" style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:4px;">1 π = 1000 SGT</p>
                         </div>
                     </div>
 
@@ -3670,10 +3675,10 @@
             <div style="background:#F0FDF4;border-radius:14px;padding:16px;margin-bottom:12px;border:1px solid #A7F3D0;">
                 <h4 style="font-weight:800;margin-bottom:10px;font-size:13px;color:#065F46;"><i class="fas fa-sliders-h" style="margin-right:6px;"></i>Adjust Rate Mint (SGT/Pi)</h4>
                 <div style="display:flex;gap:8px;align-items:center;">
-                    <input type="number" id="newMintRate" class="form-input" style="flex:1;" placeholder="Default: 100" min="1" max="10000">
+                    <input type="number" id="newMintRate" class="form-input" style="flex:1;" placeholder="Default: 1000" min="1" max="10000">
                     <button onclick="updateMintRate()" style="background:#059669;color:white;border:none;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer;font-size:12px;white-space:nowrap;font-family:inherit;"><i class="fas fa-check"></i> Set</button>
                 </div>
-                <p style="font-size:10px;color:#065F46;margin:6px 0 0;">Rate saat ini: <strong id="currentMintRateDisplay">100</strong> SGT/Pi · Ubah dengan hati-hati</p>
+                <p style="font-size:10px;color:#065F46;margin:6px 0 0;">Rate saat ini: <strong id="currentMintRateDisplay">1000</strong> SGT/Pi · Ubah dengan hati-hati</p>
             </div>
 
             <div style="background:#FEF2F2; border-radius:14px; padding:16px; margin-bottom:16px; border:1px solid #FECACA;">
@@ -3923,9 +3928,38 @@ const SGT_GENESIS_ALLOC   = {
     baitulMaal: 0.10, // 10% dana sosial
     tim       : 0.05  // 5% pengembang (locked 12 bln)
 };
-// Mint rate (adjustable admin, default 100)
-let sgtRatePerPi   = 100;
+// Mint rate (adjustable admin, default 1000)
+let sgtRatePerPi   = 1000;
 let sgtMinPurchase = 0.1;
+
+// ── Migrasi rate lama ───────────────────────────────────────────
+// Dulu default rate sempat 100/500 SGT per Pi lalu distandarkan ke 1000.
+// Nilai lama yang sudah kadung tersimpan di Firestore/localStorage tetap
+// akan menang saat load (karena memang admin-configurable), jadi kalau
+// yang terbaca masih salah satu nilai lama itu, kita perbaiki sekali
+// secara otomatis (lokal + tulis balik ke Firestore bila memungkinkan).
+const SGT_LEGACY_RATES = [100, 500];
+function _fixLegacySGTRate(sourceLabel) {
+    if (!SGT_LEGACY_RATES.includes(sgtRatePerPi)) return;
+    const oldRate = sgtRatePerPi;
+    sgtRatePerPi = 1000;
+    try { localStorage.setItem('sgt_rate', '1000'); } catch(e) {}
+    if (typeof logDebug === 'function') {
+        logDebug(`[SGT] Rate lama terdeteksi (${oldRate} dari ${sourceLabel}) → dikoreksi otomatis ke 1000`);
+    }
+    // Best-effort: tulis balik ke Firestore supaya tidak kembali ke nilai lama
+    // di sesi/perangkat lain. Boleh gagal diam-diam (mis. rules membatasi
+    // penulisan dari browser non-admin) — tidak fatal, cukup dikoreksi lokal.
+    try {
+        if (typeof db !== 'undefined' && typeof doc === 'function' && typeof setDoc === 'function') {
+            setDoc(doc(db, 'sgt_config', 'supply'), {
+                mintRate: 1000,
+                mintRateUpdatedAt: (typeof serverTimestamp === 'function') ? serverTimestamp() : new Date().toISOString(),
+                mintRateUpdatedBy: 'auto-migration'
+            }, { merge: true }).catch(function(){});
+        }
+    } catch(e) {}
+}
 
 // Fee pool — setiap transaksi bayar fee ini, dana ke pool
 const SGT_FEE_RATE      = 0.03;  // 3% dari base reward masuk fee pool
@@ -4198,13 +4232,15 @@ async function loadSGTDataFixed() {
         const rateSnap = await getDoc(doc(db, 'sgt_config', 'supply'));
         if (rateSnap.exists() && rateSnap.data().mintRate) {
             sgtRatePerPi = rateSnap.data().mintRate;
+            _fixLegacySGTRate('Firestore');
             localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
             logDebug('[SGT-v3] Rate synced from Firestore: ' + sgtRatePerPi + ' SGT/Pi');
         }
     } catch(e) {
         // Fallback ke localStorage jika offline
         const savedRate = localStorage.getItem('sgt_rate');
-        if (savedRate) sgtRatePerPi = parseInt(savedRate) || 100;
+        if (savedRate) sgtRatePerPi = parseInt(savedRate) || 1000;
+        _fixLegacySGTRate('localStorage-fallback');
         logDebug('[SGT-v3] Rate fallback localStorage: ' + sgtRatePerPi);
     }
     const uid = currentUser.uid;
@@ -4289,7 +4325,8 @@ async function loadSGTDataFixed() {
         const rate = localStorage.getItem('sgt_rate');
         if (bal) sgtBalance = parseInt(bal) || 0;
         if (tx) { try { sgtTransactions = JSON.parse(tx); } catch(e) { sgtTransactions = []; } }
-        if (rate) sgtRatePerPi = parseInt(rate) || 100;
+        if (rate) sgtRatePerPi = parseInt(rate) || 1000;
+        _fixLegacySGTRate('localStorage-strategy3');
         logDebug(`[SGT-v3] ⚠️ Loaded from localStorage: ${sgtBalance} SGT`);
         updateSGTUI();
         
@@ -5113,6 +5150,7 @@ window.loadMintRateFromFirestore = async function loadMintRateFromFirestore() {
         const snap = await getDoc(doc(db, 'sgt_config', 'supply'));
         if (snap.exists() && snap.data().mintRate) {
             sgtRatePerPi = snap.data().mintRate;
+            _fixLegacySGTRate('loadMintRateFromFirestore');
             const el = document.getElementById('currentMintRateDisplay');
             if (el) el.textContent = sgtRatePerPi;
             logDebug('Mint rate loaded: ' + sgtRatePerPi + ' SGT/Pi');
@@ -5421,7 +5459,7 @@ window.openExchangeRateModal = function() {
     const existingModal = document.getElementById('exchangeRateModal');
     if (existingModal) existingModal.remove();
 
-    const currentSgtRate = (typeof sgtRatePerPi !== 'undefined') ? sgtRatePerPi : 100;
+    const currentSgtRate = (typeof sgtRatePerPi !== 'undefined') ? sgtRatePerPi : 1000;
 
     const modal = document.createElement('div');
     modal.id = 'exchangeRateModal';
@@ -5743,7 +5781,7 @@ window.switchCalcMode = function(mode) {
 
 window.updateAdminCalculator = function() {
     const rate = parseInt(document.getElementById('adminRateInput')?.value || 15000);
-    const sgtPerPi = parseInt(document.getElementById('adminSgtRateInput')?.value || 100);
+    const sgtPerPi = parseInt(document.getElementById('adminSgtRateInput')?.value || 1000);
     adminExchangeRate = rate;
     localStorage.setItem('admin_exchange_rate', rate.toString());
     // Simpan ke Firebase agar persisten
@@ -5858,6 +5896,7 @@ async function init() {
             const savedRate = localStorage.getItem('sgt_rate');
             const savedMin  = localStorage.getItem('sgt_min_purchase');
             if (savedRate) sgtRatePerPi = parseInt(savedRate);
+            _fixLegacySGTRate('session-restore');
             if (savedMin)  sgtMinPurchase = parseFloat(savedMin);
             const savedBal  = localStorage.getItem('sgt_balance_' + currentUser.uid);
             const savedTxs  = localStorage.getItem('sgt_transactions_' + currentUser.uid);
