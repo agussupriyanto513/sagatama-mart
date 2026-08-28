@@ -4051,6 +4051,16 @@ function generateMemberId() {
     return 'SGT-' + time + rand;
 }
 
+// Bungkus promise Firestore dengan batas waktu, supaya UI tidak "muter"
+// selamanya kalau request nyangkut (mis. Security Rules di Firebase Console
+// belum di-update / koneksi bermasalah).
+function withTimeout(promise, ms = 12000, label = 'Operasi') {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timeout (${ms/1000}s) — kemungkinan Firestore Security Rules di Firebase Console belum di-update, atau koneksi bermasalah.`)), ms))
+    ]);
+}
+
 // Staking APY didanai dari fee pool, bukan mint baru
 const SGT_STAKING_PLANS = [
     { days: 30,  apy: 8,  label: '30 Hari'  },
@@ -10344,13 +10354,13 @@ window.submitManualAddMember = async function() {
     const btn = document.getElementById('btnManualAddMember');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...'; }
     try {
-        const existingWl = await getDoc(doc(db, 'member_whitelist', uname));
+        const existingWl = await withTimeout(getDoc(doc(db, 'member_whitelist', uname)), 12000, 'Cek member');
         if (existingWl.exists()) {
             showToast(`@${uname} sudah terdaftar sebagai member.`, 'warning');
             return;
         }
         const memberId = generateMemberId();
-        await setDoc(doc(db, 'member_whitelist', uname), {
+        await withTimeout(setDoc(doc(db, 'member_whitelist', uname), {
             username: uname,
             memberId,
             nama: namaInput?.value.trim() || '',
@@ -10358,7 +10368,7 @@ window.submitManualAddMember = async function() {
             addedBy: currentUser.uid,
             addedByAdmin: true,
             createdAt: serverTimestamp()
-        });
+        }), 12000, 'Simpan member');
         // Best-effort: kalau username ini sudah pernah login sebelumnya, sinkronkan juga ke dokumen users-nya
         try {
             const usnap = await getDocs(query(collection(db, 'users'), where('username', '==', uname), limit(1)));
