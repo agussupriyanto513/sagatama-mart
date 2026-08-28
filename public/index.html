@@ -2248,8 +2248,8 @@
                             <i class="fas fa-hand-holding-heart"></i>
                         </div>
                         <div style="flex:1;">
-                            <p style="font-weight:600;color:#1F2937;font-size:13px;margin:0;">SGT Sosial</p>
-                            <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Beasiswa, bansos & staking</p>
+                            <p style="font-weight:600;color:#1F2937;font-size:13px;margin:0;">SGT Sosial & Member</p>
+                            <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Beasiswa, bansos, staking & kartu member</p>
                         </div>
                         <span id="adminSosialBadge" style="display:none;background:#EF4444;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">0</span>
                         <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
@@ -2696,21 +2696,39 @@
             <!-- Admin: Member (Kartu Member / ID Card) -->
             <div id="admin-sosial-member" style="display:none;">
                 <div style="background:linear-gradient(135deg,#1F2937,#111827);border-radius:16px;padding:16px;margin-bottom:14px;color:white;">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <i class="fas fa-id-card" style="color:#D4AF37;font-size:18px;"></i>
-                        <div>
-                            <p style="font-weight:700;font-size:13px;margin:0;">Kelola Member</p>
-                            <p style="font-size:11px;opacity:0.7;margin:2px 0 0;">Hanya member terverifikasi yang bisa berbelanja</p>
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                        <i class="fas fa-shield-alt" style="color:#D4AF37;font-size:18px;"></i>
+                        <div style="flex:1;">
+                            <p style="font-weight:700;font-size:13px;margin:0;">Mode Khusus Member</p>
+                            <p style="font-size:11px;opacity:0.7;margin:2px 0 0;">Hanya username di Daftar Member yang bisa login & belanja</p>
                         </div>
                     </div>
+                </div>
+                <div onclick="toggleManualMemberForm()" style="cursor:pointer;background:#111827;border-radius:14px;padding:14px 16px;margin-bottom:0;color:white;display:flex;align-items:center;gap:10px;">
+                    <i class="fas fa-user-plus" style="color:#D4AF37;"></i>
+                    <p style="flex:1;font-weight:700;font-size:13px;margin:0;">Daftarkan Username Baru</p>
+                    <i id="manualMemberChevron" class="fas fa-chevron-down" style="opacity:0.6;font-size:12px;"></i>
+                </div>
+                <div id="adminManualMemberForm" style="display:none;background:#F9FAFB;border:1px solid #E5E7EB;border-top:none;border-radius:0 0 14px 14px;padding:14px;margin-bottom:16px;">
+                    <p style="font-size:12px;color:#6B7280;margin-bottom:10px;"><i class="fas fa-info-circle" style="color:#D97706;margin-right:4px;"></i>Username TIDAK perlu sudah pernah login. Setelah didaftarkan, orang ini baru bisa login pakai username itu.</p>
+                    <div class="form-group" style="margin-bottom:8px;">
+                        <input type="text" id="manualMemberUsername" class="form-input" placeholder="Username Pi (wajib, tanpa @)">
+                    </div>
+                    <div class="form-group" style="margin-bottom:8px;">
+                        <input type="text" id="manualMemberNama" class="form-input" placeholder="Nama (opsional)">
+                    </div>
+                    <div class="form-group" style="margin-bottom:10px;">
+                        <input type="tel" id="manualMemberHp" class="form-input" placeholder="No. HP/WhatsApp (opsional)">
+                    </div>
+                    <button id="btnManualAddMember" onclick="submitManualAddMember()" style="width:100%;background:#059669;color:white;border:none;padding:12px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;"><i class="fas fa-user-plus" style="margin-right:6px;"></i>Daftarkan Member</button>
                 </div>
                 <h4 style="font-weight:700;color:#1F2937;margin-bottom:10px;font-size:13px;">Pengajuan Member Masuk</h4>
                 <div id="adminMemberList">
                     <div class="empty-state" style="padding:30px;"><i class="fas fa-inbox" style="font-size:36px;"></i><p>Belum ada pengajuan member</p></div>
                 </div>
-                <h4 style="font-weight:700;color:#1F2937;margin:18px 0 10px;font-size:13px;">Member Aktif</h4>
+                <h4 style="font-weight:700;color:#1F2937;margin:18px 0 10px;font-size:13px;">Daftar Member (bisa login)</h4>
                 <div id="adminMemberActiveList">
-                    <div class="empty-state" style="padding:24px;"><i class="fas fa-users" style="font-size:32px;"></i><p>Belum ada member aktif</p></div>
+                    <div class="empty-state" style="padding:24px;"><i class="fas fa-users" style="font-size:32px;"></i><p>Belum ada member terdaftar</p></div>
                 </div>
             </div>
         </div>
@@ -3895,6 +3913,14 @@ window.addEventListener('unhandledrejection', function(e) {
 //       allow read: if request.auth != null;
 //       allow create: if request.auth != null;
 //       allow update: if request.auth != null && isAdmin();
+//     }
+//
+//     // Member Whitelist — daftar username yang boleh LOGIN & belanja.
+//     // Dicek saat login (butuh baca oleh siapa saja yang sudah auth),
+//     // tapi hanya admin yang boleh menambah/menghapus.
+//     match /member_whitelist/{username} {
+//       allow read: if request.auth != null;
+//       allow write: if request.auth != null && isAdmin();
 //     }
 //
 //     // SGT Stakings
@@ -6573,18 +6599,69 @@ async function processPiAuthSuccess(authResult) {
     
     // KRITIS: Gunakan UID dari Pi yang konsisten!
     const piUid = authResult.user.uid || ('pi_' + (authResult.user.username || 'unknown'));
+    const piUsername = authResult.user.username || 'pioneer';
     
     // Deteksi admin via Pi UID — verifikasi server-side via Firestore
     // Admin Pi UID harus terdaftar di koleksi 'admins' di Firestore
     const _piIsAdmin = (piUid === ADMIN_FIREBASE_UID) ||
-                       (authResult.user.username === 'sagatama_admin');
+                       (piUsername === 'sagatama_admin');
+
+    // Firebase Auth - Anonymous sign in duluan, supaya pembacaan Firestore
+    // (termasuk cek whitelist member di bawah) punya konteks auth yang valid
+    let firebaseUid = null;
+    try {
+        if (auth) {
+            if (!auth.currentUser) {
+                const anonResult = await signInAnonymously(auth);
+                firebaseUid = anonResult.user.uid;
+                logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
+            } else {
+                firebaseUid = auth.currentUser.uid;
+            }
+        }
+    } catch (fbErr) {
+        logDebug("[AUTH-v3] Firebase anon warning (non-kritis): " + fbErr.message);
+    }
+
+    // ── GERBANG MEMBER: hanya member terdaftar yang boleh login ────────
+    // Admin selalu diizinkan. User biasa wajib sudah ada di 'member_whitelist'
+    // (didaftarkan admin) ATAU sudah pernah di-approve sebelumnya (isMember
+    // di dokumen users/{uid}, untuk kompatibilitas member lama).
+    let memberWhitelistData = null;
+    if (!_piIsAdmin) {
+        let whitelisted = false;
+        try {
+            const wlSnap = await getDoc(doc(db, 'member_whitelist', piUsername.toLowerCase()));
+            if (wlSnap.exists()) {
+                whitelisted = true;
+                memberWhitelistData = wlSnap.data();
+            } else {
+                const uSnap = await getDoc(doc(db, 'users', piUid));
+                whitelisted = uSnap.exists() && uSnap.data().isMember === true;
+            }
+        } catch (wlErr) {
+            logDebug('[AUTH-v3] Whitelist check gagal: ' + wlErr.message);
+            whitelisted = false; // fail-closed: kalau gagal cek, jangan izinkan masuk
+        }
+        if (!whitelisted) {
+            isPiAuthenticated = false;
+            piAuth = null;
+            showToast(`Akun @${piUsername} belum terdaftar sebagai member. Hubungi admin untuk didaftarkan dulu.`, 'error');
+            logDebug('[AUTH-v3] Login ditolak, bukan member: @' + piUsername);
+            const piLoginBtn = document.querySelector('#piAuthModal button[disabled]');
+            if (piLoginBtn) piLoginBtn.disabled = false;
+            return;
+        }
+    }
+
     currentUser = {
         uid: piUid,
-        username: authResult.user.username || 'pioneer',
+        username: piUsername,
         role: _piIsAdmin ? 'admin' : 'buyer',
         accessToken: authResult.accessToken,
         walletAddress: authResult.user.wallet_address || null,
-        authType: 'pi'
+        authType: 'pi',
+        firebaseUid: firebaseUid || undefined
     };
     // Jika terdeteksi sebagai admin via Pi UID, konfirmasi ke Firestore
     if (_piIsAdmin && db) {
@@ -6604,31 +6681,22 @@ async function processPiAuthSuccess(authResult) {
     localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
     window._currentUser = currentUser; // Expose untuk game script
     logDebug(`[AUTH-v3] User authenticated: @${currentUser.username} | UID: ${piUid}`);
-    
-    // Step 5: Firebase Auth - Anonymous sign in untuk Firestore write permission
-    let firebaseUid = null;
-    try {
-        if (auth) {
-            if (!auth.currentUser) {
-                const anonResult = await signInAnonymously(auth);
-                firebaseUid = anonResult.user.uid;
-                logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
-            } else {
-                firebaseUid = auth.currentUser.uid;
-            }
-        }
-    } catch (fbErr) {
-        logDebug("[AUTH-v3] Firebase anon warning (non-kritis): " + fbErr.message);
-    }
-
-    // KRITIS: simpan firebaseUid ke currentUser agar query Firestore bisa pakai
-    if (firebaseUid) {
-        currentUser.firebaseUid = firebaseUid;
-        localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
-    }
 
     // Step 6: Pastikan dokumen user ada di Firestore dengan UID yang benar
     await ensureUserDocumentExists(piUid, currentUser.username, firebaseUid);
+
+    // Sinkronkan data member dari whitelist ke dokumen user resmi (uid Pi)
+    if (!_piIsAdmin && db) {
+        try {
+            await setDoc(doc(db, 'users', piUid), {
+                isMember: true,
+                memberId: memberWhitelistData?.memberId || null,
+                memberSince: memberWhitelistData?.createdAt || serverTimestamp()
+            }, { merge: true });
+        } catch (syncErr) {
+            logDebug('[AUTH-v3] Sync whitelist->user gagal: ' + syncErr.message);
+        }
+    }
 
     // Sinkronkan status member (isMember/memberId) dari Firestore ke currentUser
     await verifyUserSession().catch(e => logDebug('[AUTH-v3] verifyUserSession: ' + e.message));
@@ -6774,15 +6842,33 @@ window.manualPiLogin = async function() {
             targetUid = 'pi_manual_' + Date.now();
             logDebug(`[MANUAL] User baru: @${username} | UID: ${targetUid}`);
         }
+
+        const isAdminUser = existingData.role === 'admin';
+
+        // ── GERBANG MEMBER: hanya member terdaftar yang boleh login ────
+        let memberWl = null;
+        if (!isAdminUser) {
+            try {
+                const wlSnap = await getDoc(doc(db, 'member_whitelist', username));
+                if (wlSnap.exists()) memberWl = wlSnap.data();
+            } catch (wlErr) {
+                logDebug('[MANUAL] Whitelist check gagal: ' + wlErr.message);
+            }
+            const legacyMember = existingData.isMember === true;
+            if (!memberWl && !legacyMember) {
+                showToast(`Akun @${username} belum terdaftar sebagai member. Hubungi admin untuk didaftarkan dulu.`, 'error');
+                return;
+            }
+        }
         
         currentUser = {
             uid: targetUid,
             username: username,
             role: existingData.role || 'buyer',
             authType: 'pi_manual',
-            isMember: existingData.isMember === true,
-            memberId: existingData.memberId || null,
-            memberSince: existingData.memberSince || null
+            isMember: isAdminUser ? false : true,
+            memberId: memberWl?.memberId || existingData.memberId || null,
+            memberSince: memberWl?.createdAt || existingData.memberSince || null
         };
         
         await setDoc(doc(db, 'users', targetUid), {
@@ -6792,7 +6878,8 @@ window.manualPiLogin = async function() {
             createdAt: existingData.createdAt || serverTimestamp(),
             lastLogin: serverTimestamp(),
             sgtBalance: existingData.sgtBalance || 0,
-            sgtTransactions: existingData.sgtTransactions || []
+            sgtTransactions: existingData.sgtTransactions || [],
+            ...(memberWl ? { isMember: true, memberId: memberWl.memberId || null, memberSince: memberWl.createdAt || serverTimestamp() } : {})
         }, { merge: true });
         
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
@@ -10235,6 +10322,63 @@ window.submitMemberApplication = async function() {
     }
 };
 
+// ---- ADMIN: TAMBAH MEMBER MANUAL (tanpa nunggu pengajuan) ----
+window.toggleManualMemberForm = function() {
+    const el = document.getElementById('adminManualMemberForm');
+    const chevron = document.getElementById('manualMemberChevron');
+    if (!el) return;
+    const isHidden = el.style.display === 'none' || !el.style.display;
+    el.style.display = isHidden ? 'block' : 'none';
+    if (chevron) chevron.className = isHidden ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+};
+
+window.submitManualAddMember = async function() {
+    const input = document.getElementById('manualMemberUsername');
+    const namaInput = document.getElementById('manualMemberNama');
+    const hpInput = document.getElementById('manualMemberHp');
+    const uname = input?.value.trim().replace(/^@/, '').toLowerCase();
+    if (!uname) { showToast('Masukkan username dulu', 'error'); return; }
+    if (!db) { showToast('Database belum siap, coba refresh halaman.', 'error'); return; }
+    if (!currentUser || currentUser.role !== 'admin') { showToast('Hanya admin yang bisa menambah member.', 'error'); return; }
+
+    const btn = document.getElementById('btnManualAddMember');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...'; }
+    try {
+        const existingWl = await getDoc(doc(db, 'member_whitelist', uname));
+        if (existingWl.exists()) {
+            showToast(`@${uname} sudah terdaftar sebagai member.`, 'warning');
+            return;
+        }
+        const memberId = generateMemberId();
+        await setDoc(doc(db, 'member_whitelist', uname), {
+            username: uname,
+            memberId,
+            nama: namaInput?.value.trim() || '',
+            hp: hpInput?.value.trim() || '',
+            addedBy: currentUser.uid,
+            addedByAdmin: true,
+            createdAt: serverTimestamp()
+        });
+        // Best-effort: kalau username ini sudah pernah login sebelumnya, sinkronkan juga ke dokumen users-nya
+        try {
+            const usnap = await getDocs(query(collection(db, 'users'), where('username', '==', uname), limit(1)));
+            if (!usnap.empty) {
+                await setDoc(doc(db, 'users', usnap.docs[0].id), { isMember: true, memberId, memberSince: serverTimestamp() }, { merge: true });
+            }
+        } catch (e) { /* non-fatal */ }
+        showToast(`✅ @${uname} berhasil didaftarkan sebagai member! ID: ${memberId}`, 'success');
+        if (input) input.value = '';
+        if (namaInput) namaInput.value = '';
+        if (hpInput) hpInput.value = '';
+        loadAdminMemberList();
+    } catch (e) {
+        logDebug('submitManualAddMember err: ' + e.message);
+        showToast('Gagal menambah member: ' + e.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-user-plus" style="margin-right:6px;"></i>Daftarkan Member'; }
+    }
+};
+
 // ---- ADMIN: KELOLA MEMBER ----
 async function loadAdminMemberApplications() {
     const c = document.getElementById('adminMemberList');
@@ -10263,15 +10407,15 @@ async function loadAdminMemberList() {
     const c = document.getElementById('adminMemberActiveList');
     if (!c || !db) return;
     try {
-        const snap = await getDocs(query(collection(db, 'users'), where('isMember', '==', true)));
-        if (snap.empty) { c.innerHTML = '<div class="empty-state" style="padding:24px;"><i class="fas fa-users" style="font-size:32px;"></i><p>Belum ada member aktif</p></div>'; return; }
+        const snap = await getDocs(query(collection(db, 'member_whitelist'), orderBy('createdAt', 'desc')));
+        if (snap.empty) { c.innerHTML = '<div class="empty-state" style="padding:24px;"><i class="fas fa-users" style="font-size:32px;"></i><p>Belum ada member terdaftar</p></div>'; return; }
         c.innerHTML = '';
         snap.forEach(d => {
             const s = d.data();
             c.innerHTML += `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:#F9FAFB;border-radius:10px;margin-bottom:6px;">
                 <div style="width:36px;height:36px;background:#1F2937;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#D4AF37;font-size:14px;flex-shrink:0;"><i class="fas fa-id-card"></i></div>
-                <div style="flex:1;min-width:0;"><p style="font-weight:700;color:#1F2937;font-size:12px;margin:0;">@${s.username || d.id}</p><p style="font-size:10px;color:#6B7280;margin:0;">${s.memberId || '-'}</p></div>
-                <button onclick="revokeMembership('${d.id}','${s.username || ''}')" style="background:#FEE2E2;color:#DC2626;border:none;padding:6px 10px;border-radius:8px;font-weight:700;cursor:pointer;font-size:10px;font-family:inherit;flex-shrink:0;">Cabut</button>
+                <div style="flex:1;min-width:0;"><p style="font-weight:700;color:#1F2937;font-size:12px;margin:0;">@${s.username || d.id}${s.nama ? ' · '+s.nama : ''}</p><p style="font-size:10px;color:#6B7280;margin:0;">${s.memberId || '-'}${s.hp ? ' · '+s.hp : ''}</p></div>
+                <button onclick="revokeMembership('${d.id}')" style="background:#FEE2E2;color:#DC2626;border:none;padding:6px 10px;border-radius:8px;font-weight:700;cursor:pointer;font-size:10px;font-family:inherit;flex-shrink:0;">Cabut</button>
             </div>`;
         });
     } catch (e) { logDebug('loadAdminMemberList err: ' + e.message); }
@@ -10282,6 +10426,8 @@ window.approveMemberApplication = async function(docId, userId) {
     if (!db) { showToast('Database tidak siap. Refresh halaman.', 'error'); return; }
     if (!currentUser || currentUser.role !== 'admin') { showToast('Hanya admin yang bisa menyetujui pengajuan.', 'error'); return; }
     try {
+        const appSnap = await getDoc(doc(db, 'member_applications', docId));
+        const appData = appSnap.exists() ? appSnap.data() : {};
         const memberId = generateMemberId();
         await updateDoc(doc(db, 'member_applications', docId), { status: 'approved', approvedAt: serverTimestamp(), approvedBy: currentUser?.uid, memberId });
         await setDoc(doc(db, 'users', userId), {
@@ -10289,6 +10435,17 @@ window.approveMemberApplication = async function(docId, userId) {
             memberId: memberId,
             memberSince: serverTimestamp()
         }, { merge: true });
+        if (appData.username) {
+            await setDoc(doc(db, 'member_whitelist', appData.username.toLowerCase()), {
+                username: appData.username.toLowerCase(),
+                memberId,
+                nama: appData.nama || '',
+                hp: appData.hp || '',
+                addedBy: currentUser.uid,
+                addedByAdmin: false,
+                createdAt: serverTimestamp()
+            }, { merge: true });
+        }
         showToast(`✅ Member disetujui! ID: ${memberId}`, 'success');
         loadAdminMemberApplications();
         loadAdminMemberList();
@@ -10307,12 +10464,19 @@ window.rejectMemberApplication = async function(docId) {
     } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
 };
 
-window.revokeMembership = async function(userId, username) {
-    if (!confirm(`Cabut status member @${username || userId}? User tidak akan bisa berbelanja lagi sampai daftar ulang.`)) return;
+window.revokeMembership = async function(username) {
+    if (!confirm(`Cabut status member @${username}? User tidak akan bisa login lagi sampai didaftarkan ulang.`)) return;
     if (!currentUser || currentUser.role !== 'admin') { showToast('Hanya admin yang bisa mencabut member.', 'error'); return; }
     try {
-        await setDoc(doc(db, 'users', userId), { isMember: false }, { merge: true });
-        showToast(`Status member @${username || userId} dicabut`, 'warning');
+        await deleteDoc(doc(db, 'member_whitelist', username));
+        // Best-effort: unset juga di dokumen users kalau usernya sudah pernah login
+        try {
+            const usnap = await getDocs(query(collection(db, 'users'), where('username', '==', username), limit(1)));
+            if (!usnap.empty) {
+                await setDoc(doc(db, 'users', usnap.docs[0].id), { isMember: false }, { merge: true });
+            }
+        } catch (e) { /* non-fatal */ }
+        showToast(`Status member @${username} dicabut`, 'warning');
         loadAdminMemberList();
     } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
 };
