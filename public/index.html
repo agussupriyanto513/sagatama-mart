@@ -2604,6 +2604,7 @@
                 <button onclick="switchAdminSosialTab('bansos',this)">Bantuan Sosial</button>
                 <button onclick="switchAdminSosialTab('staking',this)">Staking</button>
                 <button onclick="switchAdminSosialTab('distribute',this)">Distribusi</button>
+                <button onclick="switchAdminSosialTab('member',this)">Member <span id="adminMemberBadge" style="display:none;background:#DC2626;color:white;font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px;"></span></button>
             </div>
 
             <!-- Admin: Beasiswa -->
@@ -2689,6 +2690,27 @@
                     <div id="adminDistLog">
                         <div class="empty-state" style="padding:24px;"><i class="fas fa-history" style="font-size:36px;"></i><p>Belum ada riwayat</p></div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Admin: Member (Kartu Member / ID Card) -->
+            <div id="admin-sosial-member" style="display:none;">
+                <div style="background:linear-gradient(135deg,#1F2937,#111827);border-radius:16px;padding:16px;margin-bottom:14px;color:white;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <i class="fas fa-id-card" style="color:#D4AF37;font-size:18px;"></i>
+                        <div>
+                            <p style="font-weight:700;font-size:13px;margin:0;">Kelola Member</p>
+                            <p style="font-size:11px;opacity:0.7;margin:2px 0 0;">Hanya member terverifikasi yang bisa berbelanja</p>
+                        </div>
+                    </div>
+                </div>
+                <h4 style="font-weight:700;color:#1F2937;margin-bottom:10px;font-size:13px;">Pengajuan Member Masuk</h4>
+                <div id="adminMemberList">
+                    <div class="empty-state" style="padding:30px;"><i class="fas fa-inbox" style="font-size:36px;"></i><p>Belum ada pengajuan member</p></div>
+                </div>
+                <h4 style="font-weight:700;color:#1F2937;margin:18px 0 10px;font-size:13px;">Member Aktif</h4>
+                <div id="adminMemberActiveList">
+                    <div class="empty-state" style="padding:24px;"><i class="fas fa-users" style="font-size:32px;"></i><p>Belum ada member aktif</p></div>
                 </div>
             </div>
         </div>
@@ -3200,6 +3222,20 @@
             <button id="btnSubmitBeasiswa" onclick="submitBeasiswa()" class="btn-primary" style="background:linear-gradient(135deg,#1D4ED8,#3B82F6);">
                 <i class="fas fa-paper-plane" style="margin-right:8px;"></i>Kirim Pengajuan
             </button>
+        </div>
+    </div>
+
+    <!-- MODAL: MEMBER (Kartu Member / ID Card) -->
+    <div id="memberModal" class="modal">
+        <div class="modal-content">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                <div style="width:52px;height:52px;background:linear-gradient(135deg,#1F2937,#111827);border-radius:14px;display:flex;align-items:center;justify-content:center;color:#D4AF37;font-size:22px;"><i class="fas fa-id-card"></i></div>
+                <div><h3 style="font-size:18px;font-weight:800;color:#1F2937;margin:0;">Member Sagatama</h3><p style="font-size:12px;color:#6B7280;margin:0;">Wajib jadi member untuk berbelanja</p></div>
+                <button onclick="closeModal('memberModal')" style="margin-left:auto;background:#F3F4F6;border:none;width:36px;height:36px;border-radius:10px;cursor:pointer;color:#6B7280;"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="memberModalBody">
+                <div style="text-align:center;padding:30px 0;"><div class="loading-spinner" style="margin:0 auto;"></div></div>
+            </div>
         </div>
     </div>
 
@@ -3853,6 +3889,14 @@ window.addEventListener('unhandledrejection', function(e) {
 //       allow update: if request.auth != null && isAdmin();
 //     }
 //
+//     // Member (Kartu Member / ID Card) — hanya member yang boleh checkout
+//     match /member_applications/{docId} {
+//       allow read: if request.auth != null && isAdmin();
+//       allow read: if request.auth != null;
+//       allow create: if request.auth != null;
+//       allow update: if request.auth != null && isAdmin();
+//     }
+//
 //     // SGT Stakings
 //     match /sgt_stakings/{docId} {
 //       allow read: if request.auth != null;
@@ -3965,6 +4009,21 @@ function _fixLegacySGTRate(sourceLabel) {
 const SGT_FEE_RATE      = 0.03;  // 3% dari base reward masuk fee pool
 const SGT_AUTOBURN_RATE = 0.02;  // 2% dari setiap SGT yang dipakai redeem/transfer di-burn
 const SGT_SOSIAL_RATE   = 0.05;  // 5% dari reward belanja ke Baitul Maal
+
+// ── MEMBERSHIP (Kartu Member / ID Card) ─────────────────────────────
+// Hanya user dengan status member (isMember === true di dokumen users/{uid})
+// yang boleh berbelanja. Admin selalu diizinkan untuk keperluan kelola toko.
+function isUserMember() {
+    if (!currentUser) return false;
+    if (currentUser.role === 'admin') return true;
+    return currentUser.isMember === true;
+}
+
+function generateMemberId() {
+    const time = Date.now().toString(36).toUpperCase().slice(-4);
+    const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return 'SGT-' + time + rand;
+}
 
 // Staking APY didanai dari fee pool, bukan mint baru
 const SGT_STAKING_PLANS = [
@@ -6004,6 +6063,10 @@ async function verifyUserSession() {
             // Update data terbaru ke currentUser
             currentUser.address = data.address || currentUser.address;
             currentUser.fullName = data.fullName || currentUser.fullName;
+            // Sinkronkan status member (isMember di-set admin lewat approveMemberApplication)
+            currentUser.isMember  = data.isMember === true;
+            currentUser.memberId  = data.memberId || null;
+            currentUser.memberSince = data.memberSince || null;
             localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
             logDebug("User session verified: @" + currentUser.username);
         }
@@ -6566,7 +6629,10 @@ async function processPiAuthSuccess(authResult) {
 
     // Step 6: Pastikan dokumen user ada di Firestore dengan UID yang benar
     await ensureUserDocumentExists(piUid, currentUser.username, firebaseUid);
-    
+
+    // Sinkronkan status member (isMember/memberId) dari Firestore ke currentUser
+    await verifyUserSession().catch(e => logDebug('[AUTH-v3] verifyUserSession: ' + e.message));
+
     // Step 7: Load SGT data dengan strategi multi-fallback
     await loadSGTDataFixed();
     
@@ -6713,7 +6779,10 @@ window.manualPiLogin = async function() {
             uid: targetUid,
             username: username,
             role: existingData.role || 'buyer',
-            authType: 'pi_manual'
+            authType: 'pi_manual',
+            isMember: existingData.isMember === true,
+            memberId: existingData.memberId || null,
+            memberSince: existingData.memberSince || null
         };
         
         await setDoc(doc(db, 'users', targetUid), {
@@ -8260,6 +8329,16 @@ function renderAccount() {
         </div>
 
         ${!isAdmin ? `
+        <div class="card" onclick="openModal('memberModal')" style="cursor:pointer;display:flex;align-items:center;gap:12px;border-left:3px solid ${isUserMember() ? '#059669' : '#DC2626'};">
+            <div style="width:48px;height:48px;background:${isUserMember() ? '#ECFDF5' : '#FEF2F2'};border-radius:12px;display:flex;align-items:center;justify-content:center;color:${isUserMember() ? '#059669' : '#DC2626'};font-size:20px;"><i class="fas fa-id-card"></i></div>
+            <div style="flex:1;">
+                <p style="font-weight:700;color:#1F2937;">Kartu Member</p>
+                <p style="font-size:12px;color:${isUserMember() ? '#059669' : '#DC2626'};font-weight:700;">${isUserMember() ? '✅ Member aktif · ' + (currentUser.memberId || '-') : 'Belum member · wajib daftar untuk belanja'}</p>
+            </div>
+            <i class="fas fa-chevron-right" style="color:#9CA3AF;"></i>
+        </div>` : ''}
+
+        ${!isAdmin ? `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px;">
             <button onclick="openSGTRedeemModal()" class="btn-sgt" style="margin-bottom:0;font-size:13px;padding:12px;"><i class="fas fa-gift"></i> Tukar Reward</button>
             <button onclick="openSGTTransferModal()" style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);border:1.5px solid #F59E0B;color:#92400E;padding:12px;border-radius:12px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fas fa-exchange-alt"></i> Transfer SGT</button>
@@ -8832,6 +8911,16 @@ function renderSalesChart() {
 
 // CART FUNCTIONS
 window.addToCart = function(id) {
+    if (!currentUser) {
+        showToast('Silakan login terlebih dahulu', 'warning');
+        openModal('loginOptionsModal');
+        return;
+    }
+    if (!isUserMember()) {
+        showToast('Khusus member yang bisa belanja. Daftar member dulu ya!', 'warning');
+        openModal('memberModal');
+        return;
+    }
     const p = products.find(x => x.id === id);
     if (!p) { showToast('Produk tidak ditemukan!', 'error'); return; }
     if (!p.stock || p.stock <= 0) { showToast('Produk habis stok!', 'error'); return; }
@@ -8875,6 +8964,7 @@ window.removeFromCart = function(idx) {
 window.openPayment = function() {
     if (cart.length === 0) { showToast('Keranjang kosong!', 'error'); return; }
     if (!currentUser) { showToast('Silakan login terlebih dahulu', 'warning'); openModal('loginOptionsModal'); return; }
+    if (!isUserMember()) { showToast('Khusus member yang bisa checkout. Daftar member dulu ya!', 'warning'); openModal('memberModal'); return; }
 
     const totalPi = cart.reduce((sum, item) => sum + ((parseFloat(item.pricePi) || 0) * item.qty), 0);
     const sgtReward = calculateSGTReward(totalPi);
@@ -9420,7 +9510,7 @@ window.switchSosialTab = function(tab, btn) {
 
 // Admin Sosial Tab Switching
 window.switchAdminSosialTab = function(tab, btn) {
-    ['beasiswa','bansos','staking','distribute'].forEach(t => {
+    ['beasiswa','bansos','staking','distribute','member'].forEach(t => {
         const el = document.getElementById('admin-sosial-'+t);
         if (el) el.style.display = t===tab ? 'block' : 'none';
     });
@@ -9430,6 +9520,7 @@ window.switchAdminSosialTab = function(tab, btn) {
     if (tab==='bansos')   loadAdminBansos();
     if (tab==='staking')  loadAdminStaking();
     if (tab==='distribute') { loadAdminDistLog(); updateSGTAdminStats(); }
+    if (tab==='member') { loadAdminMemberApplications(); loadAdminMemberList(); }
 };
 
 // Auto-load beasiswa & bansos saat admin membuka view sosial
@@ -9961,6 +10052,7 @@ async function updateAdminSosialBadge() {
         const badge = document.getElementById('adminSosialBadge');
         if (badge) { badge.style.display = count>0 ? 'inline' : 'none'; badge.textContent = count; }
     } catch {}
+    if (typeof updateAdminMemberBadge === 'function') updateAdminMemberBadge();
 }
 
 // switchView sudah dipatch langsung di atas (validViews, navMap, switch cases)
@@ -9973,6 +10065,268 @@ window.loadSGTDataWithSosial = async function() {
     updateSosialUI();
     if (userRole === 'admin') updateAdminSosialBadge();
 };
+
+// ══════════════════════════════════════════════════════════════════
+// MEMBERSHIP MODULE — Kartu Member / ID Card
+// Hanya user ber-status member (isMember===true) yang boleh belanja.
+// Alur: user isi form → tersimpan di 'member_applications' (status pending)
+// → admin approve/reject → jika approve, users/{uid}.isMember=true + memberId
+// ══════════════════════════════════════════════════════════════════
+
+window.renderMemberModal = async function renderMemberModal() {
+    const body = document.getElementById('memberModalBody');
+    if (!body) return;
+
+    if (!currentUser) {
+        body.innerHTML = `<div style="text-align:center;padding:20px 0;">
+            <p style="color:#6B7280;font-size:14px;margin-bottom:16px;">Silakan login terlebih dahulu untuk mendaftar member.</p>
+            <button onclick="closeModal('memberModal');openModal('loginOptionsModal');" class="btn-primary">Login Sekarang</button>
+        </div>`;
+        return;
+    }
+
+    // Sudah member → tampilkan kartu ID
+    if (isUserMember() && currentUser.role !== 'admin') {
+        renderMemberIdCard(body);
+        return;
+    }
+    if (currentUser.role === 'admin') {
+        body.innerHTML = `<div style="text-align:center;padding:20px 0;">
+            <i class="fas fa-user-shield" style="font-size:36px;color:#D97706;margin-bottom:12px;"></i>
+            <p style="color:#6B7280;font-size:14px;">Akun admin tidak memerlukan kartu member.</p>
+        </div>`;
+        return;
+    }
+
+    body.innerHTML = `<div style="text-align:center;padding:30px 0;"><div class="loading-spinner" style="margin:0 auto;"></div></div>`;
+
+    // Cek pengajuan terakhir user (pending/rejected/approved)
+    try {
+        if (!db) throw new Error('Database belum siap');
+        const queryUid = currentUser.firebaseUid || auth?.currentUser?.uid || currentUser.uid;
+        let snap = await getDocs(query(collection(db, 'member_applications'), where('firebaseUid', '==', queryUid), orderBy('createdAt', 'desc'), limit(1)));
+        if (snap.empty) snap = await getDocs(query(collection(db, 'member_applications'), where('userId', '==', currentUser.uid), orderBy('createdAt', 'desc'), limit(1)));
+
+        if (!snap.empty) {
+            const app = snap.docs[0].data();
+            if (app.status === 'pending') {
+                body.innerHTML = `<div style="text-align:center;padding:10px 0 20px;">
+                    <i class="fas fa-hourglass-half" style="font-size:40px;color:#D97706;margin-bottom:14px;"></i>
+                    <p style="font-weight:700;color:#1F2937;margin-bottom:4px;">Pengajuan Sedang Diverifikasi</p>
+                    <p style="font-size:13px;color:#6B7280;">Admin akan memeriksa data kamu dalam 1-3 hari kerja. Kamu belum bisa berbelanja sampai disetujui.</p>
+                </div>`;
+                return;
+            }
+            if (app.status === 'rejected') {
+                body.innerHTML = `<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;padding:14px;margin-bottom:16px;text-align:center;">
+                    <i class="fas fa-times-circle" style="font-size:28px;color:#DC2626;margin-bottom:8px;"></i>
+                    <p style="font-weight:700;color:#B91C1C;font-size:13px;margin:0;">Pengajuan sebelumnya ditolak</p>
+                    <p style="font-size:12px;color:#7F1D1D;margin-top:4px;">Silakan periksa kembali data kamu dan ajukan ulang.</p>
+                </div>` + renderMemberFormHtml(app);
+                attachMemberFormHandler();
+                return;
+            }
+        }
+        // Belum pernah daftar → tampilkan form
+        body.innerHTML = renderMemberFormHtml(null);
+        attachMemberFormHandler();
+    } catch (e) {
+        logDebug('renderMemberModal error: ' + e.message);
+        body.innerHTML = renderMemberFormHtml(null) + `<p style="font-size:11px;color:#DC2626;margin-top:8px;text-align:center;">Gagal cek status sebelumnya, tapi kamu tetap bisa mendaftar.</p>`;
+        attachMemberFormHandler();
+    }
+};
+
+function renderMemberFormHtml(prefill) {
+    const p = prefill || {};
+    return `
+        <div class="form-group">
+            <label class="form-label">Nama Lengkap</label>
+            <input type="text" id="memNama" class="form-input" placeholder="Nama sesuai KTP" value="${p.nama || ''}">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Nomor HP / WhatsApp</label>
+            <input type="tel" id="memHp" class="form-input" placeholder="08123456789" value="${p.hp || ''}">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Alamat Lengkap</label>
+            <textarea id="memAlamat" class="form-input" rows="3" placeholder="Jalan, RT/RW, Kelurahan, Kecamatan, Kota" style="resize:vertical;font-family:inherit;">${p.alamat || ''}</textarea>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Nomor KTP / Identitas <span style="color:#9CA3AF;font-weight:500;">(opsional)</span></label>
+            <input type="text" id="memKtp" class="form-input" placeholder="Untuk verifikasi tambahan" value="${p.ktp || ''}">
+        </div>
+        <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:10px;padding:12px;margin-bottom:16px;">
+            <p style="font-size:12px;color:#92400E;"><i class="fas fa-info-circle" style="margin-right:6px;"></i>Hanya member terverifikasi yang bisa berbelanja. Pengajuan diverifikasi admin dalam 1-3 hari kerja.</p>
+        </div>
+        <button id="btnSubmitMember" class="btn-primary" style="background:linear-gradient(135deg,#1F2937,#111827);">
+            <i class="fas fa-id-card" style="margin-right:8px;"></i>Daftar Member
+        </button>`;
+}
+
+function attachMemberFormHandler() {
+    const btn = document.getElementById('btnSubmitMember');
+    if (btn) btn.onclick = submitMemberApplication;
+}
+
+function renderMemberIdCard(body) {
+    const since = currentUser.memberSince?.toDate ? currentUser.memberSince.toDate() : (currentUser.memberSince ? new Date(currentUser.memberSince) : null);
+    const sinceLabel = since ? since.toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' }) : '-';
+    body.innerHTML = `
+        <div style="background:linear-gradient(135deg,#1F2937 0%,#111827 100%);border-radius:18px;padding:22px;color:white;position:relative;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,0.25);">
+            <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(212,175,55,0.12);border-radius:50%;"></div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;position:relative;">
+                <div>
+                    <p style="font-size:11px;letter-spacing:1px;color:#D4AF37;font-weight:800;margin:0;">SAGATAMA MART</p>
+                    <p style="font-size:10px;color:rgba(255,255,255,0.6);margin:2px 0 0;">Exclusive Member Card</p>
+                </div>
+                <i class="fas fa-gem" style="color:#D4AF37;font-size:20px;"></i>
+            </div>
+            <p style="font-size:20px;font-weight:800;margin:0 0 4px;position:relative;">@${currentUser.username || 'pioneer'}</p>
+            <p style="font-size:13px;letter-spacing:2px;color:#F5E7BE;font-weight:700;margin:0 0 18px;position:relative;">${currentUser.memberId || '-'}</p>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;position:relative;">
+                <div><p style="font-size:9px;color:rgba(255,255,255,0.5);margin:0;">MEMBER SEJAK</p><p style="font-size:12px;font-weight:700;margin:2px 0 0;">${sinceLabel}</p></div>
+                <span style="background:rgba(16,185,129,0.2);color:#6EE7B7;border:1px solid rgba(16,185,129,0.35);padding:4px 10px;border-radius:20px;font-size:10px;font-weight:800;"><i class="fas fa-check-circle" style="margin-right:4px;"></i>AKTIF</span>
+            </div>
+        </div>
+        <p style="text-align:center;font-size:12px;color:#6B7280;margin-top:16px;">Kamu sudah bisa berbelanja bebas di Sagatama Mart 🎉</p>`;
+}
+
+window.submitMemberApplication = async function() {
+    if (!currentUser) {
+        closeModal('memberModal');
+        showToast('Silakan login terlebih dahulu', 'warning');
+        setTimeout(() => openModal('loginOptionsModal'), 300);
+        return;
+    }
+    const nama   = document.getElementById('memNama')?.value.trim();
+    const hp     = document.getElementById('memHp')?.value.trim();
+    const alamat = document.getElementById('memAlamat')?.value.trim();
+    const ktp    = document.getElementById('memKtp')?.value.trim() || '';
+    if (!nama || !hp || !alamat) {
+        showToast('Lengkapi nama, no. HP, dan alamat terlebih dahulu', 'error');
+        return;
+    }
+    const btn = document.getElementById('btnSubmitMember');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Mengirim...'; }
+    try {
+        if (!db) throw new Error('Database belum siap, coba refresh halaman.');
+        if (auth && !auth.currentUser) {
+            try { await signInAnonymously(auth); }
+            catch (authErr) { logDebug('Anon auth skip (non-fatal): ' + authErr.message); }
+        }
+        await addDoc(collection(db, 'member_applications'), {
+            userId:      currentUser.uid,
+            firebaseUid: currentUser.firebaseUid || auth?.currentUser?.uid || null,
+            username:    currentUser.username || 'user',
+            nama, hp, alamat, ktp,
+            status: 'pending', createdAt: serverTimestamp()
+        });
+        showToast('✅ Pengajuan member berhasil dikirim! Tunggu verifikasi admin.', 'success');
+        renderMemberModal();
+        if (typeof updateAdminSosialBadge === 'function') updateAdminMemberBadge();
+    } catch (e) {
+        logDebug('submitMemberApplication error: ' + e.message + ' | code: ' + e.code);
+        let errMsg = e.message;
+        if (e.code === 'permission-denied') errMsg = 'Akses ditolak. Coba login ulang.';
+        else if (e.code === 'unavailable' || (e.message||'').includes('offline')) errMsg = 'Tidak ada koneksi internet.';
+        showToast('Gagal kirim pengajuan: ' + errMsg, 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-id-card" style="margin-right:8px;"></i>Daftar Member'; }
+    }
+};
+
+// ---- ADMIN: KELOLA MEMBER ----
+async function loadAdminMemberApplications() {
+    const c = document.getElementById('adminMemberList');
+    if (!c || !db) return;
+    try {
+        const snap = await getDocs(query(collection(db, 'member_applications'), where('status', '==', 'pending'), orderBy('createdAt', 'desc')));
+        if (snap.empty) { c.innerHTML = '<div class="empty-state" style="padding:30px;"><i class="fas fa-inbox" style="font-size:36px;"></i><p>Belum ada pengajuan member</p></div>'; return; }
+        c.innerHTML = '';
+        snap.forEach(d => {
+            const s = d.data();
+            c.innerHTML += `<div style="background:white;border-radius:12px;padding:14px;margin-bottom:10px;border:1px solid #E2E8F0;">
+                <p style="font-weight:700;color:#1F2937;font-size:13px;margin:0;">${s.nama} <span style="color:#9CA3AF;font-weight:500;">@${s.username}</span></p>
+                <p style="font-size:11px;color:#6B7280;margin:4px 0;"><i class="fas fa-phone" style="width:14px;"></i> ${s.hp}</p>
+                <p style="font-size:11px;color:#6B7280;margin:0 0 10px;"><i class="fas fa-map-marker-alt" style="width:14px;"></i> ${s.alamat}</p>
+                ${s.ktp ? `<p style="font-size:11px;color:#6B7280;margin:0 0 10px;"><i class="fas fa-id-card" style="width:14px;"></i> ${s.ktp}</p>` : ''}
+                <div style="display:flex;gap:8px;">
+                    <button onclick="approveMemberApplication('${d.id}','${s.userId}')" style="flex:1;background:#059669;color:white;border:none;padding:10px;border-radius:8px;font-weight:700;cursor:pointer;font-size:12px;font-family:inherit;"><i class="fas fa-check"></i> Setujui</button>
+                    <button onclick="rejectMemberApplication('${d.id}')" style="flex:1;background:#FEE2E2;color:#DC2626;border:none;padding:10px;border-radius:8px;font-weight:700;cursor:pointer;font-size:12px;font-family:inherit;"><i class="fas fa-times"></i> Tolak</button>
+                </div>
+            </div>`;
+        });
+    } catch (e) { logDebug('loadAdminMemberApplications err: ' + e.message); }
+}
+
+async function loadAdminMemberList() {
+    const c = document.getElementById('adminMemberActiveList');
+    if (!c || !db) return;
+    try {
+        const snap = await getDocs(query(collection(db, 'users'), where('isMember', '==', true)));
+        if (snap.empty) { c.innerHTML = '<div class="empty-state" style="padding:24px;"><i class="fas fa-users" style="font-size:32px;"></i><p>Belum ada member aktif</p></div>'; return; }
+        c.innerHTML = '';
+        snap.forEach(d => {
+            const s = d.data();
+            c.innerHTML += `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:#F9FAFB;border-radius:10px;margin-bottom:6px;">
+                <div style="width:36px;height:36px;background:#1F2937;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#D4AF37;font-size:14px;flex-shrink:0;"><i class="fas fa-id-card"></i></div>
+                <div style="flex:1;min-width:0;"><p style="font-weight:700;color:#1F2937;font-size:12px;margin:0;">@${s.username || d.id}</p><p style="font-size:10px;color:#6B7280;margin:0;">${s.memberId || '-'}</p></div>
+                <button onclick="revokeMembership('${d.id}','${s.username || ''}')" style="background:#FEE2E2;color:#DC2626;border:none;padding:6px 10px;border-radius:8px;font-weight:700;cursor:pointer;font-size:10px;font-family:inherit;flex-shrink:0;">Cabut</button>
+            </div>`;
+        });
+    } catch (e) { logDebug('loadAdminMemberList err: ' + e.message); }
+}
+
+window.approveMemberApplication = async function(docId, userId) {
+    if (!confirm('Setujui pengajuan member ini? User akan langsung mendapat kartu member.')) return;
+    if (!db) { showToast('Database tidak siap. Refresh halaman.', 'error'); return; }
+    if (!currentUser || currentUser.role !== 'admin') { showToast('Hanya admin yang bisa menyetujui pengajuan.', 'error'); return; }
+    try {
+        const memberId = generateMemberId();
+        await updateDoc(doc(db, 'member_applications', docId), { status: 'approved', approvedAt: serverTimestamp(), approvedBy: currentUser?.uid, memberId });
+        await setDoc(doc(db, 'users', userId), {
+            isMember: true,
+            memberId: memberId,
+            memberSince: serverTimestamp()
+        }, { merge: true });
+        showToast(`✅ Member disetujui! ID: ${memberId}`, 'success');
+        loadAdminMemberApplications();
+        loadAdminMemberList();
+        updateAdminMemberBadge();
+    } catch (e) { showToast('Gagal approve: ' + e.message, 'error'); logDebug('approveMemberApplication err: ' + e.message); }
+};
+
+window.rejectMemberApplication = async function(docId) {
+    if (!confirm('Tolak pengajuan member ini?')) return;
+    if (!currentUser || currentUser.role !== 'admin') { showToast('Hanya admin yang bisa menolak pengajuan.', 'error'); return; }
+    try {
+        await updateDoc(doc(db, 'member_applications', docId), { status: 'rejected', rejectedAt: serverTimestamp() });
+        showToast('Pengajuan member ditolak', 'warning');
+        loadAdminMemberApplications();
+        updateAdminMemberBadge();
+    } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
+};
+
+window.revokeMembership = async function(userId, username) {
+    if (!confirm(`Cabut status member @${username || userId}? User tidak akan bisa berbelanja lagi sampai daftar ulang.`)) return;
+    if (!currentUser || currentUser.role !== 'admin') { showToast('Hanya admin yang bisa mencabut member.', 'error'); return; }
+    try {
+        await setDoc(doc(db, 'users', userId), { isMember: false }, { merge: true });
+        showToast(`Status member @${username || userId} dicabut`, 'warning');
+        loadAdminMemberList();
+    } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
+};
+
+async function updateAdminMemberBadge() {
+    if (!db || userRole !== 'admin') return;
+    try {
+        const snap = await getDocs(query(collection(db, 'member_applications'), where('status', '==', 'pending')));
+        const badge = document.getElementById('adminMemberBadge');
+        if (badge) { badge.style.display = snap.size > 0 ? 'inline' : 'none'; badge.textContent = snap.size; }
+    } catch {}
+}
+
+// END MEMBERSHIP MODULE
 
 // END SGT SOSIAL MODULE
 
@@ -10862,6 +11216,9 @@ window.openModal = function(id) {
             if (adminRateEl) adminRateEl.value = sgtRatePerPi;
             if (adminRateHint) adminRateHint.textContent = sgtRatePerPi;
         }).catch(()=>{});
+    }
+    if (id === 'memberModal') {
+        if (typeof renderMemberModal === 'function') renderMemberModal();
     }
 };
 
