@@ -6099,13 +6099,30 @@ async function verifyUserSession() {
             // Update data terbaru ke currentUser
             currentUser.address = data.address || currentUser.address;
             currentUser.fullName = data.fullName || currentUser.fullName;
-            // Sinkronkan status member (isMember di-set admin lewat approveMemberApplication)
-            currentUser.isMember  = data.isMember === true;
-            currentUser.memberId  = data.memberId || null;
-            currentUser.memberSince = data.memberSince || null;
-            localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
-            logDebug("User session verified: @" + currentUser.username);
         }
+        // Sinkronkan status member dari SUMBER ASLI (member_whitelist), BUKAN dari
+        // users.isMember — field itu tidak pernah bisa ditulis dari client karena
+        // dikunci di Security Rules (`allow update: if false`), jadi kalau dipakai
+        // di sini statusnya akan selalu ke-reset jadi false meski user sudah member.
+        if (currentUser.role !== 'admin' && currentUser.username) {
+            try {
+                const wlSnap = await getDoc(doc(db, 'member_whitelist', currentUser.username.toLowerCase()));
+                if (wlSnap.exists()) {
+                    const wl = wlSnap.data();
+                    currentUser.isMember   = true;
+                    currentUser.memberId   = wl.memberId || currentUser.memberId || null;
+                    currentUser.memberSince = wl.createdAt || currentUser.memberSince || null;
+                } else {
+                    currentUser.isMember = false;
+                }
+            } catch (wlErr) {
+                // Gagal cek whitelist (mis. offline) — JANGAN turunkan status member
+                // yang sudah benar sebelumnya, biarkan apa adanya.
+                logDebug('verifyUserSession whitelist check skip: ' + wlErr.message);
+            }
+        }
+        localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
+        logDebug("User session verified: @" + currentUser.username);
     } catch (e) {
         logDebug("verifyUserSession error: " + e.message);
     }
@@ -6671,7 +6688,12 @@ async function processPiAuthSuccess(authResult) {
         accessToken: authResult.accessToken,
         walletAddress: authResult.user.wallet_address || null,
         authType: 'pi',
-        firebaseUid: firebaseUid || undefined
+        firebaseUid: firebaseUid || undefined,
+        // Sudah lolos gerbang whitelist di atas, jadi langsung set true di sini
+        // supaya tidak ada jeda status salah sebelum verifyUserSession() selesai
+        isMember: _piIsAdmin ? false : true,
+        memberId: memberWhitelistData?.memberId || null,
+        memberSince: memberWhitelistData?.createdAt || null
     };
     // Jika terdeteksi sebagai admin via Pi UID, konfirmasi ke Firestore
     if (_piIsAdmin && db) {
