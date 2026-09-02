@@ -9,16 +9,25 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { paymentId } = req.body || {};
+  const { paymentId, network } = req.body || {};
 
   if (!paymentId) {
     return res.status(400).json({ error: 'paymentId diperlukan' });
   }
 
-  const rawKey = process.env.PI_API_KEY;
+  // Pilih key sesuai jaringan yang dipakai frontend saat itu (testnet/mainnet).
+  // App Testnet dan App Mainnet di Pi Developer Portal punya API key yang
+  // BERBEDA — pakai key yang salah = Pi selalu menolak approve, meski
+  // kodenya sendiri benar. Kalau PI_API_KEY_TESTNET / PI_API_KEY_MAINNET
+  // belum di-set di Vercel, fallback ke PI_API_KEY lama (kompatibel dengan
+  // setup sebelumnya).
+  const rawKey = network === 'testnet'
+    ? (process.env.PI_API_KEY_TESTNET || process.env.PI_API_KEY)
+    : (process.env.PI_API_KEY_MAINNET || process.env.PI_API_KEY);
+
   if (!rawKey) {
-    console.error('[approve] PI_API_KEY tidak ditemukan di environment!');
-    return res.status(500).json({ error: 'Server config error: PI_API_KEY missing' });
+    console.error(`[approve] PI_API_KEY untuk network="${network}" tidak ditemukan di environment!`);
+    return res.status(500).json({ error: `Server config error: API key untuk network "${network}" belum di-set` });
   }
 
   // Auto-trim: whitespace/newline tersembunyi di PI_API_KEY sering ke-paste
@@ -40,10 +49,10 @@ export default async function handler(req, res) {
 
     if (!checkResponse.ok) {
       const checkData = await checkResponse.json().catch(() => ({}));
-      console.error('[approve] Payment tidak dikenali oleh App/Key ini. Status:', checkResponse.status, 'Response:', JSON.stringify(checkData));
+      console.error('[approve] Payment tidak dikenali oleh App/Key ini. Network:', network, '| Status:', checkResponse.status, '| Response:', JSON.stringify(checkData));
       return res.status(400).json({
         error: checkResponse.status === 404
-          ? 'Payment tidak ditemukan di app ini — PI_API_KEY atau App URL di Developer Portal kemungkinan tidak cocok dengan app yang membuat payment ini.'
+          ? `Payment tidak ditemukan di app ${network || 'mainnet'} — PI_API_KEY untuk network ini kemungkinan tidak cocok dengan app yang membuat payment.`
           : 'Pi menolak permintaan status payment',
         status: checkResponse.status,
         detail: checkData
@@ -62,7 +71,7 @@ export default async function handler(req, res) {
     );
 
     const data = await response.json();
-    console.log('[approve] STATUS:', response.status);
+    console.log('[approve] network:', network, '| STATUS:', response.status);
 
     if (!response.ok) {
       console.error('[approve] Approve gagal:', JSON.stringify(data));

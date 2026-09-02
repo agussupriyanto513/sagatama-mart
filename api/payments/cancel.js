@@ -8,16 +8,22 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { paymentId } = req.body;
+  const { paymentId, network } = req.body || {};
 
   if (!paymentId) {
     return res.status(400).json({ error: 'paymentId diperlukan' });
   }
 
-  if (!process.env.PI_API_KEY) {
-    console.error('[cancel] PI_API_KEY tidak ditemukan di environment!');
-    return res.status(500).json({ error: 'Server config error: PI_API_KEY missing' });
+  const rawKey = network === 'testnet'
+    ? (process.env.PI_API_KEY_TESTNET || process.env.PI_API_KEY)
+    : (process.env.PI_API_KEY_MAINNET || process.env.PI_API_KEY);
+
+  if (!rawKey) {
+    console.error(`[cancel] PI_API_KEY untuk network="${network}" tidak ditemukan di environment!`);
+    return res.status(500).json({ error: `Server config error: API key untuk network "${network}" belum di-set` });
   }
+
+  const piApiKey = rawKey.trim();
 
   try {
     const response = await fetch(
@@ -25,19 +31,19 @@ export default async function handler(req, res) {
       {
         method: 'POST',
         headers: {
-          'Authorization': `Key ${process.env.PI_API_KEY}`,
+          'Authorization': `Key ${piApiKey}`,
           'Content-Type': 'application/json'
         }
       }
     );
 
     const data = await response.json().catch(() => ({}));
-    console.log('[cancel] STATUS:', response.status);
+    console.log('[cancel] network:', network, '| STATUS:', response.status);
     console.log('[cancel] RESPONSE:', JSON.stringify(data));
 
     if (!response.ok) {
       return res.status(400).json({
-        error: 'Pi cancel failed',
+        error: data?.error_message || data?.error || 'Pi cancel failed',
         status: response.status,
         detail: data
       });
