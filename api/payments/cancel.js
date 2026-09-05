@@ -1,55 +1,61 @@
-// /api/payments/cancel.js
 export default async function handler(req, res) {
-  // CORS — konsisten dengan approve.js dan complete.js
-  res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+  // 1. Pengaturan Header CORS (sama seperti approve.js)
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   const { paymentId, network } = req.body || {};
 
+  // 2. Validasi Payload
   if (!paymentId) {
-    return res.status(400).json({ error: 'paymentId diperlukan' });
+    return res.status(400).json({ error: 'paymentId wajib diisi.' });
   }
 
+  // 3. Pemilihan API Key sesuai Network (testnet vs mainnet) — sama seperti approve.js
   const rawKey = network === 'testnet'
     ? (process.env.PI_API_KEY_TESTNET || process.env.PI_API_KEY)
     : (process.env.PI_API_KEY_MAINNET || process.env.PI_API_KEY);
 
   if (!rawKey) {
-    console.error(`[cancel] PI_API_KEY untuk network="${network}" tidak ditemukan di environment!`);
-    return res.status(500).json({ error: `Server config error: API key untuk network "${network}" belum di-set` });
+    console.error(`[cancel] PI_API_KEY untuk network="${network}" tidak ditemukan!`);
+    return res.status(500).json({
+      error: `Server config error: API key untuk network "${network}" belum di-set di environment Vercel.`
+    });
   }
 
   const piApiKey = rawKey.trim();
 
   try {
+    // 4. Eksekusi Cancel Payment ke Pi Server
     const response = await fetch(
       `https://api.minepi.com/v2/payments/${paymentId}/cancel`,
       {
         method: 'POST',
-        headers: {
-          'Authorization': `Key ${piApiKey}`,
-          'Content-Type': 'application/json'
-        }
+        headers: { Authorization: `Key ${piApiKey}` }
       }
     );
 
     const data = await response.json().catch(() => ({}));
-    console.log('[cancel] network:', network, '| STATUS:', response.status);
-    console.log('[cancel] RESPONSE:', JSON.stringify(data));
 
     if (!response.ok) {
+      console.error('[cancel] Cancel gagal:', JSON.stringify(data));
       return res.status(400).json({
-        error: data?.error_message || data?.error || 'Pi cancel failed',
+        error: data?.error_message || data?.error || 'Pi cancellation failed',
         status: response.status,
         detail: data
       });
     }
 
-    return res.status(200).json({ success: true, data });
+    return res.status(200).json(data);
 
   } catch (err) {
     console.error('[cancel] Exception:', err.message);

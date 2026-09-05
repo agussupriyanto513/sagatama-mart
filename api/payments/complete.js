@@ -1,37 +1,44 @@
 export default async function handler(req, res) {
-  // CORS — pakai ALLOWED_ORIGIN kalau di-set di Vercel env, fallback ke '*'
+  // 1. Pengaturan Header CORS (sama seperti approve.js)
   const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   const { paymentId, txid, network } = req.body || {};
 
-  if (!paymentId || !txid) {
-    return res.status(400).json({ error: 'paymentId dan txid diperlukan' });
+  // 2. Validasi Payload
+  if (!paymentId) {
+    return res.status(400).json({ error: 'paymentId wajib diisi.' });
+  }
+  if (!txid) {
+    return res.status(400).json({ error: 'txid wajib diisi.' });
   }
 
-  // Sama seperti approve.js: pilih key sesuai jaringan yang aktif saat
-  // payment ini dibuat, supaya complete tidak gagal gara-gara pakai key
-  // App yang berbeda dari App tempat payment-nya berasal.
+  // 3. Pemilihan API Key sesuai Network (testnet vs mainnet) — sama seperti approve.js
   const rawKey = network === 'testnet'
     ? (process.env.PI_API_KEY_TESTNET || process.env.PI_API_KEY)
     : (process.env.PI_API_KEY_MAINNET || process.env.PI_API_KEY);
 
   if (!rawKey) {
-    console.error(`[complete] PI_API_KEY untuk network="${network}" tidak ditemukan di environment!`);
-    return res.status(500).json({ error: `Server config error: API key untuk network "${network}" belum di-set` });
+    console.error(`[complete] PI_API_KEY untuk network="${network}" tidak ditemukan!`);
+    return res.status(500).json({
+      error: `Server config error: API key untuk network "${network}" belum di-set di environment Vercel.`
+    });
   }
 
   const piApiKey = rawKey.trim();
-  if (piApiKey !== rawKey) {
-    console.warn('[complete] PI_API_KEY punya whitespace tersembunyi — auto-trim diterapkan.');
-  }
 
   try {
+    // 4. Eksekusi Complete Payment ke Pi Server
     const response = await fetch(
       `https://api.minepi.com/v2/payments/${paymentId}/complete`,
       {
@@ -44,18 +51,18 @@ export default async function handler(req, res) {
       }
     );
 
-    const data = await response.json();
-    console.log('[complete] network:', network, '| STATUS:', response.status);
-    console.log('[complete] RESPONSE:', JSON.stringify(data));
+    const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
+      console.error('[complete] Complete gagal:', JSON.stringify(data));
       return res.status(400).json({
-        error: data?.error_message || data?.error || 'Pi complete failed',
+        error: data?.error_message || data?.error || 'Pi completion failed',
         status: response.status,
         detail: data
       });
     }
 
+    // Berhasil di-complete
     return res.status(200).json(data);
 
   } catch (err) {
