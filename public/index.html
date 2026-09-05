@@ -15,10 +15,6 @@
     <meta http-equiv="Content-Security-Policy" content="default-src * 'self' data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src * 'self' data: blob:;">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23111111'/%3E%3Ctext x='16' y='21' text-anchor='middle' fill='%23D4AF37' font-size='16' font-family='serif'%3ES%3C/text%3E%3C/svg%3E">
 
-    var _globalFns = [
-    'switchView', 'openModal', ..., 'onPiApprove'
-    ];
-
     <!-- GLOBAL FUNCTION STUBS — must run first, before any onclick is parsed -->
     <script>
         window._deferredCalls = [];
@@ -10930,27 +10926,5 @@ window.openModal = function(id) {
     })();
     </script>
 	
-	<script>
-    function onPiApprove(paymentId) {
-        fetch('/api/approve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                paymentId: paymentId,
-                network: 'mainnet' // Ubah ke 'testnet' jika masih pengujian
-            })
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-            if (data.error) console.error('[Sagatama] Approval gagal:', data.error);
-            else console.log('[Sagatama] Approval berhasil:', data);
-        })
-        .catch(function(err) { console.error('[Sagatama] Error:', err); });
-    }
-
-    if (typeof window._registerReal === 'function') {
-        window._registerReal({ 'onPiApprove': onPiApprove });
-    }
-    </script>
 </body>
 </html>
