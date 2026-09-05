@@ -37,6 +37,14 @@ export default async function handler(req, res) {
   // Auto-trim whitespace tersembunyi
   const piApiKey = rawKey.trim();
 
+  // Diagnostik aman: tampilkan paymentId, panjang key, dan beberapa
+  // karakter awal/akhir key SAJA (bukan key penuh) supaya bisa dicocokkan
+  // manual dengan yang ada di Developer Portal tanpa membocorkan key asli.
+  const keyPreview = piApiKey.length > 8
+    ? `${piApiKey.slice(0, 4)}...${piApiKey.slice(-4)} (len:${piApiKey.length})`
+    : `(len:${piApiKey.length})`;
+  console.log(`[approve] Mulai proses. paymentId=${paymentId} | network=${network} | keyEnvUsed=${network === 'testnet' ? (process.env.PI_API_KEY_TESTNET ? 'PI_API_KEY_TESTNET' : 'PI_API_KEY(fallback)') : (process.env.PI_API_KEY_MAINNET ? 'PI_API_KEY_MAINNET' : 'PI_API_KEY(fallback)')} | keyPreview=${keyPreview}`);
+
   try {
     // 4. Pre-check payment ke Pi Server
     const checkResponse = await fetch(
@@ -46,7 +54,7 @@ export default async function handler(req, res) {
 
     if (!checkResponse.ok) {
       const checkData = await checkResponse.json().catch(() => ({}));
-      console.error('[approve] Pre-check gagal. Network:', network, '| Status:', checkResponse.status);
+      console.error('[approve] Pre-check gagal. paymentId:', paymentId, '| Network:', network, '| Status:', checkResponse.status, '| Detail:', JSON.stringify(checkData));
       return res.status(400).json({
         error: checkResponse.status === 404
           ? `Payment tidak ditemukan di app ${network || 'mainnet'}. Pastikan API Key cocok dengan App ID tempat transaksi dibuat.`
