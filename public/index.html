@@ -3991,17 +3991,14 @@ async function loadAdminExchangeRate() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// NETWORK MODE — ubah ke false saat go-live Mainnet (setelah CT approval)
+// NETWORK MODE
 // true  = Testnet: SGT reward aktif meski Pi amount 0, payment via sandbox
 // false = Mainnet: hanya reward transaksi Pi nyata, payment production
 // ✅ Pi Network mode — false = Mainnet, true = Testnet/Sandbox
 // ⚠️  WAJIB SINKRON dengan ESCROW_CONFIG.NETWORK di atas!
-// Saat ini: app masih PENDING approval Mainnet dari Pi Core Team (dicek
-// lewat App Checklist di Developer Portal, 27 Agu 2026) — jadi sementara
-// dikembalikan ke Testnet supaya pembayaran tidak selalu gagal/timeout.
-// GANTI ke false HANYA setelah App Checklist menunjukkan approval selesai.
-// SGT akan beralih Mainnet setelah multisig wallet disetujui Pi Core Team
-const USE_SANDBOX = true;
+// UPDATE: App Checklist di Developer Portal sudah lolos & disetujui Mainnet
+// oleh Pi Core Team → diaktifkan ke Mainnet.
+const USE_SANDBOX = false;
 
 // Helper: cek apakah SGT sedang di Testnet (meski Pi sudah Mainnet)
 const SGT_IS_TESTNET = (typeof ESCROW_CONFIG !== 'undefined' && ESCROW_CONFIG.NETWORK === 'testnet');
