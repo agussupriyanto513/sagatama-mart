@@ -6793,9 +6793,11 @@ async function loadAdminExchangeRate() {
 // false = Mainnet: hanya reward transaksi Pi nyata, payment production
 // ✅ Pi Network mode — false = Mainnet, true = Testnet/Sandbox
 // ⚠️  WAJIB SINKRON dengan ESCROW_CONFIG.NETWORK di atas!
-// Saat ini: Pi = Mainnet (USE_SANDBOX=false), SGT = Testnet (ESCROW_CONFIG.NETWORK='testnet')
+// Saat ini: Pi = Testnet (USE_SANDBOX=true) — Mainnet approval dari Pi Core Team masih PENDING.
+// ⚠️ Ubah balik ke false HANYA setelah approval Mainnet keluar, kalau tidak login akan stuck/timeout
+// karena Pi Browser menolak proses auth Mainnet untuk app yang belum diotorisasi.
 // SGT akan beralih Mainnet setelah multisig wallet disetujui Pi Core Team
-const USE_SANDBOX = false;
+const USE_SANDBOX = true;
 
 // Helper: cek apakah SGT sedang di Testnet (meski Pi sudah Mainnet)
 const SGT_IS_TESTNET = (typeof ESCROW_CONFIG !== 'undefined' && ESCROW_CONFIG.NETWORK === 'testnet');
