@@ -6,16 +6,34 @@
 // seperti alur yang sudah berjalan. Endpoint ini murni validasi + harga.
 import admin from "firebase-admin";
 
-// Inisialisasi Firebase Admin hanya sekali (singleton pattern)
+// Inisialisasi Firebase Admin hanya sekali (singleton pattern).
+// PENTING: dibungkus try/catch — kalau env var (terutama FIREBASE_PRIVATE_KEY)
+// salah format, initializeApp() bisa throw SAAT MODULE DI-LOAD (di luar handler),
+// yang bikin seluruh function crash total (Vercel: "FUNCTION_INVOCATION_FAILED",
+// tanpa body JSON sama sekali). Dengan try/catch ini, error-nya tetap tercatat
+// dan handler() masih bisa jalan untuk mengembalikan pesan error yang jelas.
+let initError = null;
 if (!admin.apps.length) {
-    admin.initializeApp({
-        credential: admin.credential.cert({
-            projectId:   process.env.FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            // Ganti literal \n dari env var menjadi newline asli
-            privateKey:  process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
-        })
-    });
+    try {
+        const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+        if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !privateKey) {
+            throw new Error(
+                'Env var Firebase Admin belum lengkap: ' +
+                ['FIREBASE_PROJECT_ID', 'FIREBASE_CLIENT_EMAIL', 'FIREBASE_PRIVATE_KEY']
+                    .filter(k => !process.env[k]).join(', ') + ' kosong/tidak ada.'
+            );
+        }
+        admin.initializeApp({
+            credential: admin.credential.cert({
+                projectId:   process.env.FIREBASE_PROJECT_ID,
+                clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+                privateKey
+            })
+        });
+    } catch (e) {
+        initError = e.message;
+        console.error('[create.js] Firebase Admin init GAGAL:', e.message);
+    }
 }
 
 export default async function handler(req, res) {
@@ -31,6 +49,11 @@ export default async function handler(req, res) {
 
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // Kalau init Firebase Admin gagal tadi, jangan lanjut — balas error jelas
+    if (initError) {
+        return res.status(500).json({ error: 'Firebase Admin init gagal: ' + initError });
     }
 
     try {
