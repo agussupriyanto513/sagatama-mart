@@ -138,6 +138,54 @@
     })();
     </script>
 
+    <!-- DEBUG WATCHDOG — tampilkan error di layar (bukan cuma console) supaya kelihatan di Pi Browser HP -->
+    <script>
+    (function() {
+        window._moduleLoadedOk = false;
+
+        function showDebugBanner(text) {
+            try {
+                var old = document.getElementById('_debugErrBanner');
+                if (old) old.remove();
+                var b = document.createElement('div');
+                b.id = '_debugErrBanner';
+                b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#DC2626;color:#fff;padding:10px 14px;font-size:12px;font-family:monospace;z-index:999999;max-height:40vh;overflow:auto;white-space:pre-wrap;word-break:break-word;box-shadow:0 2px 10px rgba(0,0,0,.3);';
+                b.innerHTML = '<b>DEBUG ERROR</b><br>' + text.replace(/</g,'&lt;') +
+                    '<br><button onclick="this.parentElement.remove()" style="margin-top:6px;background:#fff;color:#DC2626;border:none;padding:4px 10px;border-radius:6px;font-weight:700;">Tutup</button>';
+                (document.body || document.documentElement).appendChild(b);
+            } catch (e) {}
+        }
+        window._showDebugBanner = showDebugBanner;
+
+        window.addEventListener('error', function(e) {
+            var msg = (e && e.message) ? e.message : String(e);
+            var loc = (e && e.filename) ? (' @' + e.filename.split('/').pop() + ':' + e.lineno + ':' + e.colno) : '';
+            showDebugBanner(msg + loc);
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(e) {
+            var msg = (e.reason && e.reason.message) ? e.reason.message : String(e.reason || e);
+            if (msg.indexOf('Messaging promise') !== -1 || msg.indexOf('timed out') !== -1) return;
+            showDebugBanner('Promise rejection: ' + msg);
+        }, true);
+
+        // Kalau script module utama (Firebase + semua fungsi app) belum kelar
+        // register dalam 10 detik setelah halaman selesai load, tandanya
+        // module-nya gagal jalan total (biasanya import Firebase gagal / error di tengah).
+        window.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                if (!window._moduleLoadedOk) {
+                    showDebugBanner(
+                        'Script utama gagal dimuat sepenuhnya (module script tidak selesai jalan). ' +
+                        'Kemungkinan: gagal import Firebase dari CDN, atau ada error runtime di tengah script. ' +
+                        'Screenshot pesan ini dan kirim ke developer.'
+                    );
+                }
+            }, 10000);
+        });
+    })();
+    </script>
+
     <!-- Pi SDK -->
     <script>
     // Suppress Pi SDK warnings yang normal terjadi di luar Pi Browser
@@ -13400,6 +13448,9 @@ if (typeof window._registerReal === 'function') {
         resetSupplyToken: window.resetSupplyToken,   // ← defined above, inside module
     });
 } // end if (_registerReal)
+
+window._moduleLoadedOk = true;
+if (typeof logDebug === 'function') logDebug('[BOOT] Module script selesai jalan, semua fungsi terpasang ✅');
 
 // Helper untuk akses sgtBalance dari inline HTML onclick
 // (variabel module tidak bisa diakses langsung dari onclick="...")
