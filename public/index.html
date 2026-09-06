@@ -3977,16 +3977,16 @@ let adminExchangeRate = 15000;
 // Load adminExchangeRate dari Firebase saat app start
 async function loadAdminExchangeRate() {
     try {
-        const snap = await getDoc(doc(db, 'sgt_config', 'app_settings'));
+        const snap = await withPiTimeout(getDoc(doc(db, 'sgt_config', 'app_settings')), 8000, 'Load exchange rate');
         if (snap.exists() && snap.data().adminExchangeRate) {
             adminExchangeRate = snap.data().adminExchangeRate;
             logDebug('[Rate] Loaded from Firebase: Rp ' + adminExchangeRate.toLocaleString('id-ID') + '/Pi');
         }
     } catch(e) {
-        // Fallback ke localStorage
+        // Fallback ke localStorage (juga dipakai kalau timeout)
         const saved = localStorage.getItem('admin_exchange_rate');
         if (saved) adminExchangeRate = parseInt(saved) || 15000;
-        logDebug('[Rate] Fallback localStorage: ' + adminExchangeRate);
+        logDebug('[Rate] Fallback localStorage: ' + adminExchangeRate + ' (' + e.message + ')');
     }
 }
 
@@ -4211,24 +4211,28 @@ async function loadSGTDataFixed() {
         logDebug('[SGT-v3] No currentUser');
         return;
     }
-    
-    // Load adminExchangeRate dari Firebase
-    await loadAdminExchangeRate();
 
-    // Load mint rate dari Firestore dulu agar rate selalu sinkron dengan admin
-    try {
-        const rateSnap = await getDoc(doc(db, 'sgt_config', 'supply'));
+    // Load adminExchangeRate & mint rate PARALEL (tidak saling bergantung),
+    // masing-masing sudah dibungkus timeout supaya tidak menggantung.
+    const [_, rateResult] = await Promise.allSettled([
+        loadAdminExchangeRate(),
+        withPiTimeout(getDoc(doc(db, 'sgt_config', 'supply')), 8000, 'Load mint rate')
+    ]);
+
+    if (rateResult.status === 'fulfilled') {
+        const rateSnap = rateResult.value;
         if (rateSnap.exists() && rateSnap.data().mintRate) {
             sgtRatePerPi = rateSnap.data().mintRate;
             localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
             logDebug('[SGT-v3] Rate synced from Firestore: ' + sgtRatePerPi + ' SGT/Pi');
         }
-    } catch(e) {
-        // Fallback ke localStorage jika offline
+    } else {
+        // Fallback ke localStorage jika offline/timeout
         const savedRate = localStorage.getItem('sgt_rate');
         if (savedRate) sgtRatePerPi = parseInt(savedRate) || 100;
-        logDebug('[SGT-v3] Rate fallback localStorage: ' + sgtRatePerPi);
+        logDebug('[SGT-v3] Rate fallback localStorage: ' + sgtRatePerPi + ' (' + rateResult.reason?.message + ')');
     }
+
     const uid = currentUser.uid;
     const username = currentUser.username;
     logDebug(`[SGT-v3] Loading SGT for uid=${uid}, username=${username}`);
@@ -4236,11 +4240,11 @@ async function loadSGTDataFixed() {
     // ── Jalur BARU: user Pi asli → ambil saldo dari ledger pusat ──
     if (currentUser.authType === 'pi' && currentUser.accessToken) {
         try {
-            const res = await fetch('/api/sgt/balance', {
+            const res = await withPiTimeout(fetch('/api/sgt/balance', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ accessToken: currentUser.accessToken })
-            });
+            }), 10000, 'Load saldo SGT');
             const data = await res.json();
             if (data.success) {
                 sgtBalance = data.sgtBalance || 0;
@@ -6506,31 +6510,57 @@ async function processPiAuthSuccess(authResult) {
         walletAddress: authResult.user.wallet_address || null,
         authType: 'pi'
     };
-    // Jika terdeteksi sebagai admin via Pi UID, konfirmasi ke Firestore
-    if (_piIsAdmin && db) {
-        try {
-            const adminDoc = await getDoc(doc(db, 'admins', piUid));
-            if (!adminDoc.exists()) {
-                // Pi UID tidak terdaftar di Firestore admins — tolak admin access
-                currentUser.role = 'buyer';
-                logDebug('[AUTH-v3] Admin Pi UID tidak ada di Firestore admins, role dibatalkan');
-            }
-        } catch (_adminCheckErr) {
-            // Jika Firestore tidak bisa diakses, fall back ke UID check saja
-            logDebug('[AUTH-v3] Admin Firestore check skip: ' + _adminCheckErr.message);
-        }
-    }
-    
+
     localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
     window._currentUser = currentUser; // Expose untuk game script
     logDebug(`[AUTH-v3] User authenticated: @${currentUser.username} | UID: ${piUid}`);
-    
-    // Step 5: Firebase Auth - Anonymous sign in untuk Firestore write permission
+
+    // ── TAMPIL SEGERA: user tidak perlu menunggu Firestore/API untuk bisa
+    // masuk ke halaman utama. Data saldo SGT, verifikasi admin, dsb akan
+    // menyusul di background lewat _finishPiAuthInBackground() di bawah.
+    // Sementara itu, pakai data cache lokal (kalau ada) supaya UI tidak
+    // kosong melompong selagi menunggu data terbaru dari server.
+    try {
+        const cachedBal = localStorage.getItem('sgt_balance_' + piUid);
+        if (cachedBal) sgtBalance = parseInt(cachedBal) || 0;
+        const cachedTx = localStorage.getItem('sgt_transactions_' + piUid);
+        if (cachedTx) sgtTransactions = JSON.parse(cachedTx);
+    } catch (e) {}
+
+    showSGTElements(true);
+    updateUI();
+    closeModal('piAuthModal');
+    closeModal('loginOptionsModal');
+    showToast(`Selamat datang, @${currentUser.username}! 🎉`, 'success');
+    logDebug("[AUTH-v3] Auth sukses (UI tampil): @" + currentUser.username);
+    switchView('home');
+
+    // Re-filter myOrders pakai data yang sudah ada duluan (kalau ada),
+    // nanti di-refresh lagi setelah loadDataFromFirebase() selesai.
+    if (orders.length > 0) {
+        myOrders = orders.filter(o =>
+            o.customerUid === currentUser.uid ||
+            o.customer === currentUser.username
+        );
+        renderOrders();
+    }
+
+    // ── SISANYA JALAN DI BACKGROUND — tidak diawait di sini, supaya
+    // fungsi ini selesai cepat dan user tidak menunggu di layar loading.
+    _finishPiAuthInBackground(piUid, currentUser.username, currentUser.role);
+}
+
+// Bagian "berat" dari proses login (Firebase anon auth, verifikasi admin,
+// sinkronisasi dokumen user, saldo SGT) — sengaja dipisah dari
+// processPiAuthSuccess() dan TIDAK di-await oleh pemanggilnya, supaya user
+// bisa langsung pakai app sambil data ini menyusul di belakang layar.
+async function _finishPiAuthInBackground(piUid, username, initialRole) {
+    // Step: Firebase Auth - Anonymous sign in untuk Firestore write permission
     let firebaseUid = null;
     try {
         if (auth) {
             if (!auth.currentUser) {
-                const anonResult = await signInAnonymously(auth);
+                const anonResult = await withPiTimeout(signInAnonymously(auth), 8000, 'Firebase anonymous sign-in');
                 firebaseUid = anonResult.user.uid;
                 logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
             } else {
@@ -6542,38 +6572,57 @@ async function processPiAuthSuccess(authResult) {
     }
 
     // KRITIS: simpan firebaseUid ke currentUser agar query Firestore bisa pakai
-    if (firebaseUid) {
+    if (firebaseUid && currentUser) {
         currentUser.firebaseUid = firebaseUid;
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
     }
 
-    // Step 6: Pastikan dokumen user ada di Firestore dengan UID yang benar
-    await ensureUserDocumentExists(piUid, currentUser.username, firebaseUid);
-    
-    // Step 7: Load SGT data dengan strategi multi-fallback
-    await loadSGTDataFixed();
-    
-    // Step 8: Start realtime listener untuk SGT
-    if (currentUser.uid) {
+    // Verifikasi admin & sinkronisasi dokumen user & saldo SGT — jalan
+    // PARALEL karena tidak saling bergantung satu sama lain.
+    const tasks = [];
+
+    if (initialRole === 'admin' && db) {
+        tasks.push((async () => {
+            try {
+                const adminDoc = await withPiTimeout(getDoc(doc(db, 'admins', piUid)), 8000, 'Cek admin Firestore');
+                if (!adminDoc.exists() && currentUser) {
+                    // Pi UID tidak terdaftar di Firestore admins — tolak admin access
+                    currentUser.role = 'buyer';
+                    localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
+                    logDebug('[AUTH-v3] Admin Pi UID tidak ada di Firestore admins, role dibatalkan');
+                    updateUI();
+                }
+            } catch (_adminCheckErr) {
+                logDebug('[AUTH-v3] Admin Firestore check skip: ' + _adminCheckErr.message);
+            }
+        })());
+    }
+
+    tasks.push(
+        ensureUserDocumentExists(piUid, username, firebaseUid)
+            .catch(e => logDebug('[AUTH-v3] ensureUserDocumentExists gagal: ' + e.message))
+    );
+
+    tasks.push(
+        loadSGTDataFixed()
+            .catch(e => logDebug('[AUTH-v3] loadSGTDataFixed gagal: ' + e.message))
+    );
+
+    await Promise.allSettled(tasks);
+
+    if (currentUser?.uid) {
         listenUserSGTBalanceFixed(currentUser.uid);
     }
-    
-    showSGTElements(true);
     updateUI();
-    
+
     // Refresh sosial module after login
     if (typeof updateSosialUI === 'function') setTimeout(updateSosialUI, 500);
     if (typeof updateAdminSosialBadge === 'function' && userRole === 'admin') setTimeout(updateAdminSosialBadge, 600);
-    
-    closeModal('piAuthModal');
-    closeModal('loginOptionsModal');
-    showToast(`Selamat datang, @${currentUser.username}! 🎉`, 'success');
-    logDebug("[AUTH-v3] Auth sukses: @" + currentUser.username);
-    
+
     loadDataFromFirebase();
-    
-    // Re-filter myOrders setelah login berhasil — cover semua field ownership
-    if (orders.length > 0) {
+
+    // Re-filter myOrders lagi dengan firebaseUid setelah semua data lengkap
+    if (orders.length > 0 && currentUser) {
         const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
         myOrders = orders.filter(o =>
             o.firebaseUid === fbUid ||
@@ -6584,14 +6633,12 @@ async function processPiAuthSuccess(authResult) {
         );
         renderOrders();
     }
-    
+
     // Init fase 3 modules
     setTimeout(() => {
         if (typeof initFase3 === 'function') initFase3();
         if (typeof updateSosialUI === 'function') updateSosialUI();
     }, 500);
-    
-    switchView('home');
 }
 
 function handlePiAuthError(error, loginBtn, originalHTML) {
@@ -6738,14 +6785,15 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
     
     try {
         const userRef = doc(db, 'users', piUid);
-        const userSnap = await getDoc(userRef);
+        const userSnap = await withPiTimeout(getDoc(userRef), 8000, 'Cek dokumen user');
         
         if (!userSnap.exists()) {
             logDebug(`[SGT-v3] Dokumen baru: ${piUid}`);
             
             // Cari dokumen lama dengan username sama
-            const oldSnap = await getDocs(
-                query(collection(db, 'users'), where('username', '==', username), limit(10))
+            const oldSnap = await withPiTimeout(
+                getDocs(query(collection(db, 'users'), where('username', '==', username), limit(10))),
+                8000, 'Cari dokumen lama'
             );
             
             let oldBalance = 0;
@@ -6776,7 +6824,7 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
                 isNewUser: true
             };
             
-            await setDoc(userRef, newData);
+            await withPiTimeout(setDoc(userRef, newData), 8000, 'Buat dokumen user');
             logDebug(`[SGT-v3] Dokumen dibuat: ${piUid} | Balance: ${oldBalance}`);
 
             // WELCOME BONUS: 50 SGT untuk user baru
@@ -6789,10 +6837,10 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
                     date: new Date().toISOString(), userId: piUid
                 };
                 try {
-                    await setDoc(userRef, {
+                    await withPiTimeout(setDoc(userRef, {
                         sgtBalance: welcomeBonus,
                         sgtTransactions: [welcomeTx]
-                    }, { merge: true });
+                    }, { merge: true }), 8000, 'Set welcome bonus');
                     // Update in-memory state
                     sgtBalance = welcomeBonus;
                     sgtTransactions = [welcomeTx];
@@ -6819,21 +6867,25 @@ async function ensureUserDocumentExists(piUid, username, firebaseUid) {
                 }
             }
             
-            // Migrate: nolkan dokumen lama
-            for (const oldDocId of oldDocsToMigrate) {
-                await setDoc(doc(db, 'users', oldDocId), {
-                    sgtBalance: 0,
-                    migratedTo: piUid,
-                    migrationDate: serverTimestamp()
-                }, { merge: true });
-                logDebug(`[SGT-v3] Migrated: ${oldDocId} → ${piUid}`);
+            // Migrate: nolkan dokumen lama — jalan PARALEL, bukan satu-satu,
+            // supaya tidak menambah waktu tunggu kalau ada banyak dokumen lama.
+            if (oldDocsToMigrate.length > 0) {
+                await Promise.allSettled(oldDocsToMigrate.map(oldDocId =>
+                    withPiTimeout(setDoc(doc(db, 'users', oldDocId), {
+                        sgtBalance: 0,
+                        migratedTo: piUid,
+                        migrationDate: serverTimestamp()
+                    }, { merge: true }), 8000, 'Migrasi dokumen lama')
+                        .then(() => logDebug(`[SGT-v3] Migrated: ${oldDocId} → ${piUid}`))
+                        .catch(e => logDebug(`[SGT-v3] Migrasi ${oldDocId} gagal/timeout: ` + e.message))
+                ));
             }
             
         } else {
-            await setDoc(userRef, {
+            await withPiTimeout(setDoc(userRef, {
                 lastLogin: serverTimestamp(),
                 firebaseUid: firebaseUid || null
-            }, { merge: true });
+            }, { merge: true }), 8000, 'Update lastLogin');
             logDebug(`[SGT-v3] Dokumen exists, updated: ${piUid}`);
         }
         
