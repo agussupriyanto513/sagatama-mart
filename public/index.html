@@ -7267,32 +7267,44 @@ async function approvePaymentOnServer(paymentId) {
  * order tetap disimpan ke Firestore dan SGT tetap diberikan.
  */
 async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
-    // Langkah 1: Coba konfirmasi ke server Pi
+    // ── Helper kecil: bungkus fetch dengan AbortController supaya TIDAK PERNAH
+    // menggantung tanpa batas. Kalau server lambat/mati, fetch akan gagal
+    // (reject) setelah timeoutMs, bukan menggantung selamanya.
+    const fetchWithTimeout = async (url, options = {}, timeoutMs = 15000) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            return await fetch(url, { ...options, signal: controller.signal });
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    };
+
+    // Langkah 1: Coba konfirmasi ke server Pi (dengan timeout 15 detik)
     let serverConfirmed = false;
-    let result = {};
     try {
-        const response = await fetch('https://sagatama-mart.vercel.app/api/payments/complete', {
+        const response = await fetchWithTimeout('https://sagatama-mart.vercel.app/api/payments/complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ paymentId, txid, network: USE_SANDBOX ? 'testnet' : 'mainnet' })
-        });
+        }, 15000);
+
         if (response.ok) {
-            result = await response.json();
             serverConfirmed = true;
             logDebug("Server Pi mengonfirmasi selesai ✅");
         } else {
             const errBody = await response.json().catch(() => ({}));
             logDebug('[complete] Server error ' + response.status + ': ' + (errBody.error || '') + ' → fallback lokal');
         }
-    } catch(fetchErr) {
-        logDebug('[complete] Server tidak terjangkau: ' + fetchErr.message + ' → fallback lokal');
+    } catch (fetchErr) {
+        // Ini juga menangkap kasus AbortError (timeout 15 detik)
+        logDebug('[complete] Server tidak terjangkau/timeout: ' + fetchErr.message + ' → fallback lokal');
     }
 
     const finalAmount = pendingPayment?.amount || 0;
     const finalItems  = cartSnapshot || pendingPayment?.items || [];
     const sgtEarned   = calculateSGTReward(finalAmount);
 
-    // Langkah 2: Simpan order ke Firestore (baik server berhasil maupun tidak)
     const fbUidForOrder = currentUser?.firebaseUid || auth?.currentUser?.uid || null;
     const orderData = {
         paymentId,
@@ -7313,20 +7325,51 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
         orderId: pendingPayment?.metadata?.orderId || ('ORD_' + Date.now())
     };
 
-    await saveOrderToFirebase(orderData, paymentId);
-    logDebug("Order tersimpan Firestore: " + paymentId);
+    // ── Langkah 2 (KRITIS): simpan order ke Firestore.
+    // Ini SATU-SATUNYA langkah yang wajib berhasil sebelum kita bilang
+    // "pembayaran berhasil" ke user — karena tanpa dokumen order, tidak ada
+    // bukti transaksi tersimpan. Dibungkus timeout 15 detik supaya kalau
+    // Firestore macet, kita tahu dalam waktu wajar, bukan menggantung.
+    try {
+        await withPiTimeout(saveOrderToFirebase(orderData, paymentId), 15000, 'Simpan order ke Firestore');
+        logDebug("Order tersimpan Firestore: " + paymentId);
+    } catch (saveErr) {
+        logDebug("Order GAGAL tersimpan: " + saveErr.message);
+        // Uang Pi sudah bergerak di jaringan Pi (txid ada), tapi order kita
+        // gagal tercatat — ini beda kasus dari "server approve gagal", jadi
+        // JANGAN bilang "gagal", tapi minta user simpan bukti Payment ID
+        // supaya admin bisa rekonsiliasi manual. Jangan sampai user mikir
+        // uangnya hilang padahal sudah terpotong di Pi Network.
+        showToast('Pembayaran diterima Pi Network, tapi order belum tersimpan di sistem. Simpan Payment ID: ' + paymentId + ' dan hubungi admin.', 'error');
+        if (db) {
+            addDoc(collection(db, 'pending_payments'), {
+                paymentId, txid: txid || null,
+                status: 'complete_but_order_save_failed',
+                note: saveErr.message,
+                amount: finalAmount,
+                items: finalItems,
+                customer: currentUser?.username,
+                customerUid: currentUser?.uid,
+                createdAt: serverTimestamp()
+            }).catch(() => {});
+        }
+        cart = [];
+        saveCart();
+        updateCartUI();
+        pendingPayment = null;
+        return { ok: false, orderSaveFailed: true, paymentId };
+    }
 
-    // Langkah 3: Update stok produk
-    // FIX: sebelumnya kode ini menulis LANGSUNG ke Firestore 'products' dari
-    // browser pembeli lewat updateDoc() — ini yang menyebabkan stok tidak
-    // pernah berkurang, karena Firestore Rules menolaknya (permission-denied),
-    // gagal diam-diam tanpa terlihat. Sekarang stok dikurangi lewat API server
-    // (/api/orders/decrement-stock, pakai Firebase Admin SDK) yang tidak
-    // terikat Firestore Rules dan sudah atomik + idempotent per paymentId.
-    let stockDebugLog = [];
-    if (finalItems && finalItems.length > 0) {
+    // ── Langkah 3-6 (NON-KRITIS): jalankan PARALEL, jangan saling menunggu.
+    // Kalau salah satu macet/gagal, tidak boleh menahan UI "sukses" yang
+    // user lihat — order sudah aman tersimpan di Langkah 2.
+    const orderIdShort = pendingPayment?.metadata?.orderId || paymentId.substring(0, 8);
+
+    const stockTask = (async () => {
+        if (!finalItems || finalItems.length === 0) return;
+        let stockDebugLog = [{ ok: false, reason: 'not run' }];
         try {
-            const stockRes = await fetch('/api/orders/decrement-stock', {
+            const stockRes = await fetchWithTimeout('/api/orders/decrement-stock', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -7336,10 +7379,9 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
                         qty: item.quantity || item.qty || 1
                     }))
                 })
-            });
+            }, 10000);
             const stockData = await stockRes.json();
             stockDebugLog = stockData.results || [{ ok: false, reason: stockData.error || 'unknown response' }];
-            // Update array `products` lokal + cache supaya UI langsung ikut update
             stockDebugLog.forEach(r => {
                 if (r.ok) {
                     const idx = products.findIndex(p => p.id === r.productId);
@@ -7348,80 +7390,68 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
                     console.error('[stok] Gagal update stok produk ' + r.productId + ':', r.reason);
                 }
             });
+            localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+            renderAdminProducts?.();
+            renderProducts?.();
         } catch (e) {
             console.error('[stok] Gagal memanggil /api/orders/decrement-stock:', e.message);
-            stockDebugLog = [{ ok: false, reason: 'Fetch gagal: ' + e.message }];
+            stockDebugLog = [{ ok: false, reason: 'Fetch gagal/timeout: ' + e.message }];
         }
-        localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
-        renderAdminProducts?.();
-        renderProducts?.();
-    }
-    // Simpan hasil diagnostik stok ke dokumen order ini (cek via Firebase Console:
-    // koleksi 'orders' → dokumen paymentId → field 'stockUpdateDebug')
-    try {
-        await updateDoc(doc(db, 'orders', paymentId), { stockUpdateDebug: stockDebugLog });
-    } catch (e) { /* non-kritis, jangan gagalkan checkout */ }
+        try { await updateDoc(doc(db, 'orders', paymentId), { stockUpdateDebug: stockDebugLog }); } catch (e) {}
+    })();
 
-    // Langkah 4: Simpan escrow record (non-kritis)
-    try {
-        await EscrowService.saveEscrowRecord(paymentId, {
-            orderId: orderData.orderId || paymentId.substring(0, 8),
-            paymentId,
-            txid: txid || null,
-            buyerUid: fbUidForOrder || currentUser?.uid,
-            buyerUsername: currentUser?.username,
-            amount: finalAmount,
-            status: serverConfirmed ? 'escrow_active' : 'escrow_local',
-            contractId: ESCROW_CONFIG.CONTRACT_ID,
-        });
-        await setDoc(doc(db, 'orders', paymentId), {
-            escrowStatus: serverConfirmed ? 'active' : 'pending_wallet_review',
-            escrowContractId: ESCROW_CONFIG.CONTRACT_ID,
-            escrowNetwork: ESCROW_CONFIG.NETWORK,
-        }, { merge: true });
-    } catch(escrowErr) {
-        logDebug('Escrow record (non-kritis): ' + escrowErr.message);
-    }
+    const escrowTask = EscrowService.saveEscrowRecord(paymentId, {
+        orderId: orderData.orderId || paymentId.substring(0, 8),
+        paymentId,
+        txid: txid || null,
+        buyerUid: fbUidForOrder || currentUser?.uid,
+        buyerUsername: currentUser?.username,
+        amount: finalAmount,
+        status: serverConfirmed ? 'escrow_active' : 'escrow_local',
+        contractId: ESCROW_CONFIG.CONTRACT_ID,
+    }).then(() => setDoc(doc(db, 'orders', paymentId), {
+        escrowStatus: serverConfirmed ? 'active' : 'pending_wallet_review',
+        escrowContractId: ESCROW_CONFIG.CONTRACT_ID,
+        escrowNetwork: ESCROW_CONFIG.NETWORK,
+    }, { merge: true })).catch(escrowErr => logDebug('Escrow record (non-kritis): ' + escrowErr.message));
 
-    // Langkah 5: Award SGT
-    const orderId = pendingPayment?.metadata?.orderId || paymentId.substring(0, 8);
-    const actualSGT = await awardSGT(finalAmount, `Reward pesanan #${orderId}`, `mart_cashback_${orderId}`);
-    // Diagnostik: catat hasil kredit SGT + status sinkron ke ledger pusat, supaya
-    // bisa dicek lewat Firebase Console (koleksi 'orders' → field 'sgtAwardDebug')
-    // tanpa perlu browser console (penting untuk testing di Pi Browser).
-    try {
-        await updateDoc(doc(db, 'orders', paymentId), {
-            sgtAwardDebug: {
-                actualSGT,
-                sgtBalanceLocalAfter: sgtBalance,
-                lastSyncedToLedger: _sgtLastSyncedBalance,
-                syncDetail: window._lastSgtSyncDebug || null
-            }
-        });
-    } catch (e) { /* non-kritis */ }
+    const sgtTask = withPiTimeout(
+        awardSGT(finalAmount, `Reward pesanan #${orderIdShort}`, `mart_cashback_${orderIdShort}`),
+        15000, 'Award SGT'
+    ).then(actualSGT => updateDoc(doc(db, 'orders', paymentId), {
+        sgtAwardDebug: {
+            actualSGT,
+            sgtBalanceLocalAfter: sgtBalance,
+            lastSyncedToLedger: _sgtLastSyncedBalance,
+            syncDetail: window._lastSgtSyncDebug || null
+        }
+    }).catch(() => {})).catch(e => logDebug('[awardSGT bg] gagal/timeout: ' + e.message));
 
-    // Langkah 6: Bersihkan cart
+    const cleanupTask = (async () => {
+        try {
+            const q = query(collection(db, 'pending_payments'), where('paymentId', '==', paymentId));
+            const qs = await getDocs(q);
+            await Promise.all(qs.docs.map(d => deleteDoc(d.ref)));
+        } catch (e) {
+            logDebug('Hapus pending (non-kritis): ' + e.message);
+        }
+    })();
+
+    // Tidak di-await di jalur utama — biar sukses ke user tidak nunggu ini.
+    Promise.allSettled([stockTask, escrowTask, sgtTask, cleanupTask]);
+
+    // ── Langkah 7: UI sukses — tampil SEGERA setelah order tersimpan (Langkah 2),
+    // tidak menunggu stok/escrow/SGT/cleanup di atas.
     cart = [];
     saveCart();
     updateCartUI();
     pendingPayment = null;
 
-    // Langkah 7: UI sukses
-    const sgtMsg = actualSGT > 0 ? ` +${actualSGT.toLocaleString('id-ID')} SGT 🎉` : '';
-    showToast('Pembayaran Berhasil!' + sgtMsg, 'success');
+    showToast('Pembayaran Berhasil!' + (sgtEarned > 0 ? ` (SGT sedang diproses ⏳)` : ''), 'success');
     closeModal('paymentModal');
     setTimeout(() => switchView('orders'), 2000);
 
-    // Hapus pending_payments
-    try {
-        const q = query(collection(db, 'pending_payments'), where('paymentId', '==', paymentId));
-        const qs = await getDocs(q);
-        await Promise.all(qs.docs.map(d => deleteDoc(d.ref)));
-    } catch (e) {
-        logDebug('Hapus pending (non-kritis): ' + e.message);
-    }
-
-    return result;
+    return { ok: true, orderSaveFailed: false, paymentId, serverConfirmed };
 }
 
 /**
