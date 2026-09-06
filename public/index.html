@@ -6027,7 +6027,8 @@ async function initPiSDKRobust() {
 
     piInitPromise = new Promise(async (resolve) => {
 
-        // Tidak perlu retry 5x × 2-10 detik = buang 34 detik percuma
+        // Kalau memang bukan Pi Browser sama sekali (UA tidak cocok DAN
+        // window.Pi juga belum ada), baru skip tanpa buang waktu retry.
         if (!window.Pi && navigator.userAgent.indexOf('PiBrowser') === -1) {
             logDebug('[AUTH-v3] Bukan Pi Browser — skip Pi SDK init');
             resolve(false);
@@ -6040,11 +6041,20 @@ async function initPiSDKRobust() {
 
             try {
                 if (!window.Pi) {
+                    // PERBAIKAN: window.Pi disuntikkan Pi Browser secara async
+                    // dan waktunya bisa bervariasi (device lambat, halaman
+                    // berat, jaringan lemot). SEBELUMNYA: kalau window.Pi
+                    // belum ada setelah SATU KALI tunggu 1.5 detik, kode
+                    // langsung resolve(false) dan MENYERAH SELAMANYA untuk
+                    // sesi ini — walau UA-nya cocok Pi Browser asli dan
+                    // MAX_PI_INIT_ATTEMPTS=5 tidak pernah benar-benar dipakai.
+                    // SEKARANG: ikut retry loop yang sama sampai
+                    // MAX_PI_INIT_ATTEMPTS, jangan langsung menyerah.
                     logDebug('[AUTH-v3] Pi object belum tersedia, menunggu...');
-                    await delay(1500);
-                    // Cek lagi setelah delay — kalau tetap tidak ada, keluar
-                    if (!window.Pi) { resolve(false); return; }
-                    continue;
+                    await delay(1200);
+                    if (!window.Pi) {
+                        continue; // coba lagi di iterasi berikutnya
+                    }
                 }
 
                 await window.Pi.init({
@@ -6061,7 +6071,7 @@ async function initPiSDKRobust() {
 
             } catch (err) {
                 logDebug(`[AUTH-v3] Pi SDK init gagal: ${err.message}`);
-                const waitTime = Math.min(2000 * Math.pow(2, piInitAttempts - 1), 5000);
+                const waitTime = Math.min(1000 * Math.pow(1.6, piInitAttempts - 1), 4000);
                 await delay(waitTime);
             }
         }
@@ -6649,11 +6659,24 @@ function handlePiAuthError(error, loginBtn, originalHTML) {
     }
     
     const msg = (error.message || '').toLowerCase();
-    
-    // Reset state untuk memungkinkan retry
-    isPiSDKReady = false;
-    piInitPromise = null;
-    piInitAttempts = 0;
+    const isSdkLevelError = msg.includes('messaging') || msg.includes('promise');
+
+    // PERBAIKAN: SEBELUMNYA isPiSDKReady selalu di-reset ke false di sini,
+    // untuk SEMUA jenis error — termasuk saat user cuma batal/cancel di
+    // layar consent, atau auth timeout. Padahal di kasus itu Pi SDK-nya
+    // sendiri baik-baik saja (window.Pi.init() sudah sukses sebelumnya),
+    // yang gagal cuma proses authenticate()-nya. Akibatnya: pembayaran
+    // ditolak dengan pesan "hanya tersedia di Pi Browser" walau user
+    // benar-benar di Pi Browser, karena isPiSDKReady sudah terlanjur false
+    // dan tidak ada yang otomatis meng-init ulang.
+    // SEKARANG: hanya reset kalau errornya memang indikasi masalah di level
+    // SDK (mis. "messaging"/"promise" timeout dari Pi SDK), bukan sekadar
+    // pembatalan/timeout dari sisi user.
+    if (isSdkLevelError) {
+        isPiSDKReady = false;
+        piInitPromise = null;
+        piInitAttempts = 0;
+    }
     
     if (msg.includes('consent') || msg.includes('cancel') || msg.includes('dibatalkan')) {
         showToast('Login dibatalkan', 'warning');
@@ -6664,7 +6687,7 @@ function handlePiAuthError(error, loginBtn, originalHTML) {
                 authenticatePi();
             }
         }, 800);
-    } else if (msg.includes('messaging') || msg.includes('promise')) {
+    } else if (isSdkLevelError) {
         showToast('Pi SDK error. Refresh halaman dan coba lagi.', 'error');
     } else {
         showToast('Gagal login: ' + error.message, 'error');
@@ -8979,14 +9002,38 @@ window.processPayment = async function() {
     const btn = document.getElementById('btnProcessPayment');
     if (btn?.disabled) return;
 
-    // Guard: pastikan hanya berjalan di Pi Browser
+    // Guard: pastikan Pi SDK siap. PERBAIKAN: sebelumnya kalau isPiSDKReady
+    // kebetulan false (misal gara-gara bug retry di initPiSDKRobust, atau
+    // reset berlebihan di handlePiAuthError), user langsung ditolak dengan
+    // pesan "bukan Pi Browser" walau sebenarnya genuine di Pi Browser.
+    // Sekarang: kalau UA cocok Pi Browser tapi SDK belum ready, coba
+    // re-init dulu sebelum benar-benar menolak — self-healing, bukan
+    // langsung nyerah ke user.
     if (!isPiBrowser || !isPiSDKReady) {
-        showToast('Pembayaran Pi hanya tersedia di Pi Browser. Gunakan aplikasi Pi Browser untuk bertransaksi.', 'warning');
-        logDebug('[Payment] Ditolak: bukan Pi Browser atau SDK belum siap. isPiBrowser=' + isPiBrowser + ' isPiSDKReady=' + isPiSDKReady);
-        // Tampilkan info di modal jika ada
-        const paymentNote = document.getElementById('paymentNotPiBrowserNote');
-        if (paymentNote) paymentNote.style.display = 'block';
-        return;
+        const looksLikePiBrowser = navigator.userAgent.indexOf('PiBrowser') !== -1 || typeof window.Pi !== 'undefined';
+        if (looksLikePiBrowser && !isPiSDKReady) {
+            logDebug('[Payment] SDK belum ready, coba re-init sebelum menolak...');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Menyiapkan Pi SDK...'; }
+            piInitPromise = null; // paksa attempt baru, bukan pakai promise lama yang sudah resolve(false)
+            piInitAttempts = 0;
+            const recovered = await initPiSDKRobust();
+            detectPiEnv();
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock" style="margin-right:8px;"></i>Konfirmasi & Bayar dengan Pi'; }
+            if (!recovered || !isPiSDKReady) {
+                showToast('Pembayaran Pi hanya tersedia di Pi Browser. Gunakan aplikasi Pi Browser untuk bertransaksi.', 'warning');
+                logDebug('[Payment] Ditolak setelah retry: isPiBrowser=' + isPiBrowser + ' isPiSDKReady=' + isPiSDKReady);
+                const paymentNote = document.getElementById('paymentNotPiBrowserNote');
+                if (paymentNote) paymentNote.style.display = 'block';
+                return;
+            }
+            logDebug('[Payment] SDK berhasil di-recover, lanjut pembayaran ✅');
+        } else {
+            showToast('Pembayaran Pi hanya tersedia di Pi Browser. Gunakan aplikasi Pi Browser untuk bertransaksi.', 'warning');
+            logDebug('[Payment] Ditolak: bukan Pi Browser atau SDK belum siap. isPiBrowser=' + isPiBrowser + ' isPiSDKReady=' + isPiSDKReady);
+            const paymentNote = document.getElementById('paymentNotPiBrowserNote');
+            if (paymentNote) paymentNote.style.display = 'block';
+            return;
+        }
     }
 
     // Guard: pastikan user sudah login Pi
