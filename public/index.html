@@ -6841,11 +6841,9 @@ async function loadAdminExchangeRate() {
 // false = Mainnet: hanya reward transaksi Pi nyata, payment production
 // ✅ Pi Network mode — false = Mainnet, true = Testnet/Sandbox
 // ⚠️  WAJIB SINKRON dengan ESCROW_CONFIG.NETWORK di atas!
-// Saat ini: Pi = Testnet (USE_SANDBOX=true) — Mainnet approval dari Pi Core Team masih PENDING.
-// ⚠️ Ubah balik ke false HANYA setelah approval Mainnet keluar, kalau tidak login akan stuck/timeout
-// karena Pi Browser menolak proses auth Mainnet untuk app yang belum diotorisasi.
+// Saat ini: Pi = Mainnet (USE_SANDBOX=false) — approval Mainnet dari Pi Core Team SUDAH disetujui.
 // SGT akan beralih Mainnet setelah multisig wallet disetujui Pi Core Team
-const USE_SANDBOX = true;
+const USE_SANDBOX = false;
 
 // Helper: cek apakah SGT sedang di Testnet (meski Pi sudah Mainnet)
 const SGT_IS_TESTNET = (typeof ESCROW_CONFIG !== 'undefined' && ESCROW_CONFIG.NETWORK === 'testnet');
@@ -9812,6 +9810,56 @@ window.refreshPiBalance = function() {
  */
 let paymentInProgress = false;
 
+/**
+ * validateCartOnServer — kirim cart ke /api/payments/create untuk divalidasi
+ * (stok + harga dihitung ulang dari Firestore di server, bukan dari client).
+ * Kalau server tidak terjangkau, fallback ke perhitungan client (non-blocking)
+ * supaya checkout tidak macet total gara-gara API sedang bermasalah.
+ */
+async function validateCartOnServer(cartSnapshot) {
+    if (!auth?.currentUser) {
+        throw { blocking: false, message: 'Auth belum siap' };
+    }
+    try {
+        const idToken = await auth.currentUser.getIdToken();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        let response;
+        try {
+            response = await fetch('https://sagatama-mart.vercel.app/api/payments/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
+                body: JSON.stringify({
+                    cart: cartSnapshot.map(i => ({ id: i.id, qty: i.qty }))
+                }),
+                signal: controller.signal
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            // Error dari validasi (stok kurang, produk tidak ada, dll) — HARUS blokir checkout
+            throw { blocking: true, message: result.error || 'Validasi keranjang gagal' };
+        }
+
+        logDebug('[validateCart] Server OK, total tervalidasi: ' + result.total);
+        return result; // { success, uid, total, items }
+
+    } catch (err) {
+        if (err?.blocking) throw err;
+        // Network/timeout/auth error → jangan blokir, cuma catat & lanjut dengan hitungan client
+        logDebug('[validateCart] Server tidak terjangkau (' + (err?.message || err) + ') → pakai hitungan client');
+        throw { blocking: false, message: err?.message || String(err) };
+    }
+}
+
 async function createPiPayment() {
     if (paymentInProgress) {
         showToast('Transaksi sedang diproses...', 'warning');
@@ -9834,6 +9882,21 @@ async function createPiPayment() {
     }
 
     paymentInProgress = true;
+
+    // Validasi cart + harga ke server sebelum bikin Pi payment (anti manipulasi harga)
+    let validatedTotal = totalPi;
+    try {
+        const cartForValidation = JSON.parse(JSON.stringify(cart));
+        const serverResult = await validateCartOnServer(cartForValidation);
+        validatedTotal = serverResult.total;
+    } catch (validationErr) {
+        if (validationErr?.blocking) {
+            showToast(validationErr.message, 'error');
+            paymentInProgress = false;
+            return;
+        }
+        // Non-blocking: lanjut pakai totalPi dari client
+    }
 
     if (paymentTimeout) {
         clearTimeout(paymentTimeout);
@@ -9865,12 +9928,12 @@ async function createPiPayment() {
             customer: currentUser?.username || 'guest',
             customerUid: currentUser?.uid || null,
             timestamp: new Date().toISOString(),
-            totalPi,
+            totalPi: validatedTotal,
             shippingAddress: currentUser?.address || null
         };
 
         pendingPayment = {
-            amount: totalPi,
+            amount: validatedTotal,
             items: cartSnapshot,
             metadata: orderMetadata,
             status: 'pending',
@@ -9946,7 +10009,7 @@ async function createPiPayment() {
         };
 
         window.Pi.createPayment({
-            amount: parseFloat(totalPi.toFixed(8)),
+            amount: parseFloat(validatedTotal.toFixed(8)),
             memo: `Sagatama Mart - ${cart.length} item`,
             metadata: orderMetadata
         }, callbacks);
@@ -9975,7 +10038,7 @@ async function approvePaymentOnServer(paymentId) {
         response = await fetch('https://sagatama-mart.vercel.app/api/payments/approve', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ paymentId }),
+            body: JSON.stringify({ paymentId, network: USE_SANDBOX ? 'testnet' : 'mainnet' }),
             signal: controller.signal
         });
     } catch (fetchErr) {
@@ -10046,7 +10109,7 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
         const response = await fetch('https://sagatama-mart.vercel.app/api/payments/complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ paymentId, txid })
+            body: JSON.stringify({ paymentId, txid, network: USE_SANDBOX ? 'testnet' : 'mainnet' })
         });
         if (response.ok) {
             result = await response.json();
@@ -10278,7 +10341,7 @@ async function cancelPaymentOnServer(paymentId) {
     const response = await fetch('https://sagatama-mart.vercel.app/api/payments/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId })
+        body: JSON.stringify({ paymentId, network: USE_SANDBOX ? 'testnet' : 'mainnet' })
     });
     if (!response.ok) throw new Error("Gagal cancel payment");
     logDebug("Payment cancelled: " + paymentId);
