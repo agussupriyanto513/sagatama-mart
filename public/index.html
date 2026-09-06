@@ -9842,11 +9842,17 @@ async function validateCartOnServer(cartSnapshot) {
             clearTimeout(timeoutId);
         }
 
-        const result = await response.json().catch(() => ({}));
+        // Baca body SEKALI saja (sebagai teks dulu), baru coba parse JSON.
+        // Kalau langsung .json() lalu di-clone lagi, akan error "body already used".
+        const rawText = await response.text();
+        let result = {};
+        try { result = rawText ? JSON.parse(rawText) : {}; } catch (e) { /* bukan JSON valid */ }
 
         if (!response.ok) {
-            // Error dari validasi (stok kurang, produk tidak ada, dll) — HARUS blokir checkout
-            throw { blocking: true, message: result.error || 'Validasi keranjang gagal' };
+            const errMsg = result?.error
+                || (rawText ? `HTTP ${response.status}: ${rawText.slice(0, 200)}` : `HTTP ${response.status} (respons server kosong)`);
+            logDebug('[validateCart] Server error detail: ' + errMsg);
+            throw { blocking: true, message: errMsg };
         }
 
         logDebug('[validateCart] Server OK, total tervalidasi: ' + result.total);
