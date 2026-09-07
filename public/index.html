@@ -4114,17 +4114,6 @@ function logDebug(msg) {
     // kalau sudah tidak dibutuhkan untuk production.
     if (typeof msg === 'undefined') return;
     console.log('[Sagatama]', msg);
-    // Kirim juga ke server supaya kelihatan di Vercel Logs (memudahkan
-    // debug dari laptop tanpa perlu buka console di HP/Pi Browser).
-    // Best-effort, tidak boleh sampai mengganggu alur utama kalau gagal.
-    try {
-        fetch('/api/debug-log', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ msg: String(msg), ua: navigator.userAgent }),
-            keepalive: true
-        }).catch(() => {});
-    } catch (e) {}
 }
 
 // SGT TOKEN FUNCTIONS
@@ -7216,7 +7205,7 @@ async function approvePaymentOnServer(paymentId) {
     const timeoutId = setTimeout(() => controller.abort(), 20000);
     let response;
     try {
-        response = await fetch('https://sagatama-mart.vercel.app/api/payments/approve', {
+        response = await fetch('/api/payments/approve', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ paymentId, network: USE_SANDBOX ? 'testnet' : 'mainnet' }),
@@ -7292,7 +7281,7 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     let serverConfirmed = false;
     let result = {};
     try {
-        const response = await fetch('https://sagatama-mart.vercel.app/api/payments/complete', {
+        const response = await fetch('/api/payments/complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ paymentId, txid, network: USE_SANDBOX ? 'testnet' : 'mainnet' })
@@ -7557,7 +7546,7 @@ async function handleIncompletePayment(payment) {
 }
 
 async function cancelPaymentOnServer(paymentId) {
-    const response = await fetch('https://sagatama-mart.vercel.app/api/payments/cancel', {
+    const response = await fetch('/api/payments/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paymentId, network: USE_SANDBOX ? 'testnet' : 'mainnet' })
@@ -9294,14 +9283,6 @@ window.logDebug = function(msg) {
     // Diaktifkan kembali (sementara) — lihat catatan di definisi logDebug awal
     if (typeof msg === 'undefined') return;
     console.log('[Sagatama]', msg);
-    try {
-        fetch('/api/debug-log', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ msg: String(msg), ua: navigator.userAgent }),
-            keepalive: true
-        }).catch(() => {});
-    } catch (e) {}
 };
 
 // START APP
