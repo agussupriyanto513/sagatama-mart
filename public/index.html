@@ -4212,13 +4212,36 @@ async function loadSGTData() {
     return loadSGTDataFixed();
 }
 
+// THROTTLE: cegah loadSGTDataFixed() dipanggil bertubi-tubi dalam waktu
+// singkat. Banyak trigger pasif (mis. _handleOrdersSnapshot yang menembak
+// ulang di SETIAP perubahan order manapun) memanggil fungsi ini tanpa
+// syarat — tanpa throttle, satu proses checkout yang menulis beberapa
+// dokumen berurutan bisa memicu beberapa panggilan /api/sgt/balance dalam
+// hitungan detik dan menghabiskan kuota Firestore/Blaze secara sia-sia.
+// Pemanggil yang BENAR-BENAR butuh data fresh (mis. tepat setelah login)
+// tetap bisa memaksa dengan loadSGTDataFixed(true).
+let _sgtLastLoadAt = 0;
+const SGT_LOAD_THROTTLE_MS = 15000; // 15 detik
+
 // SGT LOAD FIXED - Multi-Strategy Fallback (v3)
-async function loadSGTDataFixed() {
+async function loadSGTDataFixed(force = false) {
     if (!currentUser) {
         logDebug('[SGT-v3] No currentUser');
         return;
     }
-    
+
+    if (!force) {
+        const now = Date.now();
+        if (now - _sgtLastLoadAt < SGT_LOAD_THROTTLE_MS) {
+            logDebug('[SGT-v3] Skip: dipanggil ulang dalam throttle window ('
+                + (now - _sgtLastLoadAt) + 'ms lalu)');
+            return;
+        }
+        _sgtLastLoadAt = now;
+    } else {
+        _sgtLastLoadAt = Date.now();
+    }
+
     const uid = currentUser.uid;
     const username = currentUser.username;
     logDebug(`[SGT-v3] Loading SGT for uid=${uid}, username=${username}`);
@@ -6562,7 +6585,7 @@ async function processPiAuthSuccess(authResult) {
     // Step 7: Load SGT data dengan strategi multi-fallback
     await Promise.all([
         ensureUserDocumentExists(piUid, currentUser.username, firebaseUid),
-        loadSGTDataFixed()
+        loadSGTDataFixed(true)
     ]);
     
     // Step 8: Start realtime listener untuk SGT
@@ -6723,7 +6746,7 @@ window.manualPiLogin = async function() {
         
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
         
-        await loadSGTDataFixed();
+        await loadSGTDataFixed(true);
         listenUserSGTBalanceFixed(targetUid);
 
         // Flush SGT offline queue jika ada reward yang belum tersimpan
