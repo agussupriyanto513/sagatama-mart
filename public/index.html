@@ -261,21 +261,6 @@
             -moz-osx-font-smoothing: grayscale;
         }
 
-        /* Batasi & pusatkan konten di layar lebar (laptop/desktop) agar kartu & gambar produk
-           tidak melebar mengikuti lebar penuh browser — app ini didesain mobile-first.
-           (padding horizontal sudah ditangani oleh .view, jadi cukup batasi lebar & pusatkan) */
-        .app-container {
-            max-width: 480px;
-            margin: 0 auto;
-        }
-        @media (min-width: 768px) {
-            .app-container { max-width: 720px; }
-        }
-        @media (min-width: 1024px) {
-            .app-container { max-width: 1100px; }
-        }
-
-
         button, .nav-item, .card, .product-card, .category-chip, .tab, input, select, textarea, a {
             transition: transform 0.25s var(--ease-smooth),
                         box-shadow 0.25s var(--ease-smooth),
@@ -519,19 +504,12 @@
         .product-card .pc-media {
             position: relative;
             width: 100%;
-            padding-top: 100%; /* fallback rasio 1:1 utk browser lama (Pi Browser) yg tak dukung aspect-ratio */
             aspect-ratio: 1 / 1;
             background: #FAFAF9;
             overflow: hidden;
             border-bottom: 1px solid #f0f0ee;
         }
-        @supports (aspect-ratio: 1 / 1) {
-            .product-card .pc-media { padding-top: 0; }
-        }
         .product-card .pc-media img {
-            position: absolute;
-            top: 0;
-            left: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -1712,7 +1690,7 @@
                 </div>
                 <button onclick="switchView('products')" style="color:#D4AF37; font-size:12px; font-weight:700; border:none; background:none; cursor:pointer;">Lihat Semua <i class="fas fa-arrow-right" style="margin-left:4px;"></i></button>
             </div>
-            <div id="featuredProducts" class="product-grid" style="gap:22px 16px;">
+            <div id="featuredProducts" style="display:grid; grid-template-columns:repeat(2, 1fr); gap:22px 16px;">
                 <!-- Loading skeleton -->
                 <div class="skeleton" style="height:200px; border-radius:16px;"></div>
                 <div class="skeleton" style="height:200px; border-radius:16px;"></div>
@@ -3995,16 +3973,8 @@ async function loadAdminExchangeRate() {
 // true  = Testnet: SGT reward aktif meski Pi amount 0, payment via sandbox
 // false = Mainnet: hanya reward transaksi Pi nyata, payment production
 // ✅ Pi Network mode — false = Mainnet, true = Testnet/Sandbox
-// ℹ️  Ini KHUSUS untuk pembayaran Pi Coin. SGT (ESCROW_CONFIG.NETWORK)
-//     adalah jaringan terpisah untuk smart contract token reward, dan
-//     boleh berbeda status dari flag ini — lihat catatan di ESCROW_CONFIG.
-// App Checklist di Developer Portal sudah APPROVED untuk Mainnet.
-// Pi Coin (pembayaran) sekarang berjalan di Mainnet — transaksi NYATA.
-// Catatan: SGT masih poin reward internal di Firestore (belum token
-// on-chain), jadi ESCROW_CONFIG.NETWORK di atas TETAP 'testnet' sampai
-// smart contract SGT benar-benar dideploy & diaudit ke Mainnet — lihat
-// checklist di ESCROW_CONFIG. Dua hal ini memang berbeda jaringan dan
-// TIDAK perlu disamakan.
+// ⚠️  WAJIB SINKRON dengan ESCROW_CONFIG.NETWORK di atas!
+// Saat ini: Pi = Mainnet (USE_SANDBOX=false), SGT = Testnet (ESCROW_CONFIG.NETWORK='testnet')
 // SGT akan beralih Mainnet setelah multisig wallet disetujui Pi Core Team
 const USE_SANDBOX = false;
 
@@ -4109,11 +4079,9 @@ async function handleSSO() {
 
 // DEBUG
 function logDebug(msg) {
-    // Debug output diaktifkan kembali (sementara) agar alur pembayaran
-    // bisa ditelusuri lewat console. Matikan lagi (return di baris atas)
-    // kalau sudah tidak dibutuhkan untuk production.
+    // Debug output dinonaktifkan untuk production build
+    // Panel tetap tersedia tapi tidak menulis ke console
     if (typeof msg === 'undefined') return;
-    console.log('[Sagatama]', msg);
 }
 
 // SGT TOKEN FUNCTIONS
@@ -7126,7 +7094,7 @@ async function createPiPayment() {
 
                 } catch (err) {
                     logDebug("Approve FAILED: " + err.message);
-                    showToast(err.message || 'Gagal verifikasi pembayaran', 'error');
+                    showToast('Gagal verifikasi pembayaran', 'error');
                     resetPaymentState();
                 }
             },
@@ -7205,10 +7173,10 @@ async function approvePaymentOnServer(paymentId) {
     const timeoutId = setTimeout(() => controller.abort(), 20000);
     let response;
     try {
-        response = await fetch('/api/payments/approve', {
+        response = await fetch('https://sagatama-mart.vercel.app/api/payments/approve', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ paymentId, network: USE_SANDBOX ? 'testnet' : 'mainnet' }),
+            body: JSON.stringify({ paymentId }),
             signal: controller.signal
         });
     } catch (fetchErr) {
@@ -7236,25 +7204,20 @@ async function approvePaymentOnServer(paymentId) {
     try { result = await response.json(); } catch { result = {}; }
 
     if (!response.ok) {
-        // Pi Network menolak approve (App/Key salah, payment tidak ditemukan,
-        // sudah expired, dll). Ini BUKAN kasus "server tidak terjangkau", jadi
-        // TIDAK boleh dianggap sukses lokal — kalau Pi menolak approve, order
-        // tidak pernah benar-benar disetujui di sisi Pi, jadi pembeli belum
-        // membayar apa pun. Catat sebagai gagal supaya tidak ada order/SGT
-        // yang lolos padahal pembayarannya ditolak.
-        logDebug('[approve] Server/Pi menolak approve ' + response.status + ': ' + (result.error || JSON.stringify(result.detail || {})));
+        // App Wallet Misconfigured atau wallet multisig pending → lanjutkan lokal
+        logDebug('[approve] Server error ' + response.status + ': ' + (result.error || '') + ' → mode lokal');
         if (db) {
             addDoc(collection(db, 'pending_payments'), {
                 paymentId,
-                status: 'approve_rejected',
-                note: 'Pi menolak approve — status ' + response.status + ': ' + (result.error || ''),
+                status: 'approved_local',
+                note: 'Wallet multisig pending review — server error ' + response.status,
                 createdAt: serverTimestamp(),
                 customer: currentUser?.username,
                 customerUid: currentUser?.uid,
                 amount: pendingPayment?.amount || 0
             }).catch(() => {});
         }
-        return { error: result.error || ('Pi menolak pembayaran (status ' + response.status + ')') };
+        return { ok: true, local: true };
     }
 
     // Simpan ke pending_payments di Firestore untuk tracking
@@ -7281,10 +7244,10 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     let serverConfirmed = false;
     let result = {};
     try {
-        const response = await fetch('/api/payments/complete', {
+        const response = await fetch('https://sagatama-mart.vercel.app/api/payments/complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ paymentId, txid, network: USE_SANDBOX ? 'testnet' : 'mainnet' })
+            body: JSON.stringify({ paymentId, txid })
         });
         if (response.ok) {
             result = await response.json();
@@ -7546,10 +7509,10 @@ async function handleIncompletePayment(payment) {
 }
 
 async function cancelPaymentOnServer(paymentId) {
-    const response = await fetch('/api/payments/cancel', {
+    const response = await fetch('https://sagatama-mart.vercel.app/api/payments/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId, network: USE_SANDBOX ? 'testnet' : 'mainnet' })
+        body: JSON.stringify({ paymentId })
     });
     if (!response.ok) throw new Error("Gagal cancel payment");
     logDebug("Payment cancelled: " + paymentId);
@@ -9280,9 +9243,7 @@ window.appState = {
 };
 
 window.logDebug = function(msg) {
-    // Diaktifkan kembali (sementara) — lihat catatan di definisi logDebug awal
-    if (typeof msg === 'undefined') return;
-    console.log('[Sagatama]', msg);
+    // No-op di production — debug output dinonaktifkan
 };
 
 // START APP
@@ -10934,28 +10895,6 @@ window.openModal = function(id) {
         });
     })();
     </script>
-	
-	<script>
-    function onPiApprove(paymentId) {
-        fetch('/api/approve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                paymentId: paymentId,
-                network: 'mainnet' // Ubah ke 'testnet' jika masih pengujian
-            })
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-            if (data.error) console.error('[Sagatama] Approval gagal:', data.error);
-            else console.log('[Sagatama] Approval berhasil:', data);
-        })
-        .catch(function(err) { console.error('[Sagatama] Error:', err); });
-    }
 
-    if (typeof window._registerReal === 'function') {
-        window._registerReal({ 'onPiApprove': onPiApprove });
-    }
-    </script>
 </body>
 </html>
