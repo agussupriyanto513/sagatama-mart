@@ -37,7 +37,7 @@
             'processSGTTransfer','redeemSGT','saveSGTSettings','distributeSGTManual',
             'burnSGT','filterAdminProducts','filterAdminOrders','updateAdminStatus',
             'filterAdminMembers','searchAdminMembers','toggleMemberBlock',
-            'openAddMemberModal','saveNewMember',
+            'openAddMemberModal','saveNewMember','deleteMember',
             'refreshPiBalance','deleteProduct','openEditProduct','saveUserAddress',
             'openExchangeRateModal','updateAdminCalculator','switchCalcMode','closeAndRemoveModal',
             'handleStartShopping','adminLogin','loginAdmin','continueAsGuest',
@@ -378,6 +378,15 @@
         }
         @media (min-width: 720px) {
             .bottom-nav { left: 50%; right: auto; transform: translateX(-50%); }
+        }
+        /* Supaya menu bawah mengikuti lebar konten yang sama seperti
+           .app-container & .header-inner (bukan tetap kecil di tengah
+           layar lebar) — jadi posisinya konsisten seperti biasa di laptop. */
+        @media (min-width: 768px) {
+            .bottom-nav { max-width: 720px; }
+        }
+        @media (min-width: 1024px) {
+            .bottom-nav { max-width: 1100px; }
         }
         /* Ukuran bottom-nav dikembalikan normal/tetap seperti biasa
            (tidak lagi mengecil mengikuti lebar layar pakai clamp/vw). */
@@ -8905,13 +8914,22 @@ function renderMembersList(list) {
                     <span style="font-size:10px;color:#6B7280;">Login terakhir: ${formatDate(m.lastLogin)}</span>
                 </div>
             </div>
-            ${!isAdmin ? `
-            <div style="display:flex;align-items:center;">
+            ${(() => {
+                const isSelf = currentUser && (m.id === currentUser.uid || m.uid === currentUser.uid);
+                if (isSelf) return '';
+                return `
+            <div style="display:flex;flex-direction:column;align-items:stretch;gap:6px;">
+                ${!isAdmin ? `
                 <button onclick="toggleMemberBlock('${m.id}', ${m.blocked})"
-                    style="white-space:nowrap;background:${m.blocked ? '#D1FAE5' : '#FEE2E2'};color:${m.blocked ? '#059669' : '#DC2626'};border:none;padding:10px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;">
+                    style="white-space:nowrap;background:${m.blocked ? '#D1FAE5' : '#FEE2E2'};color:${m.blocked ? '#059669' : '#DC2626'};border:none;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;">
                     ${m.blocked ? '<i class="fas fa-unlock"></i> Buka' : '<i class="fas fa-ban"></i> Blokir'}
+                </button>` : ''}
+                <button onclick="deleteMember('${m.id}', '${m.username}')"
+                    style="white-space:nowrap;background:#FEE2E2;color:#DC2626;border:none;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;">
+                    <i class="fas fa-trash"></i> Hapus
                 </button>
-            </div>` : ''}
+            </div>`;
+            })()}
         </div>`;
     }).join('');
 }
@@ -8938,6 +8956,23 @@ window.toggleMemberBlock = async function(memberId, isCurrentlyBlocked) {
         showToast(willBlock ? 'Member berhasil diblokir' : 'Blokir member dibuka', 'success');
     } catch (e) {
         showToast('Gagal update status member: ' + e.message, 'error');
+    }
+};
+
+window.deleteMember = async function(memberId, username) {
+    if (!db) { showToast('Koneksi database belum siap', 'error'); return; }
+
+    if (!confirm('Hapus member "@' + username + '" secara permanen? Tindakan ini tidak bisa dibatalkan.')) return;
+
+    try {
+        await deleteDoc(doc(db, 'users', memberId));
+
+        adminMembersCache = adminMembersCache.filter(m => m.id !== memberId);
+        updateMemberStats();
+        applyAdminMemberFilters();
+        showToast('Member "@' + username + '" berhasil dihapus', 'success');
+    } catch (e) {
+        showToast('Gagal menghapus member: ' + e.message, 'error');
     }
 };
 
@@ -11157,6 +11192,7 @@ if (typeof window._registerReal === 'function') {
         filterAdminMembers: window.filterAdminMembers, searchAdminMembers: window.searchAdminMembers,
         toggleMemberBlock: window.toggleMemberBlock,
         openAddMemberModal: window.openAddMemberModal, saveNewMember: window.saveNewMember,
+        deleteMember: window.deleteMember,
         refreshPiBalance: window.refreshPiBalance, deleteProduct: window.deleteProduct,
         saveUserAddress: window.saveUserAddress, openExchangeRateModal: window.openExchangeRateModal,
         updateAdminCalculator: window.updateAdminCalculator, switchCalcMode: window.switchCalcMode, closeAndRemoveModal: window.closeAndRemoveModal,
