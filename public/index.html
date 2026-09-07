@@ -376,12 +376,12 @@
             max-width: 480px;
             margin: 0 auto;
         }
-        @media (min-width: 720px) {
-            .bottom-nav { left: 50%; right: auto; transform: translateX(-50%); }
-        }
         /* Supaya menu bawah mengikuti lebar konten yang sama seperti
            .app-container & .header-inner (bukan tetap kecil di tengah
-           layar lebar) — jadi posisinya konsisten seperti biasa di laptop. */
+           layar lebar) — jadi posisinya konsisten seperti biasa di laptop.
+           PENTING: left & right TETAP dipakai keduanya (bukan left:50% +
+           transform) supaya lebar kotak benar-benar mengikuti max-width,
+           bukan menciut mengikuti lebar konten (ikon+teks) saja. */
         @media (min-width: 768px) {
             .bottom-nav { max-width: 720px; }
         }
