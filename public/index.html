@@ -37,6 +37,7 @@
             'processSGTTransfer','redeemSGT','saveSGTSettings','distributeSGTManual',
             'burnSGT','filterAdminProducts','filterAdminOrders','updateAdminStatus',
             'filterAdminMembers','searchAdminMembers','toggleMemberBlock',
+            'openAddMemberModal','saveNewMember',
             'refreshPiBalance','deleteProduct','openEditProduct','saveUserAddress',
             'openExchangeRateModal','updateAdminCalculator','switchCalcMode','closeAndRemoveModal',
             'handleStartShopping','adminLogin','loginAdmin','continueAsGuest',
@@ -378,31 +379,13 @@
         @media (min-width: 720px) {
             .bottom-nav { left: 50%; right: auto; transform: translateX(-50%); }
         }
-        /* FIX: bottom-nav sebelumnya terkunci max-width:480px terus meski
-           .app-container di atasnya sudah melebar di layar laptop/desktop
-           — akibatnya menu bawah terlihat kecil/tidak proporsional di laptop.
-           Sekarang lebar, tinggi, & ukuran ikon/teks memakai clamp() supaya
-           membesar HALUS mengikuti lebar layar (bukan cuma di titik-titik
-           breakpoint tertentu), jadi tetap terlihat pas di laptop kecil
-           maupun monitor besar. */
-        .bottom-nav {
-            max-width: clamp(320px, 46vw, 760px);
-            height: clamp(64px, 6vw, 78px);
-            gap: clamp(0px, 1vw, 12px);
-        }
-        .nav-item {
-            font-size: clamp(11px, 1vw, 14px);
-        }
-        .nav-item i {
-            font-size: clamp(18px, 2vw, 24px) !important;
-        }
-        @media (min-width: 1440px) {
-            .bottom-nav { max-width: 820px; height: 80px; }
-            .nav-item { font-size: 15px; }
-            .nav-item i { font-size: 25px !important; }
-        }
+        /* Ukuran bottom-nav dikembalikan normal/tetap seperti biasa
+           (tidak lagi mengecil mengikuti lebar layar pakai clamp/vw). */
         .bottom-nav::-webkit-scrollbar {
             display: none;
+        }
+        .nav-item i {
+            font-size: 20px;
         }
 
         .nav-item { 
@@ -2409,11 +2392,16 @@
 
         <!-- ADMIN MEMBERS VIEW -->
         <div id="admin-members-view" class="view">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:8px;">
                 <h2 style="font-size:22px; font-weight:800; color:#1F2937;">Kelola Member</h2>
-                <button onclick="switchView('admin-dashboard')" style="background:#F3F4F6; border:none; width:40px; height:40px; border-radius:10px; color:#6B7280; cursor:pointer;">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="openAddMemberModal()" style="background:linear-gradient(135deg,#D4AF37,#A9821E); border:none; padding:0 16px; height:40px; border-radius:10px; color:white; font-weight:700; font-size:13px; cursor:pointer; white-space:nowrap;">
+                        <i class="fas fa-user-plus"></i> Tambah Member
+                    </button>
+                    <button onclick="switchView('admin-dashboard')" style="background:#F3F4F6; border:none; width:40px; height:40px; border-radius:10px; color:#6B7280; cursor:pointer; flex-shrink:0;">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- Ringkasan Member -->
@@ -3735,6 +3723,36 @@
                 </div>
             </div>
             <button onclick="closeModal('sgtRedeemModal')" style="width:100%; background:#F3F4F6; color:#6B7280; border:none; padding:14px; border-radius:12px; font-weight:700; cursor:pointer; margin-top:8px; font-family:inherit;">Tutup</button>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: TAMBAH MEMBER (ADMIN) ===== -->
+    <div id="addMemberModal" class="modal">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3 style="font-size:20px; font-weight:900; color:#1E293B;">Tambah Member</h3>
+                <button onclick="closeModal('addMemberModal')" style="background:none; border:none; color:#64748B; cursor:pointer; font-size:20px;"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" id="newMemberUsername" class="form-input" placeholder="Contoh: budi_pioneer" autocomplete="off">
+                <p style="font-size:11px; color:#64748B; margin-top:4px;">Tanpa spasi/simbol, huruf & angka saja.</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Role</label>
+                <select id="newMemberRole" class="form-input">
+                    <option value="buyer">Buyer (Member biasa)</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Saldo SGT Awal (opsional)</label>
+                <input type="number" id="newMemberSGT" class="form-input" placeholder="0" min="0" value="0">
+            </div>
+            <button onclick="saveNewMember()" class="btn-sgt">
+                <i class="fas fa-user-plus"></i> Simpan Member
+            </button>
+            <button onclick="closeModal('addMemberModal')" style="width:100%; background:#F3F4F6; color:#6B7280; border:none; padding:14px; border-radius:12px; font-weight:700; cursor:pointer; margin-top:8px; font-family:inherit;">Batal</button>
         </div>
     </div>
 
@@ -8923,6 +8941,60 @@ window.toggleMemberBlock = async function(memberId, isCurrentlyBlocked) {
     }
 };
 
+window.openAddMemberModal = function() {
+    const u = document.getElementById('newMemberUsername');
+    const r = document.getElementById('newMemberRole');
+    const s = document.getElementById('newMemberSGT');
+    if (u) u.value = '';
+    if (r) r.value = 'buyer';
+    if (s) s.value = 0;
+    openModal('addMemberModal');
+};
+
+window.saveNewMember = async function() {
+    if (!db) { showToast('Koneksi database belum siap', 'error'); return; }
+
+    const usernameRaw = (document.getElementById('newMemberUsername')?.value || '').trim();
+    const role = document.getElementById('newMemberRole')?.value || 'buyer';
+    const sgtBalance = parseInt(document.getElementById('newMemberSGT')?.value, 10) || 0;
+
+    // Validasi username: huruf, angka, underscore saja, 3-30 karakter
+    const username = usernameRaw.replace(/\s+/g, '_').toLowerCase();
+    if (!/^[a-z0-9_]{3,30}$/.test(username)) {
+        showToast('Username tidak valid (huruf/angka/underscore, 3-30 karakter)', 'error');
+        return;
+    }
+
+    try {
+        // Cek username sudah dipakai atau belum
+        const existingSnap = await getDocs(query(collection(db, 'users'), where('username', '==', username), limit(1)));
+        if (!existingSnap.empty) {
+            showToast('Username sudah dipakai, pakai username lain', 'error');
+            return;
+        }
+
+        // ID member manual dibuat khusus (bukan UID Pi) supaya tidak bentrok
+        const memberId = 'manual_' + username + '_' + Date.now();
+
+        await setDoc(doc(db, 'users', memberId), {
+            uid: memberId,
+            username: username,
+            role: role,
+            authType: 'admin_created',
+            sgtBalance: sgtBalance,
+            blocked: false,
+            createdAt: serverTimestamp(),
+            lastLogin: serverTimestamp()
+        });
+
+        closeModal('addMemberModal');
+        showToast('Member "' + username + '" berhasil ditambahkan', 'success');
+        renderAdminMembers();
+    } catch (e) {
+        showToast('Gagal menambah member: ' + e.message, 'error');
+    }
+};
+
 // Global chart instance
 let salesChartInstance = null;
 
@@ -11084,6 +11156,7 @@ if (typeof window._registerReal === 'function') {
         filterAdminProducts: window.filterAdminProducts, filterAdminOrders: window.filterAdminOrders,
         filterAdminMembers: window.filterAdminMembers, searchAdminMembers: window.searchAdminMembers,
         toggleMemberBlock: window.toggleMemberBlock,
+        openAddMemberModal: window.openAddMemberModal, saveNewMember: window.saveNewMember,
         refreshPiBalance: window.refreshPiBalance, deleteProduct: window.deleteProduct,
         saveUserAddress: window.saveUserAddress, openExchangeRateModal: window.openExchangeRateModal,
         updateAdminCalculator: window.updateAdminCalculator, switchCalcMode: window.switchCalcMode, closeAndRemoveModal: window.closeAndRemoveModal,
