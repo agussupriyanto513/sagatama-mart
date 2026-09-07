@@ -254,7 +254,7 @@
             background: var(--ink);
             background-image: radial-gradient(circle at 50% 0%, #1a170f 0%, #0B0B0D 55%);
             padding-top: 70px; 
-            padding-bottom: 70px; 
+            padding-bottom: 100px; 
             min-height: 100vh; 
             color: var(--text-onlight); 
             -webkit-font-smoothing: antialiased;
@@ -316,23 +316,29 @@
             box-shadow: 0 2px 14px rgba(0,0,0,0.4); 
         }
         
-        /* Bottom Navigation */
+        /* Bottom Navigation — floating pill (bukan bar flat penuh layar ala 513) */
         .bottom-nav { 
             position: fixed; 
-            bottom: 0; 
-            left: 0; 
-            right: 0; 
-            height: 65px; 
+            bottom: 14px; 
+            left: 14px; 
+            right: 14px; 
+            height: 64px; 
             background: var(--surface); 
-            border-top: 1px solid var(--border-gold); 
+            border: 1px solid var(--border-gold); 
+            border-radius: 24px;
             display: flex; 
             justify-content: space-around;
             align-items: center; 
             z-index: 1000; 
-            box-shadow: 0 -6px 20px rgba(0,0,0,0.4);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(212,175,55,0.12);
             overflow-x: hidden;
             overflow-y: hidden;
             padding: 0;
+            max-width: 480px;
+            margin: 0 auto;
+        }
+        @media (min-width: 720px) {
+            .bottom-nav { left: 50%; right: auto; transform: translateX(-50%); }
         }
         .bottom-nav::-webkit-scrollbar {
             display: none;
@@ -365,7 +371,7 @@
         .nav-item.active::after {
             content: ''; 
             position: absolute; 
-            bottom: 0; 
+            bottom: 4px; 
             left: 50%; 
             transform: translateX(-50%); 
             width: 20px; 
@@ -502,7 +508,7 @@
         /* Product Card — Elegant / Minimalist */
         .product-card { 
             background: var(--cream); 
-            border-radius: var(--radius-sm); 
+            border-radius: 18px 6px 18px 6px; 
             padding: 0; 
             border: 1px solid #EAE3D2; 
             cursor: pointer; 
@@ -511,6 +517,7 @@
             overflow: hidden;
             box-shadow: 0 2px 6px rgba(0,0,0,0.25);
         }
+
         .product-card:hover { 
             border-color: var(--gold); 
             transform: translateY(-3px);
@@ -636,7 +643,7 @@
 
         /* Banner Carousel */
         .banner-carousel {
-            position: relative; overflow: hidden; border-radius: 28px;
+            position: relative; overflow: hidden; border-radius: 36px 12px 36px 12px;
             margin-bottom: 24px; box-shadow: 0 20px 60px rgba(169, 130, 30, 0.35);
             min-height: 300px;
         }
@@ -848,8 +855,8 @@
         .category-chip:hover { opacity: 0.75; transform: translateY(-2px); }
         .category-chip:active { transform: scale(0.94); }
         .category-chip .cc-icon {
-            width: 52px; height: 52px;
-            border-radius: 50%;
+            width: 54px; height: 54px;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
             display: flex; align-items: center; justify-content: center;
             font-size: 20px;
             background: #FAFAF9;
@@ -4212,46 +4219,46 @@ async function loadSGTDataFixed() {
         return;
     }
     
-    // Load adminExchangeRate dari Firebase
-    await loadAdminExchangeRate();
-
-    // Load mint rate dari Firestore dulu agar rate selalu sinkron dengan admin
-    try {
-        const rateSnap = await getDoc(doc(db, 'sgt_config', 'supply'));
-        if (rateSnap.exists() && rateSnap.data().mintRate) {
-            sgtRatePerPi = rateSnap.data().mintRate;
-            localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
-            logDebug('[SGT-v3] Rate synced from Firestore: ' + sgtRatePerPi + ' SGT/Pi');
-        }
-    } catch(e) {
-        // Fallback ke localStorage jika offline
-        const savedRate = localStorage.getItem('sgt_rate');
-        if (savedRate) sgtRatePerPi = parseInt(savedRate) || 100;
-        logDebug('[SGT-v3] Rate fallback localStorage: ' + sgtRatePerPi);
-    }
     const uid = currentUser.uid;
     const username = currentUser.username;
     logDebug(`[SGT-v3] Loading SGT for uid=${uid}, username=${username}`);
 
+    // PERF FIX: exchange rate, mint rate, dan saldo SGT tidak saling bergantung —
+    // sebelumnya di-await satu-satu (3 round-trip berurutan), sekarang dijalankan
+    // paralel dengan Promise.allSettled supaya total waktu tunggu = request paling
+    // lambat, bukan jumlah semuanya. Ini komponen utama yang bikin login terasa lama.
+    const rateSnapPromise = getDoc(doc(db, 'sgt_config', 'supply')).catch(e => { logDebug('[SGT-v3] rateSnap fail: ' + e.message); return null; });
+    const exchangeRatePromise = loadAdminExchangeRate().catch(e => { logDebug('[SGT-v3] exchangeRate fail: ' + e.message); });
+    const balancePromise = (currentUser.authType === 'pi' && currentUser.accessToken)
+        ? fetch('/api/sgt/balance', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ accessToken: currentUser.accessToken })
+          }).then(res => res.json()).catch(e => { logDebug('[SGT-v3] Gagal ambil dari ledger pusat: ' + e.message); return null; })
+        : null;
+
+    const [rateSnap] = await Promise.all([rateSnapPromise, exchangeRatePromise]);
+
+    if (rateSnap && rateSnap.exists() && rateSnap.data().mintRate) {
+        sgtRatePerPi = rateSnap.data().mintRate;
+        localStorage.setItem('sgt_rate', sgtRatePerPi.toString());
+        logDebug('[SGT-v3] Rate synced from Firestore: ' + sgtRatePerPi + ' SGT/Pi');
+    } else if (!rateSnap) {
+        const savedRate = localStorage.getItem('sgt_rate');
+        if (savedRate) sgtRatePerPi = parseInt(savedRate) || 100;
+        logDebug('[SGT-v3] Rate fallback localStorage: ' + sgtRatePerPi);
+    }
+
     // ── Jalur BARU: user Pi asli → ambil saldo dari ledger pusat ──
-    if (currentUser.authType === 'pi' && currentUser.accessToken) {
-        try {
-            const res = await fetch('/api/sgt/balance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ accessToken: currentUser.accessToken })
-            });
-            const data = await res.json();
-            if (data.success) {
-                sgtBalance = data.sgtBalance || 0;
-                _sgtLastSyncedBalance = sgtBalance;
-                localStorage.setItem('sgt_balance_' + uid, sgtBalance.toString());
-                logDebug(`[SGT-v3] ✅ Loaded dari ledger pusat: ${sgtBalance} SGT`);
-                updateSGTUI();
-                return;
-            }
-        } catch(e) {
-            logDebug('[SGT-v3] Gagal ambil dari ledger pusat: ' + e.message);
+    if (balancePromise) {
+        const data = await balancePromise;
+        if (data && data.success) {
+            sgtBalance = data.sgtBalance || 0;
+            _sgtLastSyncedBalance = sgtBalance;
+            localStorage.setItem('sgt_balance_' + uid, sgtBalance.toString());
+            logDebug(`[SGT-v3] ✅ Loaded dari ledger pusat: ${sgtBalance} SGT`);
+            updateSGTUI();
+            return;
         }
         // Kalau ledger pusat gagal dihubungi, fallback ke cache localStorage
         // biar UI tidak kosong — TIDAK fallback ke Firestore 'users' lama
@@ -6547,11 +6554,16 @@ async function processPiAuthSuccess(authResult) {
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
     }
 
+    // PERF FIX: Step 6 & 7 sebelumnya di-await satu-satu (2 round-trip
+    // berurutan). Untuk user Pi asli, loadSGTDataFixed mengambil saldo dari
+    // ledger pusat (bukan dari dokumen 'users' yang dibuat ensureUserDocumentExists),
+    // jadi keduanya independen dan aman dijalankan paralel.
     // Step 6: Pastikan dokumen user ada di Firestore dengan UID yang benar
-    await ensureUserDocumentExists(piUid, currentUser.username, firebaseUid);
-    
     // Step 7: Load SGT data dengan strategi multi-fallback
-    await loadSGTDataFixed();
+    await Promise.all([
+        ensureUserDocumentExists(piUid, currentUser.username, firebaseUid),
+        loadSGTDataFixed()
+    ]);
     
     // Step 8: Start realtime listener untuk SGT
     if (currentUser.uid) {
@@ -7316,7 +7328,36 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     await saveOrderToFirebase(orderData, paymentId);
     logDebug("Order tersimpan Firestore: " + paymentId);
 
-    // Langkah 3: Update stok produk
+    // PERF FIX: sampai sini semua langkah SUDAH kritis dan wajib (order harus
+    // benar-benar tersimpan sebelum kita bilang "berhasil"). Tapi update stok,
+    // escrow record, award SGT, dan tulisan debug di bawah ini TIDAK perlu
+    // membuat pembeli menunggu — sebelumnya semua di-await berurutan (bisa
+    // 5 request bolak-balik ke server sebelum toast sukses muncul), sekarang
+    // toast sukses & pembersihan cart langsung tampil, sisanya lanjut di
+    // belakang layar via finalizeOrderSideEffects() (fire-and-forget).
+    cart = [];
+    saveCart();
+    updateCartUI();
+    pendingPayment = null;
+
+    showToast('Pembayaran Berhasil! Memproses reward SGT...', 'success');
+    closeModal('paymentModal');
+    setTimeout(() => switchView('orders'), 2000);
+
+    finalizeOrderSideEffects({ paymentId, txid, orderData, finalItems, finalAmount, fbUidForOrder, serverConfirmed })
+        .catch(e => logDebug('[finalize] Background gagal (non-kritis): ' + e.message));
+
+    return result;
+}
+
+/**
+ * finalizeOrderSideEffects — bagian non-kritis dari penyelesaian order
+ * (stok, escrow, SGT, cleanup). Dijalankan di belakang layar setelah toast
+ * "Pembayaran Berhasil" sudah tampil, supaya pembeli tidak menunggu 5+
+ * round-trip server sebelum melihat konfirmasi.
+ */
+async function finalizeOrderSideEffects({ paymentId, txid, orderData, finalItems, finalAmount, fbUidForOrder, serverConfirmed }) {
+    // Update stok produk
     // FIX: sebelumnya kode ini menulis LANGSUNG ke Firestore 'products' dari
     // browser pembeli lewat updateDoc() — ini yang menyebabkan stok tidak
     // pernah berkurang, karena Firestore Rules menolaknya (permission-denied),
@@ -7324,73 +7365,74 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     // (/api/orders/decrement-stock, pakai Firebase Admin SDK) yang tidak
     // terikat Firestore Rules dan sudah atomik + idempotent per paymentId.
     let stockDebugLog = [];
-    if (finalItems && finalItems.length > 0) {
-        try {
-            const stockRes = await fetch('/api/orders/decrement-stock', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    paymentId,
-                    items: finalItems.map(item => ({
-                        productId: item.productId || item.id,
-                        qty: item.quantity || item.qty || 1
-                    }))
-                })
-            });
-            const stockData = await stockRes.json();
-            stockDebugLog = stockData.results || [{ ok: false, reason: stockData.error || 'unknown response' }];
-            // Update array `products` lokal + cache supaya UI langsung ikut update
-            stockDebugLog.forEach(r => {
-                if (r.ok) {
-                    const idx = products.findIndex(p => p.id === r.productId);
-                    if (idx !== -1) products[idx].stock = r.newStock;
-                } else if (r.reason) {
-                    console.error('[stok] Gagal update stok produk ' + r.productId + ':', r.reason);
-                }
-            });
-        } catch (e) {
-            console.error('[stok] Gagal memanggil /api/orders/decrement-stock:', e.message);
-            stockDebugLog = [{ ok: false, reason: 'Fetch gagal: ' + e.message }];
-        }
-        localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
-        renderAdminProducts?.();
-        renderProducts?.();
-    }
-    // Simpan hasil diagnostik stok ke dokumen order ini (cek via Firebase Console:
-    // koleksi 'orders' → dokumen paymentId → field 'stockUpdateDebug')
-    try {
-        await updateDoc(doc(db, 'orders', paymentId), { stockUpdateDebug: stockDebugLog });
-    } catch (e) { /* non-kritis, jangan gagalkan checkout */ }
+    const stockPromise = (finalItems && finalItems.length > 0)
+        ? fetch('/api/orders/decrement-stock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  paymentId,
+                  items: finalItems.map(item => ({
+                      productId: item.productId || item.id,
+                      qty: item.quantity || item.qty || 1
+                  }))
+              })
+          }).then(async stockRes => {
+              const stockData = await stockRes.json();
+              stockDebugLog = stockData.results || [{ ok: false, reason: stockData.error || 'unknown response' }];
+              stockDebugLog.forEach(r => {
+                  if (r.ok) {
+                      const idx = products.findIndex(p => p.id === r.productId);
+                      if (idx !== -1) products[idx].stock = r.newStock;
+                  } else if (r.reason) {
+                      console.error('[stok] Gagal update stok produk ' + r.productId + ':', r.reason);
+                  }
+              });
+              localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+              renderAdminProducts?.();
+              renderProducts?.();
+          }).catch(e => {
+              console.error('[stok] Gagal memanggil /api/orders/decrement-stock:', e.message);
+              stockDebugLog = [{ ok: false, reason: 'Fetch gagal: ' + e.message }];
+          })
+        : Promise.resolve();
 
-    // Langkah 4: Simpan escrow record (non-kritis)
-    try {
-        await EscrowService.saveEscrowRecord(paymentId, {
-            orderId: orderData.orderId || paymentId.substring(0, 8),
-            paymentId,
-            txid: txid || null,
-            buyerUid: fbUidForOrder || currentUser?.uid,
-            buyerUsername: currentUser?.username,
-            amount: finalAmount,
-            status: serverConfirmed ? 'escrow_active' : 'escrow_local',
-            contractId: ESCROW_CONFIG.CONTRACT_ID,
-        });
-        await setDoc(doc(db, 'orders', paymentId), {
-            escrowStatus: serverConfirmed ? 'active' : 'pending_wallet_review',
-            escrowContractId: ESCROW_CONFIG.CONTRACT_ID,
-            escrowNetwork: ESCROW_CONFIG.NETWORK,
-        }, { merge: true });
-    } catch(escrowErr) {
+    // Simpan escrow record (non-kritis) — jalan paralel, tidak menunggu stok
+    const escrowPromise = EscrowService.saveEscrowRecord(paymentId, {
+        orderId: orderData.orderId || paymentId.substring(0, 8),
+        paymentId,
+        txid: txid || null,
+        buyerUid: fbUidForOrder || currentUser?.uid,
+        buyerUsername: currentUser?.username,
+        amount: finalAmount,
+        status: serverConfirmed ? 'escrow_active' : 'escrow_local',
+        contractId: ESCROW_CONFIG.CONTRACT_ID,
+    }).then(() => setDoc(doc(db, 'orders', paymentId), {
+        escrowStatus: serverConfirmed ? 'active' : 'pending_wallet_review',
+        escrowContractId: ESCROW_CONFIG.CONTRACT_ID,
+        escrowNetwork: ESCROW_CONFIG.NETWORK,
+    }, { merge: true })).catch(escrowErr => {
         logDebug('Escrow record (non-kritis): ' + escrowErr.message);
-    }
+    });
 
-    // Langkah 5: Award SGT
+    // Award SGT — juga paralel; toast follow-up ditampilkan begitu selesai
     const orderId = pendingPayment?.metadata?.orderId || paymentId.substring(0, 8);
-    const actualSGT = await awardSGT(finalAmount, `Reward pesanan #${orderId}`, `mart_cashback_${orderId}`);
-    // Diagnostik: catat hasil kredit SGT + status sinkron ke ledger pusat, supaya
-    // bisa dicek lewat Firebase Console (koleksi 'orders' → field 'sgtAwardDebug')
-    // tanpa perlu browser console (penting untuk testing di Pi Browser).
+    const sgtPromise = awardSGT(finalAmount, `Reward pesanan #${orderId}`, `mart_cashback_${orderId}`)
+        .then(actualSGT => {
+            if (actualSGT > 0) {
+                showToast(`+${actualSGT.toLocaleString('id-ID')} SGT diterima! 🎉`, 'success');
+            }
+            return actualSGT;
+        })
+        .catch(e => { logDebug('[finalize] awardSGT gagal: ' + e.message); return 0; });
+
+    const [, , actualSGT] = await Promise.all([stockPromise, escrowPromise, sgtPromise]);
+
+    // Diagnostik: catat hasil update stok + kredit SGT ke dokumen order ini
+    // (cek via Firebase Console: koleksi 'orders' → dokumen paymentId), sekali
+    // tulis gabungan supaya tidak menambah round-trip lagi.
     try {
         await updateDoc(doc(db, 'orders', paymentId), {
+            stockUpdateDebug: stockDebugLog,
             sgtAwardDebug: {
                 actualSGT,
                 sgtBalanceLocalAfter: sgtBalance,
@@ -7400,18 +7442,6 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
         });
     } catch (e) { /* non-kritis */ }
 
-    // Langkah 6: Bersihkan cart
-    cart = [];
-    saveCart();
-    updateCartUI();
-    pendingPayment = null;
-
-    // Langkah 7: UI sukses
-    const sgtMsg = actualSGT > 0 ? ` +${actualSGT.toLocaleString('id-ID')} SGT 🎉` : '';
-    showToast('Pembayaran Berhasil!' + sgtMsg, 'success');
-    closeModal('paymentModal');
-    setTimeout(() => switchView('orders'), 2000);
-
     // Hapus pending_payments
     try {
         const q = query(collection(db, 'pending_payments'), where('paymentId', '==', paymentId));
@@ -7420,8 +7450,6 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     } catch (e) {
         logDebug('Hapus pending (non-kritis): ' + e.message);
     }
-
-    return result;
 }
 
 /**
