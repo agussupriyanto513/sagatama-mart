@@ -4114,6 +4114,17 @@ function logDebug(msg) {
     // kalau sudah tidak dibutuhkan untuk production.
     if (typeof msg === 'undefined') return;
     console.log('[Sagatama]', msg);
+    // Kirim juga ke server supaya kelihatan di Vercel Logs (memudahkan
+    // debug dari laptop tanpa perlu buka console di HP/Pi Browser).
+    // Best-effort, tidak boleh sampai mengganggu alur utama kalau gagal.
+    try {
+        fetch('/api/debug-log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ msg: String(msg), ua: navigator.userAgent }),
+            keepalive: true
+        }).catch(() => {});
+    } catch (e) {}
 }
 
 // SGT TOKEN FUNCTIONS
@@ -9283,6 +9294,14 @@ window.logDebug = function(msg) {
     // Diaktifkan kembali (sementara) — lihat catatan di definisi logDebug awal
     if (typeof msg === 'undefined') return;
     console.log('[Sagatama]', msg);
+    try {
+        fetch('/api/debug-log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ msg: String(msg), ua: navigator.userAgent }),
+            keepalive: true
+        }).catch(() => {});
+    } catch (e) {}
 };
 
 // START APP
