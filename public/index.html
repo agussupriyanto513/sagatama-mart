@@ -4721,32 +4721,46 @@ async function awardSGT(piAmount, description, txId = null) {
 
     if (piAmount < sgtMinPurchase) { logDebug('[awardSGT] Skip: piAmount terlalu kecil (' + piAmount + ' < ' + sgtMinPurchase + ')'); return 0; }
 
+    // ══════════════════════════════════════════════════════════
+    // OPSI A — Cashback SGT: potong Fee (3%) + Baitul Maal (5%)
+    // dulu dari Base SGT, baru tambahkan Bonus Tier (5–15%).
+    // Ketiga alokasi (User, Fee Pool, Baitul Maal) di-mint terpisah
+    // supaya Hard Cap membatasi TOTAL SGT riil yang beredar,
+    // bukan cuma baseSGT.
+    // ══════════════════════════════════════════════════════════
     const tier        = getUserTier ? getUserTier(sgtBalance) : { rate: 0.05, name: 'Bronze' };
     const baseSGT     = Math.floor(piAmount * sgtRatePerPi);
     const tierBonus   = Math.floor(baseSGT * tier.rate);
-    const feeAmount   = Math.floor(baseSGT * SGT_FEE_RATE);
-    const sosialShare = Math.floor(baseSGT * SGT_SOSIAL_RATE);
-    const userShare   = baseSGT + tierBonus - feeAmount;
+    const feeAmount   = Math.floor(baseSGT * SGT_FEE_RATE);       // 3% Fee Operasional
+    const sosialShare = Math.floor(baseSGT * SGT_SOSIAL_RATE);    // 5% Baitul Maal / Yayasan
+    const userShare   = (baseSGT - feeAmount - sosialShare) + tierBonus;
 
     if (userShare <= 0) return 0;
 
-    // Check hard cap before minting
-    let actualMint = 0;
+    // Total SGT baru yang benar-benar tercipta di 3 dompet sekaligus
+    const totalToMint = userShare + feeAmount + sosialShare;
+
+    // Mint ke 3 alokasi terpisah — setiap panggilan mintSGT() menambah
+    // sgt_config/supply.circulating dan otomatis dipangkas kalau kena Hard Cap
+    let mintedUser = 0, mintedFee = 0, mintedSosial = 0;
     try {
-        actualMint = await mintSGT(baseSGT, currentUser.uid);
+        mintedUser   = await mintSGT(userShare, currentUser.uid) || 0;
+        mintedFee    = await mintSGT(feeAmount, 'FEE_POOL') || 0;
+        mintedSosial = await mintSGT(sosialShare, 'YAYASAN_BAITULMAAL') || 0;
     } catch(mintErr) {
         logDebug('[awardSGT] mintSGT error: ' + mintErr.message + ' — lanjut dengan kredit lokal');
-        actualMint = baseSGT; // fallback: izinkan mint lokal
+        mintedUser = userShare; mintedFee = feeAmount; mintedSosial = sosialShare;
     }
+    const actualMint = mintedUser + mintedFee + mintedSosial;
     if (!actualMint) { logDebug('[awardSGT] mintSGT returned 0, SGT tidak dikreditkan'); return 0; }
 
-    // Credit to user
-    sgtBalance += userShare;
+    // 1) Kredit ke User
+    sgtBalance += mintedUser;
     sgtTransactions.unshift({
-        type: 'earn', amount: userShare,
+        type: 'earn', amount: mintedUser,
         description: description || 'Reward belanja',
         date: new Date().toISOString(), userId: currentUser.uid,
-        tier: tier.name, tierBonus, feeDeducted: feeAmount,
+        tier: tier.name, tierBonus, feeDeducted: mintedFee,
         baseSGT
     });
 
@@ -4756,8 +4770,8 @@ async function awardSGT(piAmount, description, txId = null) {
         localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions.slice(0, 200)));
     } catch(e) {}
 
-    // Fee pool accumulation (funds staking APY)
-    sgtFeePool += feeAmount;
+    // 2) Kredit ke Fee Pool (dana APY staking)
+    sgtFeePool += mintedFee;
     try {
         await setDoc(doc(db, 'sgt_config', 'fee_pool'), {
             total: sgtFeePool,
@@ -4765,9 +4779,9 @@ async function awardSGT(piAmount, description, txId = null) {
         }, { merge: true });
     } catch(e) { logDebug('[awardSGT] fee_pool write skip: ' + e.message); }
 
-    // 5% ke Baitul Maal
-    if (sosialShare > 0) {
-        try { await addDanaToPool('baitul_maal', sosialShare); } catch(e) {}
+    // 3) Kredit ke Baitul Maal / Yayasan
+    if (mintedSosial > 0) {
+        try { await addDanaToPool('baitul_maal', mintedSosial); } catch(e) {}
     }
 
     // Log transaksi ke koleksi sgt_transactions (untuk audit trail Firestore)
@@ -4776,11 +4790,11 @@ async function awardSGT(piAmount, description, txId = null) {
             userId: currentUser.uid,
             username: currentUser.username || '',
             type: 'earn',
-            amount: userShare,
+            amount: mintedUser,
             baseSGT,
             tierBonus,
-            feeDeducted: feeAmount,
-            sosialShare,
+            feeDeducted: mintedFee,
+            sosialShare: mintedSosial,
             description: description || 'Reward belanja',
             tier: tier.name,
             piAmount,
@@ -4795,13 +4809,13 @@ async function awardSGT(piAmount, description, txId = null) {
         await saveSGTData(true, txId);
     } catch(saveErr) {
         logDebug('[awardSGT] Firestore save gagal, masuk ke offline queue: ' + saveErr.message);
-        enqueueSGTOffline({ uid: currentUser.uid, amount: userShare, desc: description, ts: Date.now() });
+        enqueueSGTOffline({ uid: currentUser.uid, amount: mintedUser, desc: description, ts: Date.now() });
     }
     updateSGTUI();
     if (typeof updateSosialUI === 'function') updateSosialUI();
-    showToast(`+${userShare.toLocaleString()} SGT (Tier ${tier.name}) 🎉`, 'success');
-    logDebug('SGT awarded: ' + userShare + ' | fee: ' + feeAmount + ' | sosial: ' + sosialShare);
-    return userShare;
+    showToast(`+${mintedUser.toLocaleString()} SGT (Tier ${tier.name}) 🎉`, 'success');
+    logDebug('SGT awarded: ' + mintedUser + ' | fee: ' + mintedFee + ' | sosial: ' + mintedSosial);
+    return mintedUser;
 }
 
 // ── SGT Offline Queue: retry otomatis saat koneksi pulih ──
@@ -9949,8 +9963,15 @@ window.submitStaking = async function() {
         const feePoolCover = Math.min(grossReward, currentFeePool);
         const mintNeeded  = Math.max(0, grossReward - feePoolCover);
         logDebug('Staking reward: ' + grossReward + ' SGT | Fee pool cover: ' + feePoolCover + ' | Mint needed: ' + mintNeeded);
-        // Update fee pool
+        // Update fee pool (dan simpan ke Firestore — sebelumnya cuma di variabel lokal,
+        // jadi hilang saat reload/beda device dan berisiko double-count di staking berikutnya)
         sgtFeePool = Math.max(0, sgtFeePool - feePoolCover);
+        try {
+            await setDoc(doc(db, 'sgt_config', 'fee_pool'), {
+                total: sgtFeePool,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+        } catch(e) { logDebug('[submitStaking] fee_pool write skip: ' + e.message); }
         const reward = grossReward; // keep variable name for compatibility
 
         const stakingDoc = {
@@ -9975,8 +9996,10 @@ window.submitStaking = async function() {
         saveSGTData(true);
         updateSGTUI();
 
-        // Add zakat to baitul maal pool
-        await addDanaToPool('baitul_maal', zakat);
+        // Zakat (10%) TIDAK langsung dikreditkan ke Baitul Maal di sini lagi —
+        // dipindah ke claimStaking() supaya dana sosial hanya cair kalau reward
+        // benar-benar terealisasi (staking sudah jatuh tempo & diklaim), bukan
+        // diproyeksikan di awal saat hasilnya belum pasti.
 
         showToast(`✅ ${amt} SGT berhasil di-staking! Reward: +${netReward} SGT`, 'success');
         document.getElementById('stakingAmount').value = '';
@@ -10030,17 +10053,108 @@ async function loadActiveStaking() {
             const elapsed = now - new Date(s.startDate);
             const pct = Math.min(Math.floor((elapsed/total)*100),100);
             const daysLeft = Math.max(0, Math.ceil((end-now)/86400000));
+            const isMatured = now >= end;
+            const totalPayout = s.amount + (s.netReward || 0);
             c.innerHTML += `<div class="staking-active-card">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                     <div><p style="font-size:11px;opacity:0.75;margin:0;">Lock ${s.days} Hari • ${s.apy}% APY</p><p style="font-size:18px;font-weight:900;color:#6EE7B7;margin:0;">${s.amount.toLocaleString()} SGT</p></div>
                     <div style="text-align:right;"><p style="font-size:10px;opacity:0.7;margin:0;">Reward bersih</p><p style="font-size:16px;font-weight:800;color:#FCD34D;margin:0;">+${s.netReward} SGT</p></div>
                 </div>
+                ${isMatured ? `
+                <div style="background:rgba(110,231,183,0.12);border:1px solid #6EE7B7;border-radius:10px;padding:10px;margin-bottom:10px;text-align:center;">
+                    <p style="font-size:11px;color:#065F46;margin:0 0 6px;">🎉 Staking sudah jatuh tempo — siap diklaim (${totalPayout.toLocaleString()} SGT)</p>
+                    <button onclick="claimStaking('${d.id}')" style="width:100%;background:linear-gradient(135deg,#059669,#047857);color:white;border:none;padding:10px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">
+                        <i class="fas fa-hand-holding-dollar" style="margin-right:6px;"></i>Klaim Sekarang
+                    </button>
+                </div>` : `
                 <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:11px;opacity:0.7;">${pct}% selesai</span><span style="font-size:11px;color:#A7F3D0;">${daysLeft} hari lagi</span></div>
-                <div class="countdown-bar"><div class="countdown-fill" style="width:${pct}%;"></div></div>
+                <div class="countdown-bar"><div class="countdown-fill" style="width:${pct}%;"></div></div>`}
             </div>`;
         });
     } catch(e) { logDebug('loadActiveStaking err: '+e.message); }
 }
+
+// ── KLAIM STAKING — dipanggil user lewat tombol "Klaim Sekarang" setelah jatuh tempo ──
+window.claimStaking = async function(stakingId) {
+    if (!currentUser) { showToast('Silakan login dahulu', 'warning'); return; }
+    if (!stakingId) return;
+    try {
+        const stakingRef = doc(db, 'sgt_stakings', stakingId);
+        const snap = await getDoc(stakingRef);
+        if (!snap.exists()) { showToast('Data staking tidak ditemukan', 'error'); return; }
+        const s = snap.data();
+
+        // Verifikasi kepemilikan
+        const queryUid = currentUser.firebaseUid || auth?.currentUser?.uid || currentUser.uid;
+        const isOwner = s.firebaseUid === queryUid || s.userId === currentUser.uid;
+        if (!isOwner) { showToast('Staking ini bukan milik Anda', 'error'); return; }
+
+        if (s.status !== 'active') { showToast('Staking ini sudah diklaim/tidak aktif', 'warning'); loadActiveStaking(); return; }
+
+        // Verifikasi sudah jatuh tempo
+        if (new Date() < new Date(s.endDate)) { showToast('Belum jatuh tempo, tunggu masa lock selesai', 'warning'); return; }
+
+        const payout = s.amount + (s.netReward || 0);
+
+        // Tandai selesai dulu (idempotency guard sederhana — hindari klaim ganda kalau double-klik)
+        await updateDoc(stakingRef, {
+            status: 'completed',
+            claimedAt: serverTimestamp()
+        });
+
+        // Kembalikan pokok + reward bersih ke saldo user
+        sgtBalance += payout;
+        sgtTransactions.unshift({
+            type: 'claim', amount: payout,
+            description: `Klaim staking ${s.days} hari (pokok ${s.amount.toLocaleString()} + reward ${s.netReward.toLocaleString()} SGT)`,
+            date: new Date().toISOString(), userId: currentUser.uid
+        });
+
+        // Zakat (10% dari gross reward) baru dikreditkan ke Baitul Maal SEKARANG,
+        // saat reward benar-benar terealisasi lewat klaim — bukan lagi diproyeksikan
+        // di awal staking
+        if (s.zakat > 0) {
+            try { await addDanaToPool('baitul_maal', s.zakat); } catch(e) {}
+        }
+
+        try {
+            localStorage.setItem('sgt_balance_' + currentUser.uid, sgtBalance.toString());
+            localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions.slice(0, 200)));
+        } catch(e) {}
+
+        try {
+            await addDoc(collection(db, 'sgt_transactions'), {
+                userId: currentUser.uid,
+                username: currentUser.username || '',
+                type: 'claim',
+                amount: payout,
+                principal: s.amount,
+                netReward: s.netReward,
+                zakat: s.zakat || 0,
+                stakingId,
+                description: `Klaim staking ${s.days} hari`,
+                timestamp: serverTimestamp(),
+                network: USE_SANDBOX ? 'testnet' : 'mainnet'
+            });
+        } catch(e) { logDebug('[claimStaking] tx log skip: ' + e.message); }
+
+        try {
+            await saveSGTData(true);
+        } catch(saveErr) {
+            logDebug('[claimStaking] Firestore save gagal, masuk ke offline queue: ' + saveErr.message);
+            enqueueSGTOffline({ uid: currentUser.uid, amount: payout, desc: 'claim_staking_retry', ts: Date.now() });
+        }
+
+        updateSGTUI();
+        if (typeof updateSosialUI === 'function') updateSosialUI();
+        showToast(`✅ Klaim berhasil! +${payout.toLocaleString()} SGT (pokok + reward)`, 'success');
+        loadBaitulStats();
+        loadActiveStaking();
+    } catch(e) {
+        showToast('Gagal klaim: ' + e.message, 'error');
+        logDebug('[claimStaking] error: ' + e.message);
+    }
+};
 
 // ---- BEASISWA ----
 window.submitBeasiswa = async function() {
