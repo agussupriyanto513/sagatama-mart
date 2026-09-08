@@ -10910,13 +10910,19 @@ function genRefCode(username) {
 window.initReferralCode = async function() {
     if (!currentUser||!db) return;
     const code = genRefCode(currentUser.username);
+    // PENTING: rule referral_codes mencocokkan field 'firebaseUid' dengan
+    // request.auth.uid (UID Firebase Auth), BUKAN Pi UID. Tanpa field ini,
+    // create/update selalu kena permission-denied untuk user Pi (Pi UID
+    // berbeda dari Firebase anon UID mereka).
+    const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid;
     try {
         await setDoc(doc(db,'referral_codes',code), {
             code, userId:currentUser.uid, username:currentUser.username,
+            firebaseUid: fbUid || null,
             createdAt:serverTimestamp()
         }, { merge:true });
         currentUser.refCode = code;
-    } catch(e) {}
+    } catch(e) { logDebug('[initReferralCode] Gagal simpan kode: ' + e.message); }
     const el = document.getElementById('refCodeDisplay');
     if (el) el.textContent = code;
 };
@@ -10952,9 +10958,12 @@ window.loadReferralData = async function() {
                 });
             }
         }
-        // Check if already claimed a ref code
-        const myRef = await getDoc(doc(db,'users',currentUser.uid));
-        const claimedCode = myRef.exists() ? myRef.data().claimedRefCode : null;
+        // Check if already claimed a ref code — status ini ditulis oleh
+        // server (/api/referral/claim) di collection 'referral_claims',
+        // bukan di 'users/{uid}' (yang memang dikunci "update: if false").
+        const usernameLower = (currentUser.username||'').trim().toLowerCase();
+        const myClaim = usernameLower ? await getDoc(doc(db,'referral_claims',usernameLower)).catch(()=>null) : null;
+        const claimedCode = myClaim && myClaim.exists() ? myClaim.data().code : null;
         const inputArea  = document.getElementById('refInputArea');
         const claimedDiv = document.getElementById('refAlreadyClaimed');
         if (claimedCode) {
@@ -10979,56 +10988,52 @@ window.shareReferral = function() {
 
 window.claimReferral = async function() {
     if (!currentUser) { showToast('Silakan login dahulu','warning'); return; }
+    if (currentUser.authType !== 'pi' || !currentUser.accessToken) {
+        showToast('Klaim referral hanya tersedia untuk login Pi','warning');
+        return;
+    }
     const codeInput = document.getElementById('refCodeInput')?.value.trim().toUpperCase();
     if (!codeInput || codeInput.length < 4) { showToast('Masukkan kode referral yang valid','error'); return; }
     const myCode = currentUser.refCode || genRefCode(currentUser.username);
     if (codeInput === myCode) { showToast('Tidak bisa pakai kode sendiri','error'); return; }
+
+    // Seluruh proses klaim (validasi kode, cegah klaim ganda, kredit
+    // 100 SGT ke pengklaim + 200 SGT ke pemilik kode) sekarang dikerjakan
+    // di server lewat /api/referral/claim, karena kredit saldo langsung
+    // dari client SELALU diblokir oleh Firestore rules ("users" dikunci,
+    // wajib lewat backend). Ledger SGT asli ada di 'sgt_wallets' (kunci =
+    // username Pi), sama seperti alur /api/sgt/sync.
+    const btn = document.querySelector('[onclick="claimReferral()"]');
+    if (btn) btn.disabled = true;
     try {
-        // Check code exists
-        const codeSnap = await getDoc(doc(db,'referral_codes',codeInput));
-        if (!codeSnap.exists()) { showToast('Kode tidak ditemukan','error'); return; }
-        const refData = codeSnap.data();
-        if (refData.userId === currentUser.uid) { showToast('Tidak bisa pakai kode sendiri','error'); return; }
-        // Check already claimed
-        const mySnap = await getDoc(doc(db,'users',currentUser.uid));
-        if (mySnap.data()?.claimedRefCode) { showToast('Kamu sudah menggunakan kode referral','warning'); return; }
-        // Apply referral
-        await setDoc(doc(db,'users',currentUser.uid), { claimedRefCode:codeInput, updatedAt:serverTimestamp() }, {merge:true});
-        await addDoc(collection(db,'referrals'), {
-            refBy:refData.userId, refByUsername:refData.username,
-            userId:currentUser.uid, username:currentUser.username,
-            code:codeInput, hasTransacted:false, bonusGiven:200,
-            createdAt:serverTimestamp()
+        const resp = await fetch('/api/referral/claim', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessToken: currentUser.accessToken, code: codeInput })
         });
-        // Give bonus to claimer (100 SGT welcome bonus)
-        sgtBalance += 100;
+        const data = await resp.json();
+        if (!resp.ok || !data.success) {
+            showToast(data.error || 'Gagal klaim kode referral','error');
+            return;
+        }
+        // Sinkronkan saldo lokal dengan hasil resmi dari server
+        if (typeof data.sgtBalance === 'number') {
+            sgtBalance = data.sgtBalance;
+            _sgtLastSyncedBalance = data.sgtBalance;
+        }
         sgtTransactions.unshift({ type:'earn', amount:100, description:'Bonus referral selamat datang', date:new Date().toISOString() });
-        saveSGTData(true); updateSGTUI();
-        await mintSGT(100, currentUser.uid);
-        // Give bonus to referrer (200 SGT)
-        const refUserSnap = await getDoc(doc(db,'users',refData.userId));
-        if (refUserSnap.exists()) {
-            const curBal = refUserSnap.data().sgtBalance || 0;
-            await setDoc(doc(db,'users',refData.userId), {
-                sgtBalance: curBal+200,
-                sgtTransactions: [{type:'earn',amount:200,description:`Referral bonus dari @${currentUser.username}`,date:new Date().toISOString()},...(refUserSnap.data().sgtTransactions||[])].slice(0, 200),
-                updatedAt:serverTimestamp()
-            }, {merge:true});
-            await mintSGT(200, refData.userId);
-        }
-        // Log
-        await incrementStat('totalReferrals', 0); // for claimer stats
-        // Update referrer stats
-        const refStats = await getDoc(doc(db,'user_stats',refData.userId));
-        if (refStats.exists()) {
-            await setDoc(doc(db,'user_stats',refData.userId), {
-                totalReferrals:(refStats.data().totalReferrals||0)+1, updatedAt:serverTimestamp()
-            }, {merge:true});
-        }
-        document.getElementById('refInputArea').style.display  = 'none';
-        document.getElementById('refAlreadyClaimed').style.display = 'block';
-        showToast('🎁 +100 SGT bonus referral! Terima kasih sudah bergabung','success');
-    } catch(e) { showToast('Gagal klaim: '+e.message,'error'); }
+        updateSGTUI();
+        try { localStorage.setItem('sgt_transactions_' + currentUser.uid, JSON.stringify(sgtTransactions)); } catch(e) {}
+        const inputArea  = document.getElementById('refInputArea');
+        const claimedDiv = document.getElementById('refAlreadyClaimed');
+        if (inputArea)  inputArea.style.display  = 'none';
+        if (claimedDiv) claimedDiv.style.display = 'block';
+        showToast(data.message || '🎁 +100 SGT bonus referral! Terima kasih sudah bergabung','success');
+    } catch(e) {
+        showToast('Gagal klaim: '+e.message,'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 };
 
 window.switchVoteTab = function(tab, btn) {
