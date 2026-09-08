@@ -49,19 +49,38 @@ function ledgerRef(txId) {
 // ── Verifikasi accessToken Pi langsung ke Pi Platform API ──
 // Dipakai saat user login di salah satu app dan kita perlu tahu
 // username asli mereka (bukan yang dikirim mentah-mentah dari client).
+//
+// PENTING (fix bug "SGT hilang"): sebelumnya fungsi ini mengembalikan
+// `null` baik untuk (a) token yang MEMANG tidak valid maupun (b) Pi
+// Platform API yang cuma lagi lambat/timeout/error 5xx sesaat. Endpoint
+// pemanggil (sync.js/balance.js) lalu selalu membalas 401 untuk kedua
+// kasus itu. Client tidak bisa membedakan "token salah, jangan diulang"
+// dari "coba lagi nanti", dan reward yang gagal ter-sync dari sisi
+// server bisa hilang permanen kalau client mengira itu error final.
+// Sekarang fungsi ini mengembalikan objek dengan flag `transient` supaya
+// pemanggil bisa merespons 503 (boleh di-retry) alih-alih 401 (final).
 async function verifyPiToken(accessToken) {
-  if (!accessToken) return null;
+  if (!accessToken) return { ok: false, transient: false, reason: 'no_token' };
   try {
     const resp = await fetch('https://api.minepi.com/v2/me', {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
-    if (!resp.ok) return null;
+    if (resp.status === 401 || resp.status === 403) {
+      // Pi Platform sendiri yang bilang token ini tidak sah — final, jangan retry.
+      return { ok: false, transient: false, reason: 'invalid_token' };
+    }
+    if (!resp.ok) {
+      // Status lain (429 rate-limit, 5xx, dsb) — bukan berarti token salah,
+      // Pi Platform-nya yang lagi bermasalah. Ini TRANSIENT, boleh di-retry.
+      return { ok: false, transient: true, reason: 'pi_api_status_' + resp.status };
+    }
     const data = await resp.json();
-    if (!data || !data.username) return null;
-    return { uid: data.uid, username: data.username };
+    if (!data || !data.username) return { ok: false, transient: false, reason: 'no_username' };
+    return { ok: true, uid: data.uid, username: data.username };
   } catch (e) {
     console.error('[sgt/_lib] verifyPiToken error:', e.message);
-    return null;
+    // Network/timeout saat menghubungi Pi Platform — TRANSIENT, boleh di-retry.
+    return { ok: false, transient: true, reason: 'network_error' };
   }
 }
 
