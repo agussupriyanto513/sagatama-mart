@@ -4150,6 +4150,14 @@ async function loadAdminExchangeRate() {
 // oleh Pi Core Team → diaktifkan ke Mainnet.
 const USE_SANDBOX = false;
 
+// ══════════════════════════════════════════════════════════════════════════
+// API BASE URL — WAJIB absolute, JANGAN relative path.
+// Saat app dibuka via Pi App Studio / domain Pi Browser (mis. sagatama.pi),
+// fetch('/api/...') akan resolve ke domain itu (yang tidak punya endpoint API-nya)
+// alih-alih ke Vercel, sehingga request timeout/gagal. Semua fetch ke /api/*
+// di file ini HARUS memakai API_BASE_URL + path.
+const API_BASE_URL = 'https://sagatama-mart.vercel.app'; // ganti sesuai domain Vercel produksi Anda
+
 // Helper: cek apakah SGT sedang di Testnet (meski Pi sudah Mainnet)
 const SGT_IS_TESTNET = (typeof ESCROW_CONFIG !== 'undefined' && ESCROW_CONFIG.NETWORK === 'testnet');
 
@@ -4283,7 +4291,7 @@ async function saveSGTData(forceFirestore = false, txId = null) {
         // saldo resmi dari server sebagai baseline sebelum menghitung delta.
         if (_sgtLastSyncedBalance === null) {
             try {
-                const baseRes = await fetch('/api/sgt/balance', {
+                const baseRes = await fetch(API_BASE_URL + '/api/sgt/balance', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ accessToken: currentUser.accessToken })
@@ -4303,7 +4311,7 @@ async function saveSGTData(forceFirestore = false, txId = null) {
         const delta = sgtBalance - _sgtLastSyncedBalance;
         if (delta === 0) { window._lastSgtSyncDebug = { skipped: 'delta === 0', sgtBalance, _sgtLastSyncedBalance }; return; }
         try {
-            const res = await fetch('/api/sgt/sync', {
+            const res = await fetch(API_BASE_URL + '/api/sgt/sync', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ accessToken: currentUser.accessToken, delta, txId })
@@ -4396,7 +4404,7 @@ async function loadSGTDataFixed(force = false) {
     const rateSnapPromise = getDoc(doc(db, 'sgt_config', 'supply')).catch(e => { logDebug('[SGT-v3] rateSnap fail: ' + e.message); return null; });
     const exchangeRatePromise = loadAdminExchangeRate().catch(e => { logDebug('[SGT-v3] exchangeRate fail: ' + e.message); });
     const balancePromise = (currentUser.authType === 'pi' && currentUser.accessToken)
-        ? fetch('/api/sgt/balance', {
+        ? fetch(API_BASE_URL + '/api/sgt/balance', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ accessToken: currentUser.accessToken })
@@ -4842,7 +4850,7 @@ async function flushSGTOfflineQueue() {
             if (currentUser.authType === 'pi' && currentUser.accessToken && entry.amount) {
                 try {
                     const txId = 'mart_offline_' + (entry.uid || currentUser.uid) + '_' + entry.ts;
-                    const res = await fetch('/api/sgt/sync', {
+                    const res = await fetch(API_BASE_URL + '/api/sgt/sync', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ accessToken: currentUser.accessToken, delta: entry.amount, txId })
@@ -7415,7 +7423,7 @@ async function approvePaymentOnServer(paymentId) {
     const timeoutId = setTimeout(() => controller.abort(), 20000);
     let response;
     try {
-        response = await fetch('/api/payments/approve', {
+        response = await fetch(API_BASE_URL + '/api/payments/approve', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ paymentId, network: USE_SANDBOX ? 'testnet' : 'mainnet' }),
@@ -7491,7 +7499,7 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     let serverConfirmed = false;
     let result = {};
     try {
-        const response = await fetch('/api/payments/complete', {
+        const response = await fetch(API_BASE_URL + '/api/payments/complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ paymentId, txid, network: USE_SANDBOX ? 'testnet' : 'mainnet' })
@@ -7574,7 +7582,7 @@ async function finalizeOrderSideEffects({ paymentId, txid, orderData, finalItems
     // terikat Firestore Rules dan sudah atomik + idempotent per paymentId.
     let stockDebugLog = [];
     const stockPromise = (finalItems && finalItems.length > 0)
-        ? fetch('/api/orders/decrement-stock', {
+        ? fetch(API_BASE_URL + '/api/orders/decrement-stock', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -7772,7 +7780,7 @@ async function handleIncompletePayment(payment) {
 }
 
 async function cancelPaymentOnServer(paymentId) {
-    const response = await fetch('/api/payments/cancel', {
+    const response = await fetch(API_BASE_URL + '/api/payments/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paymentId, network: USE_SANDBOX ? 'testnet' : 'mainnet' })
@@ -11006,7 +11014,7 @@ window.claimReferral = async function() {
     const btn = document.querySelector('[onclick="claimReferral()"]');
     if (btn) btn.disabled = true;
     try {
-        const resp = await fetch('/api/referral/claim', {
+        const resp = await fetch(API_BASE_URL + '/api/referral/claim', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ accessToken: currentUser.accessToken, code: codeInput })
