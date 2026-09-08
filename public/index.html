@@ -4272,8 +4272,34 @@ function logDebug(msg) {
 // fungsi ini yang menyinkronkan SELISIHNYA ke ledger pusat.
 let _sgtLastSyncedBalance = null; // saldo terakhir yang sudah tersinkron ke pusat
 
+// FIX (idempotensi): banyak pemanggil saveSGTData() TIDAK memberi txId sendiri
+// (transfer, redeem, autosave berkala, staking, zakat/infaq, dsb). Tanpa txId,
+// backend membuatkan txId ACAK setiap request (lihat sync.js) — kalau request
+// pertama sebenarnya SUKSES tapi responsnya hilang di jalan (timeout, tab
+// ditutup, dsb), retry berikutnya akan dianggap transaksi baru oleh backend dan
+// men-double-credit/debit saldo. Fungsi ini membuat txId yang STABIL berdasarkan
+// (uid, saldo-sebelum, saldo-sesudah) dan menyimpannya di localStorage, supaya
+// retry untuk delta yang SAMA memakai txId yang SAMA persis — backend
+// (idempotent lewat sgt_ledger/{txId}) akan otomatis menolak eksekusi ganda.
+// Begitu delta itu berhasil tersinkron, cache-nya dibersihkan.
+function getOrCreateSGTSyncTxId(uid, fromBal, toBal) {
+    const key = 'sgt_pending_txid_' + uid;
+    try {
+        const cached = JSON.parse(localStorage.getItem(key) || 'null');
+        if (cached && cached.from === fromBal && cached.to === toBal && cached.txId) {
+            return cached.txId;
+        }
+    } catch(e) {}
+    const txId = 'mart_autosync_' + uid + '_' + fromBal + '_' + toBal + '_' + Date.now().toString(36);
+    try { localStorage.setItem(key, JSON.stringify({ from: fromBal, to: toBal, txId })); } catch(e) {}
+    return txId;
+}
+function clearSGTSyncTxId(uid) {
+    try { localStorage.removeItem('sgt_pending_txid_' + uid); } catch(e) {}
+}
+
 async function saveSGTData(forceFirestore = false, txId = null) {
-    if (!currentUser) return;
+    if (!currentUser) return true;
 
     // Selalu update localStorage sebagai cache cepat (tetap dipertahankan)
     try {
@@ -4304,32 +4330,62 @@ async function saveSGTData(forceFirestore = false, txId = null) {
             if (_sgtLastSyncedBalance === null) {
                 // Masih belum tahu baseline sebenarnya — simpan ke antrian offline
                 // supaya reward ini dicoba lagi nanti, bukan hilang begitu saja.
-                enqueueSGTOffline({ uid: currentUser.uid, amount: sgtBalance, desc: 'sync_retry', ts: Date.now() });
-                return;
+                const _txId = getOrCreateSGTSyncTxId(currentUser.uid, 'baseline_unknown', sgtBalance);
+                enqueueSGTOffline({ uid: currentUser.uid, amount: sgtBalance, desc: 'sync_retry', ts: Date.now(), txId: _txId });
+                return false;
             }
         }
         const delta = sgtBalance - _sgtLastSyncedBalance;
-        if (delta === 0) { window._lastSgtSyncDebug = { skipped: 'delta === 0', sgtBalance, _sgtLastSyncedBalance }; return; }
+        if (delta === 0) { window._lastSgtSyncDebug = { skipped: 'delta === 0', sgtBalance, _sgtLastSyncedBalance }; return true; }
+        // Pakai txId yang dikasih pemanggil (mis. `mart_cashback_<orderId>`) kalau
+        // ada; kalau tidak, pakai txId stabil berbasis (uid, saldo-dari, saldo-ke)
+        // supaya pemanggil yang tidak sempat dikasih txId eksplisit (transfer,
+        // redeem, autosave berkala, zakat/infaq, dll) tetap aman dari double-sync.
+        const finalTxId = txId || getOrCreateSGTSyncTxId(currentUser.uid, _sgtLastSyncedBalance, sgtBalance);
         try {
             const res = await fetch(API_BASE_URL + '/api/sgt/sync', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ accessToken: currentUser.accessToken, delta, txId })
+                body: JSON.stringify({ accessToken: currentUser.accessToken, delta, txId: finalTxId })
             });
             const data = await res.json();
-            window._lastSgtSyncDebug = { httpStatus: res.status, sentDelta: delta, sentTxId: txId, response: data };
+            window._lastSgtSyncDebug = { httpStatus: res.status, sentDelta: delta, sentTxId: finalTxId, response: data };
             if (data.success) {
                 _sgtLastSyncedBalance = data.sgtBalance;
                 if (data.sgtBalance !== sgtBalance) { sgtBalance = data.sgtBalance; updateSGTUI(); }
+                clearSGTSyncTxId(currentUser.uid);
+                return true;
             } else {
                 logDebug('[SGT-sync] Gagal: ' + (data.error||'unknown'));
-                if (data.sgtBalance !== undefined) { sgtBalance = data.sgtBalance; _sgtLastSyncedBalance = data.sgtBalance; updateSGTUI(); }
+                // FIX (penyebab "SGT hilang"): dulu di sini delta yang gagal
+                // (mis. 401/500 dari server) cuma di-log lalu DIDIAMKAN — tidak
+                // pernah masuk antrian offline. `awardSGT` mengandalkan try/catch
+                // di sekitar `await saveSGTData()` untuk menangkap kegagalan ini,
+                // padahal saveSGTData tidak pernah throw untuk kasus ini, jadi
+                // catch itu TIDAK PERNAH kepanggil (dead code) dan delta hilang
+                // permanen begitu balance resmi dari server menimpa balik nanti.
+                // Kecuali error-nya "Saldo SGT tidak cukup" (memang harus gagal
+                // total, bukan transient) — retry-kan delta yang gagal ini, dengan
+                // txId yang SAMA (finalTxId) supaya retry tetap idempotent.
+                if (data.error !== 'Saldo SGT tidak cukup') {
+                    enqueueSGTOffline({ uid: currentUser.uid, amount: delta, desc: (data.transient ? 'sync_5xx_retry' : 'sync_failed_retry'), ts: Date.now(), txId: finalTxId });
+                } else if (data.sgtBalance !== undefined) {
+                    // Server yang paling tahu saldo sesungguhnya kalau memang saldo tidak cukup.
+                    sgtBalance = data.sgtBalance; _sgtLastSyncedBalance = data.sgtBalance; updateSGTUI();
+                    clearSGTSyncTxId(currentUser.uid);
+                }
+                return false;
             }
         } catch(e) {
-            window._lastSgtSyncDebug = { fetchError: e.message, sentDelta: delta, sentTxId: txId };
+            window._lastSgtSyncDebug = { fetchError: e.message, sentDelta: delta, sentTxId: finalTxId };
             logDebug('[SGT-sync] Error jaringan: ' + e.message);
+            // FIX: request-nya sendiri gagal total (network/timeout) — delta ini
+            // juga wajib di-retry (dengan txId yang SAMA), bukan cuma dicatat di
+            // log lalu dilupakan.
+            enqueueSGTOffline({ uid: currentUser.uid, amount: delta, desc: 'sync_network_error_retry', ts: Date.now(), txId: finalTxId });
+            return false;
         }
-        return; // TIDAK lagi menulis ke Firestore 'users/{uid}.sgtBalance' untuk user Pi
+        // (unreachable — semua cabang di atas sudah return eksplisit)
     }
 
     // ── Jalur LAMA (dipertahankan): login manual / admin, tanpa identitas Pi terverifikasi ──
@@ -4357,6 +4413,7 @@ async function saveSGTData(forceFirestore = false, txId = null) {
             } catch(le) {}
         });
     }
+    return true;
 }
 
 async function loadSGTData() {
@@ -4396,6 +4453,25 @@ async function loadSGTDataFixed(force = false) {
     const uid = currentUser.uid;
     const username = currentUser.username;
     logDebug(`[SGT-v3] Loading SGT for uid=${uid}, username=${username}`);
+
+    // FIX (penyebab "SGT hilang"): sebelum ambil saldo resmi dari ledger pusat,
+    // coba flush dulu antrian sgt_offline_queue kalau ada isinya. Dulu antrian
+    // ini cuma di-retry saat event 'online' menyala (browser benar-benar
+    // putus lalu tersambung lagi) — kalau gagalnya karena error server/timeout
+    // sesaat (bukan putus koneksi), event itu tidak pernah nyala, dan reward
+    // yang sudah sempat ditampilkan ke user diam-diam tidak pernah masuk ke
+    // ledger pusat. Berikutnya begitu loadSGTDataFixed jalan lagi (buka app,
+    // reload, refresh background setelah checkout, dst — ini SERING terjadi),
+    // saldo lama dari server menimpa balik saldo yang sudah nambah di layar.
+    if (currentUser.authType === 'pi' && currentUser.accessToken) {
+        try {
+            const _pendingQ = JSON.parse(localStorage.getItem('sgt_offline_queue') || '[]');
+            if (_pendingQ.length) {
+                logDebug('[SGT-v3] Ada ' + _pendingQ.length + ' antrian offline, flush dulu sebelum ambil saldo...');
+                await flushSGTOfflineQueue();
+            }
+        } catch(e) { logDebug('[SGT-v3] Gagal cek/flush antrian offline: ' + e.message); }
+    }
 
     // PERF FIX: exchange rate, mint rate, dan saldo SGT tidak saling bergantung —
     // sebelumnya di-await satu-satu (3 round-trip berurutan), sekarang dijalankan
@@ -4811,13 +4887,16 @@ async function awardSGT(piAmount, description, txId = null) {
         });
     } catch(e) { logDebug('[awardSGT] tx log skip: ' + e.message); }
 
-    // Simpan ke Firestore (forceFirestore=true karena ini transaksi penting)
-    // Jika gagal, masukkan ke offline queue untuk retry otomatis saat online
-    try {
-        await saveSGTData(true, txId);
-    } catch(saveErr) {
-        logDebug('[awardSGT] Firestore save gagal, masuk ke offline queue: ' + saveErr.message);
-        enqueueSGTOffline({ uid: currentUser.uid, amount: mintedUser, desc: description, ts: Date.now() });
+    // Simpan ke Firestore (forceFirestore=true karena ini transaksi penting).
+    // FIX: sebelumnya di sini ada try/catch yang mengandalkan saveSGTData()
+    // melempar error saat gagal — padahal saveSGTData TIDAK PERNAH throw untuk
+    // Pi user (semua error ditangani sendiri di dalamnya), jadi catch ini tidak
+    // pernah kepanggil dan reward yang gagal sync tidak pernah masuk antrian
+    // retry. saveSGTData() sekarang sudah menangani antrian offline-nya sendiri
+    // di semua jalur kegagalan — di sini cukup baca nilai baliknya untuk log.
+    const _syncedOk = await saveSGTData(true, txId);
+    if (!_syncedOk) {
+        logDebug('[awardSGT] Sync ke ledger pusat gagal — sudah otomatis masuk antrian offline via saveSGTData()');
     }
     updateSGTUI();
     if (typeof updateSosialUI === 'function') updateSosialUI();
@@ -4849,7 +4928,13 @@ async function flushSGTOfflineQueue() {
             // lewat txId stabil supaya aman kalau flush ini sendiri gagal di tengah jalan.
             if (currentUser.authType === 'pi' && currentUser.accessToken && entry.amount) {
                 try {
-                    const txId = 'mart_offline_' + (entry.uid || currentUser.uid) + '_' + entry.ts;
+                    // FIX: pakai txId yang SAMA dengan percobaan aslinya (entry.txId,
+                    // dari getOrCreateSGTSyncTxId di saveSGTData) kalau tersedia — supaya
+                    // kalau percobaan pertama ternyata sebenarnya SUKSES di server tapi
+                    // responsnya hilang di jalan, retry ini tidak dianggap transaksi baru
+                    // (double-credit). Fallback ke skema lama untuk entri antrian lawas
+                    // yang sempat tersimpan sebelum fix ini ada.
+                    const txId = entry.txId || ('mart_offline_' + (entry.uid || currentUser.uid) + '_' + entry.ts);
                     const res = await fetch(API_BASE_URL + '/api/sgt/sync', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -4860,6 +4945,7 @@ async function flushSGTOfflineQueue() {
                         credited = true;
                         _sgtLastSyncedBalance = data.sgtBalance;
                         if (data.sgtBalance !== sgtBalance) { sgtBalance = data.sgtBalance; updateSGTUI(); }
+                        clearSGTSyncTxId(entry.uid || currentUser.uid);
                         logDebug('[SGT Queue] ✅ Berhasil dikreditkan ke ledger pusat: ' + entry.amount + ' SGT');
                     }
                 } catch(e) {
@@ -4891,6 +4977,16 @@ if (typeof window !== 'undefined') {
     window.addEventListener('online', () => {
         logDebug('[SGT Queue] Koneksi pulih, memproses antrian...');
         flushSGTOfflineQueue();
+    });
+    // FIX (penyebab "SGT hilang"): event 'online' saja tidak cukup — kalau
+    // sync gagal karena error server/timeout sesaat (browser tetap "online"),
+    // antrian ini bisa nyangkut lama. Coba juga tiap kali user balik ke tab
+    // ini, supaya reward yang tertunda tidak menunggu sampai loadSGTDataFixed
+    // berikutnya baru ke-flush.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && currentUser) {
+            flushSGTOfflineQueue().catch(() => {});
+        }
     });
 }
 
@@ -4956,6 +5052,28 @@ window.processSGTTransfer = async function() {
         if (receiverDoc.id === currentUser.uid) throw new Error('Tidak bisa transfer ke diri sendiri');
 
         const receiverData = receiverDoc.data();
+        // ⚠️ BUG ARSITEKTUR — BUKAN SEKADAR TYPO, PERLU ENDPOINT BARU DI BACKEND:
+        // Kode di bawah ini masih menulis LANGSUNG ke field lama
+        // `users/{uid}.sgtBalance` di Firestore Mart sendiri — jalur yang untuk
+        // user Pi (authType==='pi') SUDAH TIDAK DIBACA LAGI oleh loadSGTDataFixed/
+        // listenUserSGTBalanceFixed (lihat komentar di fungsi-fungsi itu; itulah
+        // yang menyebabkan bonus SGT lain "muncul sebentar lalu hilang").
+        // Untuk PENGIRIM, ini masih "ketolong" karena saveSGTData(true) di bawah
+        // menghitung ulang delta dan mengirimkannya ke ledger pusat lewat
+        // /api/sgt/sync — jadi saldo pengirim akhirnya tetap konsisten.
+        // TAPI untuk PENERIMA, TIDAK ADA jalur setara: kode ini cuma menulis ke
+        // dokumen Firestore lama milik penerima (yang tidak pernah dibaca lagi
+        // untuk saldo Pi user), dan TIDAK PERNAH memanggil ledger pusat untuk
+        // meng-kredit wallet penerima (sgt_wallets/{username}) — karena dari sisi
+        // client tidak mungkin memakai accessToken milik user lain. Hasilnya: SGT
+        // yang "dikirim" akan terpotong dari saldo pengirim (lewat ledger pusat),
+        // tapi TIDAK PERNAH benar-benar sampai ke penerima. Ini butuh endpoint
+        // backend baru (mis. api/sgt/transfer.js) yang menerima accessToken
+        // PENGIRIM + username tujuan, lalu debit+kredit KEDUANYA dalam satu
+        // transaksi Firestore di sisi server (pola sama seperti sync.js, tapi
+        // menyentuh 2 dokumen wallet sekaligus). Sebelum endpoint itu ada,
+        // JANGAN andalkan fitur transfer ini untuk transfer SGT yang riil.
+        const _transferTxId = 'mart_transfer_out_' + currentUser.uid + '_' + Date.now();
         // Update pengirim
         sgtBalance -= amount;
         const newTxSender = { type:'transfer', amount, description:`Transfer ke @${targetUserInput}`, date:new Date().toISOString(), userId:currentUser.uid };
@@ -4963,7 +5081,9 @@ window.processSGTTransfer = async function() {
         await setDoc(doc(db, 'users', currentUser.uid), {
             sgtBalance, sgtTransactions: sgtTransactions.slice(0, 200), sgtUpdatedAt: serverTimestamp()
         }, { merge: true });
-        // Update penerima
+        // Update penerima — LIHAT PERINGATAN DI ATAS: ini TIDAK mengkredit
+        // ledger pusat penerima, cuma dokumen Firestore lama yang sudah tidak
+        // relevan untuk perhitungan saldo Pi user.
         const receiverBal = (receiverData.sgtBalance || 0) + amount;
         const receiverTxs = receiverData.sgtTransactions || [];
         await setDoc(doc(db, 'users', receiverDoc.id), {
@@ -4974,7 +5094,7 @@ window.processSGTTransfer = async function() {
 
         // Auto-burn 2% dari transfer
         autoBurnOnSpend(amount).catch(()=>{});
-        saveSGTData(true);
+        saveSGTData(true, _transferTxId);
         updateSGTUI();
 
         // Log ke sgt_transactions (audit trail)
@@ -9998,7 +10118,7 @@ window.submitStaking = async function() {
             status: 'active', createdAt: serverTimestamp()
         };
 
-        await addDoc(collection(db, 'sgt_stakings'), stakingDoc);
+        const stakingRef = await addDoc(collection(db, 'sgt_stakings'), stakingDoc);
 
         // Deduct from balance
         sgtBalance -= amt;
@@ -10007,7 +10127,9 @@ window.submitStaking = async function() {
             description: `Staking ${selectedStakingDays} hari (${selectedStakingAPY}% APY)`,
             date: startDate.toISOString(), userId: currentUser.uid
         });
-        saveSGTData(true);
+        // txId deterministik dari ID dokumen staking (unik per staking) — aman
+        // di-retry tanpa risiko dobel potong saldo.
+        saveSGTData(true, 'mart_stake_start_' + stakingRef.id);
         updateSGTUI();
 
         // Zakat (10%) TIDAK langsung dikreditkan ke Baitul Maal di sini lagi —
@@ -10152,11 +10274,14 @@ window.claimStaking = async function(stakingId) {
             });
         } catch(e) { logDebug('[claimStaking] tx log skip: ' + e.message); }
 
-        try {
-            await saveSGTData(true);
-        } catch(saveErr) {
-            logDebug('[claimStaking] Firestore save gagal, masuk ke offline queue: ' + saveErr.message);
-            enqueueSGTOffline({ uid: currentUser.uid, amount: payout, desc: 'claim_staking_retry', ts: Date.now() });
+        // FIX (idempotensi + "SGT hilang"): sebelumnya di sini juga ada try/catch
+        // yang tidak pernah kepanggil (saveSGTData tidak throw), sama seperti bug
+        // di awardSGT. Sekarang dikasih txId deterministik berbasis stakingId
+        // (satu staking cuma bisa diklaim sekali — stakingId unik per klaim),
+        // dan cukup baca nilai balik boolean-nya.
+        const _syncedOk = await saveSGTData(true, 'mart_stake_claim_' + stakingId);
+        if (!_syncedOk) {
+            logDebug('[claimStaking] Sync ke ledger pusat gagal — sudah otomatis masuk antrian offline via saveSGTData()');
         }
 
         updateSGTUI();
