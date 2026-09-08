@@ -1,4 +1,4 @@
-// api/referral/claim.js
+// referral/claim.js
 // POST { accessToken, code }  →  { success, sgtBalance, message }
 //
 // LATAR BELAKANG:
