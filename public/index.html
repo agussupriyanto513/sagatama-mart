@@ -6221,7 +6221,6 @@ async function initPiSDKRobust() {
         // Tidak perlu retry 5x × 2-10 detik = buang 34 detik percuma
         if (!window.Pi && navigator.userAgent.indexOf('PiBrowser') === -1) {
             logDebug('[AUTH-v3] Bukan Pi Browser — skip Pi SDK init');
-            alert('[DEBUG SEMENTARA] Dianggap BUKAN Pi Browser. UA=' + navigator.userAgent + ' | hostname=' + window.location.hostname); // TODO: hapus baris ini setelah selesai diagnosa
             resolve(false);
             return;
         }
@@ -6236,7 +6235,6 @@ async function initPiSDKRobust() {
                     await delay(1500);
                     // Cek lagi setelah delay — kalau tetap tidak ada, keluar
                     if (!window.Pi) {
-                        alert('[DEBUG SEMENTARA] window.Pi tetap undefined setelah 1.5 detik menunggu. hostname=' + window.location.hostname); // TODO: hapus baris ini setelah selesai diagnosa
                         resolve(false);
                         return;
                     }
@@ -6257,7 +6255,6 @@ async function initPiSDKRobust() {
 
             } catch (err) {
                 logDebug(`[AUTH-v3] Pi SDK init gagal: ${err.message}`);
-                alert('[DEBUG SEMENTARA] Pi.init() gagal: ' + err.message + ' | attempt=' + piInitAttempts + ' | hostname=' + window.location.hostname); // TODO: hapus baris ini setelah selesai diagnosa
                 const waitTime = Math.min(2000 * Math.pow(2, piInitAttempts - 1), 5000);
                 await delay(waitTime);
             }
