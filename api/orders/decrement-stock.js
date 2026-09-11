@@ -1,20 +1,26 @@
 // api/orders/decrement-stock.js
-// POST { paymentId, items: [{ productId, qty }] } → { success, results }
+// POST { paymentId, items: [{ productId, qty }], network? } → { success, results }
 //
 // KENAPA endpoint ini ada:
 // Sebelumnya frontend (public/index.html) mengurangi stok produk dengan
-// updateDoc() LANGSUNG dari browser pembeli. Ini gagal diam-diam kalau
-// Firestore Rules membatasi tulis koleksi 'products' hanya untuk admin
-// (praktik keamanan yang benar — pembeli seharusnya memang tidak boleh
-// menulis langsung ke data produk). Akibatnya stok tidak pernah berkurang,
-// tanpa error yang terlihat.
+// updateDoc() LANGSUNG dari browser pembeli — gagal diam-diam karena
+// Firestore Rules membatasi tulis 'products' hanya untuk admin. Endpoint
+// ini pakai Firebase Admin SDK (server-to-server) supaya tidak terikat
+// Firestore Rules, dan mengurangi stok dalam transaksi atomik per produk.
 //
-// Endpoint ini pakai Firebase Admin SDK (server-to-server), jadi tidak
-// terikat Firestore Rules sama sekali, dan mengurangi stok dalam transaksi
-// atomik per produk (aman dari race condition kalau ada pembeli lain
-// checkout bersamaan). Idempotent lewat `paymentId` + `productId` supaya
-// retry jaringan dari client tidak memotong stok dua kali.
-import { getFirebaseApp, admin } from '../../firebase-init.js';
+// 🔒 SECURITY FIX — PENTING:
+// Versi sebelumnya menerima `paymentId` + `items` apa adanya dari client
+// dan LANGSUNG memotong stok — TANPA pernah mengecek ke Pi Platform bahwa
+// paymentId itu nyata dan benar-benar sudah dibayar. Siapa saja bisa
+// mengirim paymentId karangan + daftar produk manapun ke endpoint ini
+// lewat curl/Postman dan menghabiskan stok toko tanpa membayar sepeser
+// pun. Ini bug KRITIS.
+//
+// Fix-nya: sekarang endpoint ini WAJIB memverifikasi status pembayaran
+// LANGSUNG ke Pi Platform API (fungsi sama yang dipakai award-purchase.js)
+// sebelum menyentuh stok sama sekali. Kalau pembayaran belum terverifikasi
+// selesai, permintaan ditolak — stok tidak berkurang.
+import { getFirebaseApp, admin, verifyPiPayment } from '../../api/sgt/_lib.js';
 
 getFirebaseApp();
 const db = () => admin.firestore();
@@ -26,10 +32,22 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { paymentId, items } = req.body || {};
+  const { paymentId, items, network } = req.body || {};
   if (!paymentId) return res.status(400).json({ error: 'paymentId diperlukan' });
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'items diperlukan (array)' });
+  }
+
+  // 🔒 Titik kunci fix: verifikasi dulu ke Pi Platform, jangan percaya
+  // klaim client bahwa paymentId ini sudah lunas.
+  const payVerify = await verifyPiPayment(paymentId, network);
+  if (!payVerify.ok) {
+    const status = payVerify.transient ? 503 : 400;
+    return res.status(status).json({
+      error: 'Pembayaran belum terverifikasi selesai di Pi Platform, stok tidak dikurangi',
+      reason: payVerify.reason,
+      transient: !!payVerify.transient
+    });
   }
 
   const results = [];
