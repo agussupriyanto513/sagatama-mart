@@ -23,7 +23,14 @@
 //    Kalau txId sudah pernah diproses, endpoint akan mengembalikan hasil
 //    yang sama tanpa memotong/menambah saldo dua kali (aman untuk retry
 //    jaringan dari sisi client).
+//
+// 4. 🔒 SECURITY FIX (lihat PATCH-NOTES.md): jumlah SGT yang di-*kredit*
+//    tidak boleh lagi datang mentah-mentah dari client (`delta` bebas).
+//    Kredit dari pembelian sekarang WAJIB lewat award-purchase.js, yang
+//    menghitung ulang jumlahnya di server berdasarkan pembayaran yang
+//    diverifikasi langsung ke Pi Platform API — bukan klaim dari browser.
 
+import crypto from 'crypto';
 import { admin, getFirebaseApp } from '../../firebase-init.js';
 
 getFirebaseApp();
@@ -57,8 +64,11 @@ function ledgerRef(txId) {
 // kasus itu. Client tidak bisa membedakan "token salah, jangan diulang"
 // dari "coba lagi nanti", dan reward yang gagal ter-sync dari sisi
 // server bisa hilang permanen kalau client mengira itu error final.
-// Sekarang fungsi ini mengembalikan objek dengan flag `transient` supaya
-// pemanggil bisa merespons 503 (boleh di-retry) alih-alih 401 (final).
+// Sekarang fungsi ini SELALU mengembalikan objek dengan flag `ok` dan
+// `transient` — SEMUA pemanggil WAJIB cek `pi.ok`, bukan `!pi`
+// (objeknya sendiri selalu truthy, jadi `if (!pi)` tidak pernah berhasil
+// menangkap token tidak valid — ini bug yang sudah diperbaiki di
+// ensure.js dan transfer.js pada patch ini).
 async function verifyPiToken(accessToken) {
   if (!accessToken) return { ok: false, transient: false, reason: 'no_token' };
   try {
@@ -84,13 +94,70 @@ async function verifyPiToken(accessToken) {
   }
 }
 
+// ── 🔒 BARU: Verifikasi status pembayaran LANGSUNG ke Pi Platform API ──
+// Dipakai oleh award-purchase.js dan decrement-stock.js supaya kredit SGT
+// dan pengurangan stok HANYA terjadi untuk paymentId yang benar-benar
+// sudah selesai dibayar menurut Pi sendiri — bukan menurut klaim/field
+// apa pun yang dikirim dari browser (yang bisa dipalsukan).
+async function verifyPiPayment(paymentId, network) {
+  const rawKey = network === 'testnet'
+    ? (process.env.PI_API_KEY_TESTNET || process.env.PI_API_KEY)
+    : (process.env.PI_API_KEY_MAINNET || process.env.PI_API_KEY);
+
+  if (!rawKey) return { ok: false, transient: false, reason: 'no_api_key' };
+  const piApiKey = rawKey.trim();
+
+  try {
+    const resp = await fetch(`https://api.minepi.com/v2/payments/${paymentId}`, {
+      headers: { Authorization: `Key ${piApiKey}` }
+    });
+
+    if (resp.status === 404) {
+      return { ok: false, transient: false, reason: 'not_found' };
+    }
+    if (!resp.ok) {
+      // 429/5xx dari Pi — bukan berarti paymentId salah, transient.
+      return { ok: false, transient: true, reason: 'pi_api_status_' + resp.status };
+    }
+
+    const data = await resp.json();
+    const status = data?.status || {};
+    const completed = !!(status.developer_completed || status.transaction_verified);
+    const cancelled = !!(status.cancelled || status.user_cancelled);
+
+    if (cancelled) return { ok: false, transient: false, reason: 'cancelled', data };
+    if (!completed) return { ok: false, transient: false, reason: 'not_completed_yet', data };
+
+    return { ok: true, data };
+  } catch (e) {
+    console.error('[sgt/_lib] verifyPiPayment error:', e.message);
+    return { ok: false, transient: true, reason: 'network_error' };
+  }
+}
+
 // ── Auth server-to-server: Mart/Games/Hidayatulamin backend manggil ──
 // endpoint credit/debit/transfer pakai header ini, BUKAN accessToken user,
 // supaya secret Pi user tidak perlu diteruskan-teruskan antar service.
+//
+// 🔒 FIX: dulu pakai `provided === expected` (perbandingan string biasa),
+// yang secara teori bisa dieksploitasi lewat timing attack (waktu respons
+// sedikit berbeda tergantung berapa banyak karakter awal yang cocok).
+// Sekarang pakai crypto.timingSafeEqual supaya waktu perbandingan selalu
+// konstan berapa pun kecocokannya.
 function checkInternalSecret(req) {
-  const provided = req.headers['x-internal-secret'] || '';
-  const expected = process.env.SGT_INTERNAL_SECRET || '';
-  return !!expected && provided === expected;
+  const provided = String(req.headers['x-internal-secret'] || '');
+  const expected = String(process.env.SGT_INTERNAL_SECRET || '');
+  if (!expected) return false;
+
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) {
+    // Tetap jalankan timingSafeEqual terhadap dirinya sendiri supaya waktu
+    // respons untuk kasus "panjang beda" tidak jadi sinyal terpisah.
+    crypto.timingSafeEqual(a, a);
+    return false;
+  }
+  return crypto.timingSafeEqual(a, b);
 }
 
 function setCors(res) {
@@ -120,5 +187,5 @@ async function ensureWallet(username, extra = {}) {
 
 export {
   admin, db, walletId, walletRef, ledgerRef,
-  verifyPiToken, checkInternalSecret, setCors, ensureWallet
+  verifyPiToken, verifyPiPayment, checkInternalSecret, setCors, ensureWallet
 };
