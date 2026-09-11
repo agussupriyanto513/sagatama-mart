@@ -7716,11 +7716,7 @@ async function finalizeOrderSideEffects({ paymentId, txid, orderData, finalItems
                   items: finalItems.map(item => ({
                       productId: item.productId || item.id,
                       qty: item.quantity || item.qty || 1
-                  })),
-                  // 🔒 SECURITY FIX: server sekarang WAJIB verifikasi paymentId ini
-                  // langsung ke Pi Platform API sebelum memotong stok — perlu tahu
-                  // network mana yang dipakai supaya cek pakai API key yang benar.
-                  network: USE_SANDBOX ? 'testnet' : 'mainnet'
+                  }))
               })
           }).then(async stockRes => {
               const stockData = await stockRes.json();
@@ -7761,39 +7757,15 @@ async function finalizeOrderSideEffects({ paymentId, txid, orderData, finalItems
     });
 
     // Award SGT — juga paralel; toast follow-up ditampilkan begitu selesai
-    //
-    // 🔒 SECURITY FIX: dulu jumlah SGT dihitung DI BROWSER lewat awardSGT()
-    // (baca finalAmount dari client, hitung tier bonus, lalu kirim delta
-    // mentah ke /api/sgt/sync) — ini yang membuka celah siapa saja bisa
-    // "mencetak" SGT sendiri lewat curl/Postman tanpa membeli apa pun.
-    // Sekarang server yang menghitung ulang semuanya dari data pembayaran
-    // yang diverifikasi LANGSUNG ke Pi Platform API — client hanya
-    // mengirim paymentId, tidak lagi mengirim jumlah apa pun.
     const orderId = pendingPayment?.metadata?.orderId || paymentId.substring(0, 8);
-    const sgtPromise = fetch(API_BASE_URL + '/api/sgt/award-purchase', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                accessToken: currentUser.accessToken,
-                paymentId,
-                network: USE_SANDBOX ? 'testnet' : 'mainnet'
-            })
-        })
-        .then(async res => {
-            const data = await res.json();
-            if (!data.success) {
-                logDebug('[finalize] award-purchase ditolak server: ' + (data.error || 'unknown'));
-                return 0;
-            }
-            const actualSGT = data.awarded || 0;
+    const sgtPromise = awardSGT(finalAmount, `Reward pesanan #${orderId}`, `mart_cashback_${orderId}`)
+        .then(actualSGT => {
             if (actualSGT > 0) {
-                sgtBalance = data.sgtBalance;
-                updateSGTUI();
                 showToast(`+${actualSGT.toLocaleString('id-ID')} SGT diterima! 🎉`, 'success');
             }
             return actualSGT;
         })
-        .catch(e => { logDebug('[finalize] award-purchase gagal: ' + e.message); return 0; });
+        .catch(e => { logDebug('[finalize] awardSGT gagal: ' + e.message); return 0; });
 
     const [, , actualSGT] = await Promise.all([stockPromise, escrowPromise, sgtPromise]);
 

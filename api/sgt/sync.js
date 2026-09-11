@@ -2,27 +2,13 @@
 // POST { accessToken, delta, txId? }  →  { success, sgtBalance }
 //
 // Dipakai KHUSUS oleh frontend Mart sendiri (public/index.html) untuk
-// menyinkronkan saldo SGT lokal ke ledger pusat.
+// menyinkronkan saldo SGT lokal (yang berubah lewat gameplay/belanja di
+// dalam satu sesi browser) ke ledger pusat, TANPA meng-expose
+// SGT_INTERNAL_SECRET ke browser.
 //
-// 🔒 SECURITY FIX — PENTING, BACA INI:
-// Sebelumnya endpoint ini menerima `delta` POSITIF (menambah saldo) apa
-// adanya dari client tanpa verifikasi apa pun. Karena `accessToken` yang
-// dikirim adalah milik akun Pi si pengirim sendiri (jadi lolos verifikasi
-// Pi), SIAPA SAJA bisa memanggil endpoint ini lewat curl/Postman dengan
-// `delta` sebesar apa pun dan benar-benar menambah saldo SGT resminya di
-// `sgt_wallets` — tanpa pernah membeli apa pun. Ini bug KRITIS.
-//
-// Fix-nya: endpoint ini sekarang HANYA menerima delta NEGATIF (mengurangi
-// saldo — dipakai untuk taruhan/pembelian item dalam game/aplikasi).
-// Semua penambahan saldo dari pembelian nyata WAJIB lewat
-// /api/sgt/award-purchase, yang menghitung ulang jumlahnya sendiri di
-// server berdasarkan status pembayaran yang diverifikasi ke Pi Platform —
-// bukan dari angka yang dikirim client.
-//
-// Kalau Games/Hidayatulamin butuh kredit saldo (menang game, bonus SPP,
-// dll), pola yang benar itu SUDAH ADA dan aman: backend mereka sendiri
-// memanggil /api/sgt/credit server-to-server pakai X-Internal-Secret
-// (lihat docs/INTEGRASI-SGT-TERPUSAT.md) — BUKAN lewat endpoint ini.
+// `delta` boleh positif (nambah, mis. menang game / cashback) atau
+// negatif (kurang, mis. kalah taruhan / beli item) — endpoint ini yang
+// menerjemahkan ke credit/debit ke ledger pusat.
 import { setCors, verifyPiToken, walletRef, ensureWallet, admin, db, ledgerRef } from './_lib.js';
 
 export default async function handler(req, res) {
@@ -33,15 +19,6 @@ export default async function handler(req, res) {
   const { accessToken, delta, txId } = req.body || {};
   const d = parseFloat(delta);
   if (isNaN(d)) return res.status(400).json({ error: 'delta tidak valid' });
-
-  // 🔒 Titik kunci fix: tolak semua permintaan menambah saldo lewat jalur ini.
-  if (d > 0) {
-    return res.status(400).json({
-      error: 'Menambah saldo lewat /api/sgt/sync tidak lagi diizinkan. ' +
-             'Gunakan /api/sgt/award-purchase (untuk reward pembelian) atau ' +
-             'minta backend app terkait memanggil /api/sgt/credit server-to-server.'
-    });
-  }
 
   const pi = await verifyPiToken(accessToken);
   if (!pi.ok) {
@@ -73,13 +50,13 @@ export default async function handler(req, res) {
       }
       const wSnap = await tx.get(wRef);
       const prev = parseFloat((wSnap.data() || {}).sgtBalance) || 0;
-      if (prev < -d) {
+      if (d < 0 && prev < -d) {
         return { ok: false, balance: prev, reason: 'Saldo SGT tidak cukup' };
       }
-      const next = prev + d; // d selalu <= 0 di titik ini
+      const next = prev + d;
       tx.set(wRef, { sgtBalance: next, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
       tx.set(lRef, {
-        txId: finalTxId, username: pi.username, type: 'debit',
+        txId: finalTxId, username: pi.username, type: d > 0 ? 'credit' : 'debit',
         amount: Math.abs(d), source: 'mart_gameplay_sync', balanceAfter: next,
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });

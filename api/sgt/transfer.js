@@ -4,11 +4,6 @@
 // Endpoint ini BOLEH dipanggil langsung dari frontend (user-initiated),
 // karena pengirim diverifikasi lewat accessToken Pi miliknya sendiri —
 // dia hanya bisa mengirim dari saldonya sendiri.
-//
-// 🔒 FIX: sama seperti ensure.js — `if (!pi) return 401` diganti jadi
-// `if (!pi.ok)`, karena verifyPiToken() selalu mengembalikan objek
-// (truthy), bukan `null`, jadi pengecekan lama tidak pernah menangkap
-// token yang tidak valid di titik ini.
 import { admin, db, setCors, verifyPiToken, walletRef, ledgerRef, ensureWallet, walletId } from './_lib.js';
 
 export default async function handler(req, res) {
@@ -23,13 +18,7 @@ export default async function handler(req, res) {
   if (!toUsername) return res.status(400).json({ error: 'toUsername diperlukan' });
 
   const pi = await verifyPiToken(accessToken);
-  if (!pi.ok) {
-    const status = pi.transient ? 503 : 401;
-    return res.status(status).json({
-      error: pi.transient ? 'Pi Platform API sedang bermasalah, coba lagi' : 'accessToken Pi tidak valid',
-      transient: !!pi.transient
-    });
-  }
+  if (!pi) return res.status(401).json({ error: 'accessToken Pi tidak valid' });
 
   const fromId = walletId(pi.username);
   const toId = walletId(toUsername);
