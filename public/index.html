@@ -6840,23 +6840,6 @@ async function processPiAuthSuccess(authResult) {
         walletAddress: authResult.user.wallet_address || null,
         authType: 'pi'
     };
-    // PERF: mulai Firebase anonymous sign-in SEKARANG secara paralel (tidak
-    // di-await dulu) — proses ini independen dari pengecekan admin/whitelist
-    // di Firestore, jadi keduanya bisa jalan bersamaan alih-alih berurutan.
-    // Ini menghemat 1 round-trip jaringan penuh dari waktu login total.
-    let _anonSignInPromise = null;
-    if (auth && !auth.currentUser) {
-        _anonSignInPromise = signInAnonymously(auth).catch(fbErr => {
-            logDebug("[AUTH-v3] Firebase anon warning (non-kritis): " + fbErr.message);
-            return null;
-        });
-    }
-
-    // Jika member sudah ditemukan lewat gerbang whitelist di bawah, simpan
-    // snapshot-nya di sini supaya ensureUserDocumentExists() tidak perlu
-    // getDoc() lagi ke dokumen yang sama (hemat 1 round-trip lagi).
-    let _memberSnapForReuse = null;
-
     // Jika terdeteksi sebagai admin via Pi UID, konfirmasi ke Firestore
     if (_piIsAdmin && db) {
         try {
@@ -6878,7 +6861,6 @@ async function processPiAuthSuccess(authResult) {
         try {
             const _memberRef = doc(db, 'users', piUid);
             const _memberSnap = await getDoc(_memberRef);
-            _memberSnapForReuse = _memberSnap;
 
             if (!_memberSnap.exists()) {
                 // Member baru — belum pernah terdaftar sama sekali.
@@ -6935,17 +6917,15 @@ async function processPiAuthSuccess(authResult) {
     logDebug(`[AUTH-v3] User authenticated: @${currentUser.username} | UID: ${piUid}`);
     
     // Step 5: Firebase Auth - Anonymous sign in untuk Firestore write permission
-    // (promise-nya sudah dimulai lebih awal secara paralel di atas, di sini
-    // kita tinggal menunggu hasilnya — bukan memulai proses baru)
     let firebaseUid = null;
     try {
         if (auth) {
-            if (_anonSignInPromise) {
-                const anonResult = await _anonSignInPromise;
-                firebaseUid = anonResult?.user?.uid || auth.currentUser?.uid || null;
-                if (anonResult) logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
+            if (!auth.currentUser) {
+                const anonResult = await signInAnonymously(auth);
+                firebaseUid = anonResult.user.uid;
+                logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
             } else {
-                firebaseUid = auth.currentUser?.uid || null;
+                firebaseUid = auth.currentUser.uid;
             }
         }
     } catch (fbErr) {
@@ -6965,7 +6945,7 @@ async function processPiAuthSuccess(authResult) {
     // Step 6: Pastikan dokumen user ada di Firestore dengan UID yang benar
     // Step 7: Load SGT data dengan strategi multi-fallback
     await Promise.all([
-        ensureUserDocumentExists(piUid, currentUser.username, firebaseUid, _memberSnapForReuse),
+        ensureUserDocumentExists(piUid, currentUser.username, firebaseUid),
         loadSGTDataFixed(true)
     ]);
     
@@ -7146,22 +7126,19 @@ window.manualPiLogin = async function() {
             authType: 'pi_manual'
         };
         
+        await setDoc(doc(db, 'users', targetUid), {
+            username: username,
+            uid: targetUid,
+            authType: 'pi_manual',
+            createdAt: existingData.createdAt || serverTimestamp(),
+            lastLogin: serverTimestamp(),
+            sgtBalance: existingData.sgtBalance || 0,
+            sgtTransactions: existingData.sgtTransactions || []
+        }, { merge: true });
+        
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
         
-        // PERF: update lastLogin & load data SGT dijalankan BERSAMAAN
-        // (keduanya independen) alih-alih menunggu satu per satu.
-        await Promise.all([
-            setDoc(doc(db, 'users', targetUid), {
-                username: username,
-                uid: targetUid,
-                authType: 'pi_manual',
-                createdAt: existingData.createdAt || serverTimestamp(),
-                lastLogin: serverTimestamp(),
-                sgtBalance: existingData.sgtBalance || 0,
-                sgtTransactions: existingData.sgtTransactions || []
-            }, { merge: true }),
-            loadSGTDataFixed(true)
-        ]);
+        await loadSGTDataFixed(true);
         listenUserSGTBalanceFixed(targetUid);
 
         // Flush SGT offline queue jika ada reward yang belum tersimpan
@@ -7181,17 +7158,14 @@ window.manualPiLogin = async function() {
 };
 
 // SECTION D: ENSURE USER DOCUMENT EXISTS - v3
-async function ensureUserDocumentExists(piUid, username, firebaseUid, preFetchedSnap) {
+async function ensureUserDocumentExists(piUid, username, firebaseUid) {
     if (!db) return;
     
     logDebug(`[SGT-v3] Ensure user doc: piUid=${piUid}, username=${username}`);
     
     try {
         const userRef = doc(db, 'users', piUid);
-        // PERF: jika snapshot dokumen ini sudah pernah diambil sebelumnya
-        // (misalnya oleh gerbang whitelist member saat login), pakai ulang
-        // hasilnya di sini alih-alih getDoc() lagi ke dokumen yang sama.
-        const userSnap = preFetchedSnap || await getDoc(userRef);
+        const userSnap = await getDoc(userRef);
         
         if (!userSnap.exists()) {
             logDebug(`[SGT-v3] Dokumen baru: ${piUid}`);
