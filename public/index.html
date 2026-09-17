@@ -1953,7 +1953,7 @@
                     </div>
                     <div style="display:flex;justify-content:space-between;margin-top:3px;">
                         <span style="font-size:9px;color:#9CA3AF;">0 SGT</span>
-                        <span style="font-size:9px;color:#9CA3AF;">Hard Cap: 100,000,000 SGT</span>
+                        <span style="font-size:9px;color:#9CA3AF;">Hard Cap: 1,000,000,000 SGT</span>
                     </div>
                 </div>
 
@@ -3867,7 +3867,7 @@
                 <p style="font-size:11px;color:rgba(255,255,255,0.65);margin-bottom:12px;">Reset statistik supply dari awal. Saldo SGT user TIDAK terpengaruh.</p>
                 <div class="form-group">
                     <label class="form-label" style="color:rgba(255,255,255,0.8);">Hard Cap Baru (SGT)</label>
-                    <input type="number" id="resetSupplyCap" class="form-input" placeholder="Default: 100000000" min="1000" style="background:rgba(255,255,255,0.1);color:white;border-color:rgba(255,255,255,0.2);">
+                    <input type="number" id="resetSupplyCap" class="form-input" placeholder="Default: 1000000000" min="1000" style="background:rgba(255,255,255,0.1);color:white;border-color:rgba(255,255,255,0.2);">
                     <p style="font-size:10px;color:rgba(255,255,255,0.5);margin:4px 0 0;">Kosongkan untuk pakai cap saat ini (100 Juta)</p>
                 </div>
                 <div class="form-group">
@@ -4093,7 +4093,7 @@ let paymentTimeout = null;
 
 // SGT TOKENOMICS ENGINE v2.0
 // Hard cap & genesis allocation
-const SGT_HARD_CAP        = 100_000_000; // 100 juta SGT maksimum
+const SGT_HARD_CAP        = 1_000_000_000; // 1 miliar SGT maksimum
 const SGT_GENESIS_ALLOC   = {
     komunitas : 0.70, // 70% reward user
     treasury  : 0.15, // 15% operasional
@@ -6298,17 +6298,44 @@ async function init() {
 }
 
 // Verifikasi sesi user masih valid di Firestore (background check)
+// GERBANG WHITELIST (sesi tersimpan): sebelumnya fungsi ini cuma sinkron
+// address/fullName dan TIDAK PERNAH mengecek ulang status blocked/allowed.
+// Akibatnya member yang sesinya tersimpan di localStorage (sagatama_user)
+// tetap bisa terus pakai app selamanya walau admin baru saja memblokirnya
+// atau member itu sebenarnya belum/tidak pernah disetujui — inilah sebabnya
+// "semua member bisa login". Sekarang setiap kali app dibuka, status member
+// di Firestore dicek ulang dan sesi dipaksa logout kalau sudah tidak valid.
 async function verifyUserSession() {
     if (!currentUser?.uid || !db) return;
+    // Admin tidak tunduk pada gerbang whitelist member
+    if (currentUser.role === 'admin' || currentUser.username === 'sagatama_admin') return;
     try {
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
         if (userDoc.exists()) {
             const data = userDoc.data();
+
+            if (data.blocked === true) {
+                logDebug('[verifyUserSession] Sesi ditolak: member diblokir (' + currentUser.uid + ')');
+                showToast('Akun Anda diblokir oleh admin. Anda telah dikeluarkan.', 'error');
+                window.logout();
+                return;
+            }
+            if (data.allowed === false) {
+                logDebug('[verifyUserSession] Sesi ditolak: member belum/tidak disetujui admin (' + currentUser.uid + ')');
+                showToast('Akun Anda belum diizinkan admin untuk login. Anda telah dikeluarkan.', 'error');
+                window.logout();
+                return;
+            }
+
             // Update data terbaru ke currentUser
             currentUser.address = data.address || currentUser.address;
             currentUser.fullName = data.fullName || currentUser.fullName;
             localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
             logDebug("User session verified: @" + currentUser.username);
+        } else {
+            // Dokumen user sudah dihapus admin — sesi lokal tidak valid lagi
+            logDebug('[verifyUserSession] Sesi ditolak: dokumen member tidak ditemukan (' + currentUser.uid + ')');
+            window.logout();
         }
     } catch (e) {
         logDebug("verifyUserSession error: " + e.message);
@@ -6346,7 +6373,6 @@ async function initPiSDKRobust() {
         // Tidak perlu retry 5x × 2-10 detik = buang 34 detik percuma
         if (!window.Pi && navigator.userAgent.indexOf('PiBrowser') === -1) {
             logDebug('[AUTH-v3] Bukan Pi Browser — skip Pi SDK init');
-            alert('[DEBUG SEMENTARA] Dianggap BUKAN Pi Browser. UA=' + navigator.userAgent + ' | hostname=' + window.location.hostname); // TODO: hapus baris ini setelah selesai diagnosa
             resolve(false);
             return;
         }
@@ -6361,7 +6387,6 @@ async function initPiSDKRobust() {
                     await delay(1500);
                     // Cek lagi setelah delay — kalau tetap tidak ada, keluar
                     if (!window.Pi) {
-                        alert('[DEBUG SEMENTARA] window.Pi tetap undefined setelah 1.5 detik menunggu. hostname=' + window.location.hostname); // TODO: hapus baris ini setelah selesai diagnosa
                         resolve(false);
                         return;
                     }
@@ -6382,7 +6407,6 @@ async function initPiSDKRobust() {
 
             } catch (err) {
                 logDebug(`[AUTH-v3] Pi SDK init gagal: ${err.message}`);
-                alert('[DEBUG SEMENTARA] Pi.init() gagal: ' + err.message + ' | attempt=' + piInitAttempts + ' | hostname=' + window.location.hostname); // TODO: hapus baris ini setelah selesai diagnosa
                 const waitTime = Math.min(2000 * Math.pow(2, piInitAttempts - 1), 5000);
                 await delay(waitTime);
             }
@@ -9375,7 +9399,7 @@ async function updateAnalyticsSupplyStats() {
             if (circEl) circEl.textContent = circulating.toLocaleString('id-ID');
             if (burnedEl) burnedEl.textContent = burned.toLocaleString('id-ID');
             if (pctEl) pctEl.textContent = pct + '%';
-            if (hardCapEl) hardCapEl.textContent = (hardCap / 1000000).toFixed(0) + 'M';
+            if (hardCapEl) hardCapEl.textContent = hardCap >= 1000000000 ? (hardCap / 1000000000).toFixed(0) + 'B' : (hardCap / 1000000).toFixed(0) + 'M';
         }
     } catch (e) {
         logDebug('updateAnalyticsSupplyStats error: ' + e.message);
