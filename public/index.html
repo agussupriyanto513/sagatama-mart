@@ -37,7 +37,7 @@
             'processSGTTransfer','redeemSGT','saveSGTSettings','distributeSGTManual',
             'burnSGT','filterAdminProducts','filterAdminOrders','updateAdminStatus',
             'filterAdminMembers','searchAdminMembers','toggleMemberBlock',
-            'openAddMemberModal','saveNewMember','deleteMember',
+            'openAddMemberModal','saveNewMember','deleteMember','approveMember',
             'refreshPiBalance','deleteProduct','openEditProduct','saveUserAddress',
             'openExchangeRateModal','updateAdminCalculator','switchCalcMode','closeAndRemoveModal',
             'handleStartShopping','adminLogin','loginAdmin','continueAsGuest',
@@ -2414,16 +2414,20 @@
             </div>
 
             <!-- Ringkasan Member -->
-            <div style="display:flex; gap:10px; margin-bottom:16px;">
-                <div style="flex:1;background:white;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;text-align:center;">
+            <div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+                <div style="flex:1;min-width:70px;background:white;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;text-align:center;">
                     <p id="memberStatTotal" style="font-size:20px;font-weight:900;color:#4338CA;margin:0;">0</p>
                     <p style="font-size:10px;color:#6B7280;margin-top:2px;">Total Member</p>
                 </div>
-                <div style="flex:1;background:white;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;text-align:center;">
+                <div style="flex:1;min-width:70px;background:white;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;text-align:center;">
                     <p id="memberStatActive" style="font-size:20px;font-weight:900;color:#059669;margin:0;">0</p>
                     <p style="font-size:10px;color:#6B7280;margin-top:2px;">Aktif</p>
                 </div>
-                <div style="flex:1;background:white;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;text-align:center;">
+                <div style="flex:1;min-width:70px;background:white;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;text-align:center;">
+                    <p id="memberStatPending" style="font-size:20px;font-weight:900;color:#B45309;margin:0;">0</p>
+                    <p style="font-size:10px;color:#6B7280;margin-top:2px;">Menunggu</p>
+                </div>
+                <div style="flex:1;min-width:70px;background:white;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #F3F4F6;text-align:center;">
                     <p id="memberStatBlocked" style="font-size:20px;font-weight:900;color:#DC2626;margin:0;">0</p>
                     <p style="font-size:10px;color:#6B7280;margin-top:2px;">Diblokir</p>
                 </div>
@@ -2435,6 +2439,7 @@
 
             <div class="tab-container">
                 <button class="tab active" onclick="filterAdminMembers('all', this)">Semua</button>
+                <button class="tab" onclick="filterAdminMembers('pending', this)">Menunggu</button>
                 <button class="tab" onclick="filterAdminMembers('active', this)">Aktif</button>
                 <button class="tab" onclick="filterAdminMembers('blocked', this)">Diblokir</button>
                 <button class="tab" onclick="filterAdminMembers('admin', this)">Admin</button>
@@ -6808,6 +6813,14 @@ window.authenticatePi = async function() {
     }
 };
 
+function restorePiLoginButton() {
+    const _loginBtnRestore = document.querySelector('.login-option.pi');
+    if (_loginBtnRestore) {
+        _loginBtnRestore.innerHTML = '<i class="fab fa-pi" style="font-size:32px;color:#D4AF37;margin-bottom:12px;"></i><h4 style="color:#1F2937;font-weight:800;">Login dengan Pi</h4><p style="font-size:12px;color:#6B7280;">Gunakan Pi Browser untuk melanjutkan</p>';
+        _loginBtnRestore.style.pointerEvents = 'auto';
+    }
+}
+
 async function processPiAuthSuccess(authResult) {
     piAuth = authResult;
     isPiAuthenticated = true;
@@ -6827,6 +6840,23 @@ async function processPiAuthSuccess(authResult) {
         walletAddress: authResult.user.wallet_address || null,
         authType: 'pi'
     };
+    // PERF: mulai Firebase anonymous sign-in SEKARANG secara paralel (tidak
+    // di-await dulu) — proses ini independen dari pengecekan admin/whitelist
+    // di Firestore, jadi keduanya bisa jalan bersamaan alih-alih berurutan.
+    // Ini menghemat 1 round-trip jaringan penuh dari waktu login total.
+    let _anonSignInPromise = null;
+    if (auth && !auth.currentUser) {
+        _anonSignInPromise = signInAnonymously(auth).catch(fbErr => {
+            logDebug("[AUTH-v3] Firebase anon warning (non-kritis): " + fbErr.message);
+            return null;
+        });
+    }
+
+    // Jika member sudah ditemukan lewat gerbang whitelist di bawah, simpan
+    // snapshot-nya di sini supaya ensureUserDocumentExists() tidak perlu
+    // getDoc() lagi ke dokumen yang sama (hemat 1 round-trip lagi).
+    let _memberSnapForReuse = null;
+
     // Jika terdeteksi sebagai admin via Pi UID, konfirmasi ke Firestore
     if (_piIsAdmin && db) {
         try {
@@ -6842,24 +6872,61 @@ async function processPiAuthSuccess(authResult) {
         }
     }
 
-    // Cek status blokir member — member yang diblokir admin tidak boleh masuk
+    // GERBANG WHITELIST MEMBER — hanya member yang diizinkan admin yang
+    // boleh login & masuk ke Sagatama Mart. Admin selalu dilewatkan.
     if (currentUser.role !== 'admin' && db) {
         try {
-            const _blockSnap = await getDoc(doc(db, 'users', piUid));
-            if (_blockSnap.exists() && _blockSnap.data().blocked === true) {
+            const _memberRef = doc(db, 'users', piUid);
+            const _memberSnap = await getDoc(_memberRef);
+            _memberSnapForReuse = _memberSnap;
+
+            if (!_memberSnap.exists()) {
+                // Member baru — belum pernah terdaftar sama sekali.
+                // Buat dokumen berstatus "pending" lalu TOLAK login sampai
+                // admin menyetujuinya lewat panel Kelola Member.
+                await setDoc(_memberRef, {
+                    uid: piUid,
+                    username: currentUser.username,
+                    role: 'buyer',
+                    authType: 'pi',
+                    allowed: false,
+                    blocked: false,
+                    pendingApproval: true,
+                    createdAt: serverTimestamp(),
+                    requestedAt: serverTimestamp()
+                });
+                showToast('Pendaftaran terkirim. Akun Anda menunggu persetujuan admin sebelum bisa login.', 'info');
+                logDebug('[AUTH-v3] Login ditolak: member baru menunggu approval (' + piUid + ')');
+                currentUser = null;
+                isPiAuthenticated = false;
+                restorePiLoginButton();
+                return;
+            }
+
+            const _memberData = _memberSnap.data();
+
+            if (_memberData.blocked === true) {
                 showToast('Akun Anda diblokir oleh admin. Hubungi admin untuk info lebih lanjut.', 'error');
                 logDebug('[AUTH-v3] Login ditolak: user diblokir (' + piUid + ')');
                 currentUser = null;
                 isPiAuthenticated = false;
-                const _loginBtnRestore = document.querySelector('.login-option.pi');
-                if (_loginBtnRestore) {
-                    _loginBtnRestore.innerHTML = '<i class="fab fa-pi" style="font-size:32px;color:#D4AF37;margin-bottom:12px;"></i><h4 style="color:#1F2937;font-weight:800;">Login dengan Pi</h4><p style="font-size:12px;color:#6B7280;">Gunakan Pi Browser untuk melanjutkan</p>';
-                    _loginBtnRestore.style.pointerEvents = 'auto';
-                }
+                restorePiLoginButton();
                 return;
             }
-        } catch (_blockCheckErr) {
-            logDebug('[AUTH-v3] Block check skip: ' + _blockCheckErr.message);
+
+            // allowed === false secara eksplisit berarti belum disetujui admin.
+            // Dokumen LAMA yang tidak punya field 'allowed' dianggap sudah
+            // diizinkan (grandfathered) supaya member lama tidak terkunci.
+            if (_memberData.allowed === false) {
+                showToast('Akun Anda belum diizinkan admin untuk login. Hubungi admin untuk persetujuan.', 'error');
+                logDebug('[AUTH-v3] Login ditolak: belum di-approve admin (' + piUid + ')');
+                currentUser = null;
+                isPiAuthenticated = false;
+                restorePiLoginButton();
+                return;
+            }
+        } catch (_memberCheckErr) {
+            logDebug('[AUTH-v3] Member check skip: ' + _memberCheckErr.message);
         }
     }
     
@@ -6868,15 +6935,17 @@ async function processPiAuthSuccess(authResult) {
     logDebug(`[AUTH-v3] User authenticated: @${currentUser.username} | UID: ${piUid}`);
     
     // Step 5: Firebase Auth - Anonymous sign in untuk Firestore write permission
+    // (promise-nya sudah dimulai lebih awal secara paralel di atas, di sini
+    // kita tinggal menunggu hasilnya — bukan memulai proses baru)
     let firebaseUid = null;
     try {
         if (auth) {
-            if (!auth.currentUser) {
-                const anonResult = await signInAnonymously(auth);
-                firebaseUid = anonResult.user.uid;
-                logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
+            if (_anonSignInPromise) {
+                const anonResult = await _anonSignInPromise;
+                firebaseUid = anonResult?.user?.uid || auth.currentUser?.uid || null;
+                if (anonResult) logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
             } else {
-                firebaseUid = auth.currentUser.uid;
+                firebaseUid = auth.currentUser?.uid || null;
             }
         }
     } catch (fbErr) {
@@ -6896,7 +6965,7 @@ async function processPiAuthSuccess(authResult) {
     // Step 6: Pastikan dokumen user ada di Firestore dengan UID yang benar
     // Step 7: Load SGT data dengan strategi multi-fallback
     await Promise.all([
-        ensureUserDocumentExists(piUid, currentUser.username, firebaseUid),
+        ensureUserDocumentExists(piUid, currentUser.username, firebaseUid, _memberSnapForReuse),
         loadSGTDataFixed(true)
     ]);
     
@@ -7041,9 +7110,33 @@ window.manualPiLogin = async function() {
                 logDebug('[MANUAL] Login ditolak: user diblokir (' + targetUid + ')');
                 return;
             }
+
+            // GERBANG WHITELIST: allowed === false berarti belum disetujui
+            // admin. Dokumen lama tanpa field 'allowed' tetap diizinkan
+            // (grandfathered) supaya member lama tidak terkunci.
+            if (existingData.allowed === false && existingData.role !== 'admin') {
+                showToast('Akun Anda belum diizinkan admin untuk login. Hubungi admin untuk persetujuan.', 'error');
+                logDebug('[MANUAL] Login ditolak: belum di-approve admin (' + targetUid + ')');
+                return;
+            }
         } else {
+            // Member baru — belum pernah terdaftar. Buat dokumen "pending"
+            // lalu TOLAK login sampai admin menyetujuinya secara manual.
             targetUid = 'pi_manual_' + Date.now();
-            logDebug(`[MANUAL] User baru: @${username} | UID: ${targetUid}`);
+            logDebug(`[MANUAL] User baru: @${username} | UID: ${targetUid} — menunggu approval`);
+            await setDoc(doc(db, 'users', targetUid), {
+                uid: targetUid,
+                username: username,
+                role: 'buyer',
+                authType: 'pi_manual',
+                allowed: false,
+                blocked: false,
+                pendingApproval: true,
+                createdAt: serverTimestamp(),
+                requestedAt: serverTimestamp()
+            });
+            showToast('Pendaftaran terkirim. Akun Anda menunggu persetujuan admin sebelum bisa login.', 'info');
+            return;
         }
         
         currentUser = {
@@ -7053,19 +7146,22 @@ window.manualPiLogin = async function() {
             authType: 'pi_manual'
         };
         
-        await setDoc(doc(db, 'users', targetUid), {
-            username: username,
-            uid: targetUid,
-            authType: 'pi_manual',
-            createdAt: existingData.createdAt || serverTimestamp(),
-            lastLogin: serverTimestamp(),
-            sgtBalance: existingData.sgtBalance || 0,
-            sgtTransactions: existingData.sgtTransactions || []
-        }, { merge: true });
-        
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
         
-        await loadSGTDataFixed(true);
+        // PERF: update lastLogin & load data SGT dijalankan BERSAMAAN
+        // (keduanya independen) alih-alih menunggu satu per satu.
+        await Promise.all([
+            setDoc(doc(db, 'users', targetUid), {
+                username: username,
+                uid: targetUid,
+                authType: 'pi_manual',
+                createdAt: existingData.createdAt || serverTimestamp(),
+                lastLogin: serverTimestamp(),
+                sgtBalance: existingData.sgtBalance || 0,
+                sgtTransactions: existingData.sgtTransactions || []
+            }, { merge: true }),
+            loadSGTDataFixed(true)
+        ]);
         listenUserSGTBalanceFixed(targetUid);
 
         // Flush SGT offline queue jika ada reward yang belum tersimpan
@@ -7085,14 +7181,17 @@ window.manualPiLogin = async function() {
 };
 
 // SECTION D: ENSURE USER DOCUMENT EXISTS - v3
-async function ensureUserDocumentExists(piUid, username, firebaseUid) {
+async function ensureUserDocumentExists(piUid, username, firebaseUid, preFetchedSnap) {
     if (!db) return;
     
     logDebug(`[SGT-v3] Ensure user doc: piUid=${piUid}, username=${username}`);
     
     try {
         const userRef = doc(db, 'users', piUid);
-        const userSnap = await getDoc(userRef);
+        // PERF: jika snapshot dokumen ini sudah pernah diambil sebelumnya
+        // (misalnya oleh gerbang whitelist member saat login), pakai ulang
+        // hasilnya di sini alih-alih getDoc() lagi ke dokumen yang sama.
+        const userSnap = preFetchedSnap || await getDoc(userRef);
         
         if (!userSnap.exists()) {
             logDebug(`[SGT-v3] Dokumen baru: ${piUid}`);
@@ -8971,6 +9070,8 @@ async function renderAdminMembers() {
                 authType: d.authType || 'pi',
                 sgtBalance: d.sgtBalance || 0,
                 blocked: d.blocked === true,
+                allowed: d.allowed !== false,
+                pending: d.allowed === false,
                 createdAt: d.createdAt || null,
                 lastLogin: d.lastLogin || null
             });
@@ -8992,11 +9093,13 @@ async function renderAdminMembers() {
 function updateMemberStats() {
     const total = adminMembersCache.length;
     const blocked = adminMembersCache.filter(m => m.blocked).length;
-    const active = total - blocked;
+    const pending = adminMembersCache.filter(m => m.pending).length;
+    const active = total - blocked - pending;
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
     set('memberStatTotal', total);
     set('memberStatActive', active);
     set('memberStatBlocked', blocked);
+    set('memberStatPending', pending);
 }
 
 window.filterAdminMembers = function(filter, btn) {
@@ -9013,8 +9116,9 @@ window.searchAdminMembers = function(q) {
 
 function applyAdminMemberFilters() {
     let filtered = [...adminMembersCache];
-    if (currentAdminMemberFilter === 'active') filtered = filtered.filter(m => !m.blocked);
+    if (currentAdminMemberFilter === 'active') filtered = filtered.filter(m => !m.blocked && !m.pending);
     else if (currentAdminMemberFilter === 'blocked') filtered = filtered.filter(m => m.blocked);
+    else if (currentAdminMemberFilter === 'pending') filtered = filtered.filter(m => m.pending);
     else if (currentAdminMemberFilter === 'admin') filtered = filtered.filter(m => m.role === 'admin');
 
     if (adminMemberSearchQuery) {
@@ -9041,12 +9145,14 @@ function renderMembersList(list) {
         const isAdmin = m.role === 'admin';
         const statusBadge = isAdmin
             ? `<span style="font-size:10px;color:#4338CA;background:#E0E7FF;padding:2px 10px;border-radius:8px;font-weight:700;">Admin</span>`
-            : m.blocked
-                ? `<span style="font-size:10px;color:#DC2626;background:#FEE2E2;padding:2px 10px;border-radius:8px;font-weight:700;">Diblokir</span>`
-                : `<span style="font-size:10px;color:#059669;background:#D1FAE5;padding:2px 10px;border-radius:8px;font-weight:700;">Aktif</span>`;
+            : m.pending
+                ? `<span style="font-size:10px;color:#B45309;background:#FEF3C7;padding:2px 10px;border-radius:8px;font-weight:700;">Menunggu Persetujuan</span>`
+                : m.blocked
+                    ? `<span style="font-size:10px;color:#DC2626;background:#FEE2E2;padding:2px 10px;border-radius:8px;font-weight:700;">Diblokir</span>`
+                    : `<span style="font-size:10px;color:#059669;background:#D1FAE5;padding:2px 10px;border-radius:8px;font-weight:700;">Aktif</span>`;
 
         return `
-        <div class="card" style="display:flex;gap:12px;margin-bottom:12px;${m.blocked ? 'border-left:4px solid #EF4444;background:#FEF2F2;' : 'border-left:4px solid #10B981;'}">
+        <div class="card" style="display:flex;gap:12px;margin-bottom:12px;${m.pending ? 'border-left:4px solid #F59E0B;background:#FFFBEB;' : m.blocked ? 'border-left:4px solid #EF4444;background:#FEF2F2;' : 'border-left:4px solid #10B981;'}">
             <div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#A9821E);color:white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex-shrink:0;">
                 ${(m.username || '?').charAt(0).toUpperCase()}
             </div>
@@ -9065,6 +9171,19 @@ function renderMembersList(list) {
             ${(() => {
                 const isSelf = currentUser && (m.id === currentUser.uid || m.uid === currentUser.uid);
                 if (isSelf) return '';
+                if (m.pending) {
+                    return `
+            <div style="display:flex;flex-direction:column;align-items:stretch;gap:6px;">
+                <button onclick="approveMember('${m.id}')"
+                    style="white-space:nowrap;background:#D1FAE5;color:#059669;border:none;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;">
+                    <i class="fas fa-check"></i> Setujui
+                </button>
+                <button onclick="deleteMember('${m.id}', '${m.username}')"
+                    style="white-space:nowrap;background:#FEE2E2;color:#DC2626;border:none;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;">
+                    <i class="fas fa-times"></i> Tolak
+                </button>
+            </div>`;
+                }
                 return `
             <div style="display:flex;flex-direction:column;align-items:stretch;gap:6px;">
                 ${!isAdmin ? `
@@ -9104,6 +9223,52 @@ window.toggleMemberBlock = async function(memberId, isCurrentlyBlocked) {
         showToast(willBlock ? 'Member berhasil diblokir' : 'Blokir member dibuka', 'success');
     } catch (e) {
         showToast('Gagal update status member: ' + e.message, 'error');
+    }
+};
+
+window.approveMember = async function(memberId) {
+    if (!db) { showToast('Koneksi database belum siap', 'error'); return; }
+    if (!confirm('Setujui member ini? Member akan bisa login & belanja setelah disetujui.')) return;
+
+    try {
+        const memberRef = doc(db, 'users', memberId);
+        const memberSnap = await getDoc(memberRef);
+        const memberData = memberSnap.exists() ? memberSnap.data() : {};
+
+        const updateData = {
+            allowed: true,
+            pendingApproval: false,
+            approvedAt: serverTimestamp()
+        };
+
+        // Beri bonus selamat datang 50 SGT untuk member yang baru pertama
+        // kali disetujui (belum pernah punya saldo sama sekali).
+        let welcomeGiven = false;
+        if (!memberData.sgtBalance || memberData.sgtBalance === 0) {
+            const welcomeTx = {
+                type: 'earn', amount: 50,
+                description: '🎉 Bonus Selamat Datang - Disetujui Admin',
+                date: new Date().toISOString(), userId: memberId
+            };
+            updateData.sgtBalance = 50;
+            updateData.sgtTransactions = [...(memberData.sgtTransactions || []), welcomeTx];
+            welcomeGiven = true;
+        }
+
+        await setDoc(memberRef, updateData, { merge: true });
+
+        const idx = adminMembersCache.findIndex(m => m.id === memberId);
+        if (idx > -1) {
+            adminMembersCache[idx].allowed = true;
+            adminMembersCache[idx].pending = false;
+            if (welcomeGiven) adminMembersCache[idx].sgtBalance = 50;
+        }
+
+        updateMemberStats();
+        applyAdminMemberFilters();
+        showToast('Member berhasil disetujui, sekarang bisa login', 'success');
+    } catch (e) {
+        showToast('Gagal menyetujui member: ' + e.message, 'error');
     }
 };
 
@@ -9166,6 +9331,8 @@ window.saveNewMember = async function() {
             authType: 'admin_created',
             sgtBalance: sgtBalance,
             blocked: false,
+            allowed: true,
+            pendingApproval: false,
             createdAt: serverTimestamp(),
             lastLogin: serverTimestamp()
         });
@@ -11450,7 +11617,7 @@ if (typeof window._registerReal === 'function') {
         filterAdminMembers: window.filterAdminMembers, searchAdminMembers: window.searchAdminMembers,
         toggleMemberBlock: window.toggleMemberBlock,
         openAddMemberModal: window.openAddMemberModal, saveNewMember: window.saveNewMember,
-        deleteMember: window.deleteMember,
+        deleteMember: window.deleteMember, approveMember: window.approveMember,
         refreshPiBalance: window.refreshPiBalance, deleteProduct: window.deleteProduct,
         saveUserAddress: window.saveUserAddress, openExchangeRateModal: window.openExchangeRateModal,
         updateAdminCalculator: window.updateAdminCalculator, switchCalcMode: window.switchCalcMode, closeAndRemoveModal: window.closeAndRemoveModal,
