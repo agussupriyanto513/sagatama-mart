@@ -1935,7 +1935,7 @@
                     <div style="width:40px;height:40px;background:linear-gradient(135deg,#FCD34D,#F59E0B);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#1A0533;font-weight:900;font-size:16px;">₴</div>
                     <div>
                         <p style="font-weight:800;color:#1F2937;font-size:15px;margin:0;">SGT Tokenomics</p>
-                        <p style="font-size:11px;color:#64748B;margin:0;">Sagatama Token · Hard Cap 100 Juta</p>
+                        <p style="font-size:11px;color:#64748B;margin:0;">Sagatama Token · Hard Cap 1 Miliar</p>
                     </div>
                     <button onclick="loadSupplyStats()" style="margin-left:auto;background:#F3F4F6;border:none;width:34px;height:34px;border-radius:9px;cursor:pointer;color:#6B7280;font-size:13px;">
                         <i class="fas fa-sync-alt"></i>
@@ -2198,7 +2198,7 @@
                     </div>
                     <div style="display:flex;justify-content:space-between;">
                         <span style="font-size:10px;color:rgba(255,255,255,0.5);">Circulating: <span id="supplyCirculating" style="color:#6EE7B7;">0</span></span>
-                        <span style="font-size:10px;color:rgba(255,255,255,0.5);">Hard Cap: <span id="supplyHardCap" style="color:#FCD34D;">100M</span></span>
+                        <span style="font-size:10px;color:rgba(255,255,255,0.5);">Hard Cap: <span id="supplyHardCap" style="color:#FCD34D;">1B</span></span>
                     </div>
                 </div>
                 
@@ -3245,7 +3245,7 @@
                         <p style="font-size:10px;opacity:0.6;margin:4px 0 0;">Circulating</p>
                     </div>
                     <div style="background:rgba(252,211,77,0.15);border:1px solid rgba(252,211,77,0.2);border-radius:12px;padding:12px;text-align:center;">
-                        <p id="analyticsHardCap" style="font-size:18px;font-weight:800;color:#FCD34D;margin:0;">100M</p>
+                        <p id="analyticsHardCap" style="font-size:18px;font-weight:800;color:#FCD34D;margin:0;">1B</p>
                         <p style="font-size:10px;opacity:0.6;margin:4px 0 0;">Hard Cap</p>
                     </div>
                     <div style="background:rgba(252,165,165,0.15);border:1px solid rgba(252,165,165,0.2);border-radius:12px;padding:12px;text-align:center;">
@@ -3868,7 +3868,7 @@
                 <div class="form-group">
                     <label class="form-label" style="color:rgba(255,255,255,0.8);">Hard Cap Baru (SGT)</label>
                     <input type="number" id="resetSupplyCap" class="form-input" placeholder="Default: 1000000000" min="1000" style="background:rgba(255,255,255,0.1);color:white;border-color:rgba(255,255,255,0.2);">
-                    <p style="font-size:10px;color:rgba(255,255,255,0.5);margin:4px 0 0;">Kosongkan untuk pakai cap saat ini (100 Juta)</p>
+                    <p style="font-size:10px;color:rgba(255,255,255,0.5);margin:4px 0 0;">Kosongkan untuk pakai cap saat ini (1 Miliar)</p>
                 </div>
                 <div class="form-group">
                     <label class="form-label" style="color:rgba(255,255,255,0.8);">Circulating Supply Awal (SGT)</label>
@@ -5440,7 +5440,7 @@ window.loadSupplyStats = async function loadSupplyStats() {
 
         // Also update wallet view panel
         const fmt = n => n >= 1e6 ? (n/1e6).toFixed(2)+'jt' : n.toLocaleString('id-ID');
-        upd('walletCirculating', fmt(sgtCirculatingSupply) + ' / 100jt SGT');
+        upd('walletCirculating', fmt(sgtCirculatingSupply) + ' / ' + fmt(SGT_HARD_CAP) + ' SGT');
         upd('walletBurned',   fmt(sgtTotalBurned));
         upd('walletFeePool',  fmt(sgtFeePool));
         const wbar = document.getElementById('walletSupplyBar');
@@ -6932,7 +6932,20 @@ async function processPiAuthSuccess(authResult) {
                 return;
             }
         } catch (_memberCheckErr) {
-            logDebug('[AUTH-v3] Member check skip: ' + _memberCheckErr.message);
+            // FIX: sebelumnya error di sini (mis. permission-denied, offline,
+            // dsb) HANYA di-log (tidak tampil di production) lalu login tetap
+            // DILANJUTKAN begitu saja — akibatnya: (1) member baru "lolos"
+            // tanpa data pendaftarannya pernah benar-benar tersimpan ke
+            // Firestore ("member belum bisa disimpan"), dan (2) gerbang
+            // whitelist bisa dilewati begitu saja kalau terjadi error apapun.
+            // Sekarang: gagal di sini = TOLAK login (fail-closed) dan
+            // tampilkan pesan errornya supaya kelihatan penyebabnya.
+            logDebug('[AUTH-v3] Member check error: ' + _memberCheckErr.message);
+            showToast('Gagal memverifikasi akun member: ' + _memberCheckErr.message, 'error');
+            currentUser = null;
+            isPiAuthenticated = false;
+            restorePiLoginButton();
+            return;
         }
     }
     
@@ -6962,35 +6975,38 @@ async function processPiAuthSuccess(authResult) {
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
     }
 
-    // PERF FIX: Step 6 & 7 sebelumnya di-await satu-satu (2 round-trip
-    // berurutan). Untuk user Pi asli, loadSGTDataFixed mengambil saldo dari
-    // ledger pusat (bukan dari dokumen 'users' yang dibuat ensureUserDocumentExists),
-    // jadi keduanya independen dan aman dijalankan paralel.
-    // Step 6: Pastikan dokumen user ada di Firestore dengan UID yang benar
-    // Step 7: Load SGT data dengan strategi multi-fallback
-    await Promise.all([
-        ensureUserDocumentExists(piUid, currentUser.username, firebaseUid),
-        loadSGTDataFixed(true)
-    ]);
-    
-    // Step 8: Start realtime listener untuk SGT
-    if (currentUser.uid) {
-        listenUserSGTBalanceFixed(currentUser.uid);
-    }
-    
+    // PERF FIX v4: sebelumnya modal login BARU ditutup setelah
+    // ensureUserDocumentExists() + loadSGTDataFixed(true) selesai — padahal
+    // dua request Firestore/API ini tidak wajib selesai duluan sebelum user
+    // boleh melihat dirinya sudah login. Gerbang whitelist + Firebase auth
+    // di atas sudah cukup untuk menganggap login SAH. Sekarang UI "sudah
+    // login" langsung ditampilkan, sementara dokumen user & saldo SGT
+    // dimuat di background — ini komponen utama sisa rasa lambat saat login.
     showSGTElements(true);
     updateUI();
-    
-    // Refresh sosial module after login
-    if (typeof updateSosialUI === 'function') setTimeout(updateSosialUI, 500);
-    if (typeof updateAdminSosialBadge === 'function' && userRole === 'admin') setTimeout(updateAdminSosialBadge, 600);
-    
+
     closeModal('piAuthModal');
     closeModal('loginOptionsModal');
     showToast(`Selamat datang, @${currentUser.username}! 🎉`, 'success');
     logDebug("[AUTH-v3] Auth sukses: @" + currentUser.username);
-    
+
     loadDataFromFirebase();
+
+    // Step 6, 7 & 8 (background, tidak diblokir): pastikan dokumen user ada,
+    // muat saldo SGT dari ledger pusat, lalu nyalakan listener realtime.
+    Promise.all([
+        ensureUserDocumentExists(piUid, currentUser.username, firebaseUid),
+        loadSGTDataFixed(true)
+    ]).then(() => {
+        if (currentUser && currentUser.uid) {
+            listenUserSGTBalanceFixed(currentUser.uid);
+        }
+        updateUI();
+    }).catch(e => logDebug('[AUTH-v3] Background post-login load error: ' + e.message));
+
+    // Refresh sosial module after login
+    if (typeof updateSosialUI === 'function') setTimeout(updateSosialUI, 500);
+    if (typeof updateAdminSosialBadge === 'function' && userRole === 'admin') setTimeout(updateAdminSosialBadge, 600);
     
     // Re-filter myOrders setelah login berhasil — cover semua field ownership
     if (orders.length > 0) {
@@ -9393,7 +9409,13 @@ async function updateAnalyticsSupplyStats() {
             const data = supplySnap.data();
             const circulating = data.circulating || 0;
             const burned = data.totalBurned || 0;
-            const hardCap = data.hardCap || SGT_HARD_CAP;
+            // FIX: sebelumnya pakai `data.hardCap || SGT_HARD_CAP` — karena
+            // dokumen Firestore lama masih menyimpan hardCap 100 juta (nilai
+            // lama, bukan 0/kosong), fallback ke konstanta baru TIDAK PERNAH
+            // kepakai sampai ada mint baru yang menimpanya. Sekarang hard cap
+            // SELALU mengikuti konstanta kode (SGT_HARD_CAP = 1 miliar),
+            // yang memang jadi sumber kebenarannya.
+            const hardCap = SGT_HARD_CAP;
             const pct = hardCap > 0 ? ((circulating / hardCap) * 100).toFixed(2) : 0;
             
             if (circEl) circEl.textContent = circulating.toLocaleString('id-ID');
