@@ -7777,7 +7777,17 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     }
 
     const finalAmount = pendingPayment?.amount || 0;
-    const finalItems  = cartSnapshot || pendingPayment?.items || [];
+    const _rawItems   = cartSnapshot || pendingPayment?.items || [];
+    // FIX: item keranjang membawa field 'image' (foto produk base64 —
+    // bisa puluhan-ratusan KB per item) yang HANYA dipakai untuk tampilan
+    // halaman Keranjang, TIDAK PERNAH dipakai lagi di halaman riwayat
+    // pesanan mana pun. Tapi field itu ikut tersimpan PERMANEN ke setiap
+    // dokumen order kalau tidak dibuang di sini — akibatnya koleksi
+    // 'orders' membengkak dan bikin dashboard admin (Pi Terjual, dll)
+    // lambat setiap kali menarik ratusan pesanan sekaligus.
+    const finalItems  = _rawItems.map(i => ({
+        id: i.id, name: i.name, qty: i.qty, pricePi: parseFloat(i.pricePi) || 0
+    }));
     const sgtEarned   = calculateSGTReward(finalAmount);
 
     // Langkah 2: Simpan order ke Firestore (baik server berhasil maupun tidak)
