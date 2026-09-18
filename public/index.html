@@ -4054,6 +4054,21 @@ const firebaseConfig = {
 
 let app, auth, db;
 let products = [];
+// FIX: localStorage.setItem('sagatama_products_cache', ...) dipakai di banyak
+// tempat TANPA try/catch — kalau total ukuran `products` (termasuk foto
+// base64) melebihi kuota localStorage (~5-10MB), ini melempar
+// QuotaExceededError yang menghentikan kode setelahnya (termasuk render)
+// di tengah jalan. Helper ini dipakai menggantikan semua panggilan
+// localStorage.setItem('sagatama_products_cache', ...) langsung supaya
+// gagal simpan cache TIDAK PERNAH merusak render produk.
+function safeSetProductsCache() {
+    try {
+        localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+    } catch (e) {
+        console.error('[Sagatama][Products cache] Gagal simpan cache (kemungkinan quota localStorage penuh): ' + e.message);
+        try { localStorage.removeItem('sagatama_products_cache'); } catch (e2) {}
+    }
+}
 let orders = [];
 let myOrders = [];
 let cart = JSON.parse(localStorage.getItem('sagatama_cart') || '[]');
@@ -5983,7 +5998,7 @@ window.savePiRatePedoman = async function() {
     }
 
     if (sukses > 0) {
-        localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+        safeSetProductsCache();
         renderAdminProducts?.();
         renderProducts?.();
     }
@@ -6025,7 +6040,7 @@ window.bulkRecalcFromIdr = async function() {
             gagal++;
         }
     }
-    localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+    safeSetProductsCache();
     renderAdminProducts?.();
     renderProducts?.();
     showToast(`✅ ${sukses} produk diupdate dari IDR masing-masing!${gagal > 0 ? ' ' + gagal + ' gagal.' : ''}`, sukses > 0 ? 'success' : 'error');
@@ -6062,7 +6077,7 @@ window.bulkUpdateAllPrices = async function() {
         }
     }
 
-    localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+    safeSetProductsCache();
     adminExchangeRate = rate;
     renderAdminProducts?.();
     renderProducts?.();
@@ -6633,13 +6648,25 @@ function loadDataFromFirebase() {
         unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
             products = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             products.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-            localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+            // FIX KRITIS: localStorage.setItem bisa gagal (QuotaExceededError)
+            // kalau total ukuran produk (termasuk foto base64 yang belum
+            // dikompres) melebihi kuota localStorage (~5-10MB). Sebelumnya
+            // panggilan ini TIDAK dibungkus try/catch dan ditaruh SEBELUM
+            // semua fungsi render — begitu quota kelampaui, error ini
+            // menghentikan seluruh callback di tengah jalan, jadi
+            // renderProducts/renderFeaturedProducts/dst di bawahnya TIDAK
+            // PERNAH jalan sama sekali. Ini penyebab Pasar/Beranda kosong
+            // padahal data produk sebenarnya berhasil ditarik dari Firestore
+            // (makanya hitungan Total Produk tetap benar — query itu terpisah).
+            // Sekarang: render DULU (harus selalu jalan), baru simpan cache
+            // dengan try/catch supaya kalau gagal pun tidak merusak apapun.
             renderProducts();
             renderFeaturedProducts();
             renderHomeCategories();
             renderFlashSale();
             updateAdminStats();
             if (checkAdmin()) renderAdminProducts();
+            safeSetProductsCache();
         }, (err) => {
             logDebug("Products error: " + err.message + " | code: " + err.code);
             // DIAGNOSTIK: logDebug dimatikan total di production (lihat definisinya),
@@ -7903,7 +7930,7 @@ async function finalizeOrderSideEffects({ paymentId, txid, orderData, finalItems
                       console.error('[stok] Gagal update stok produk ' + r.productId + ':', r.reason);
                   }
               });
-              localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+              safeSetProductsCache();
               renderAdminProducts?.();
               renderProducts?.();
           }).catch(e => {
@@ -10193,7 +10220,7 @@ window.saveProduct = async function() {
             const localIdx = products.findIndex(p => p.id === editingProductId);
             if (localIdx !== -1) {
                 products[localIdx] = { ...products[localIdx], ...data, updatedAt: { seconds: Date.now()/1000 } };
-                localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+                safeSetProductsCache();
                 renderAdminProducts(); // Render langsung tanpa tunggu Firestore
             }
             await updateDoc(doc(db, 'products', editingProductId), data);
@@ -10203,7 +10230,7 @@ window.saveProduct = async function() {
             const tempId = 'temp_' + Date.now();
             const newProduct = { id: tempId, ...data, createdAt: { seconds: Date.now()/1000 } };
             products.unshift(newProduct);
-            localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+            safeSetProductsCache();
             renderAdminProducts();
             closeModal('productFormModal');
             editingProductId = null;
@@ -10214,7 +10241,7 @@ window.saveProduct = async function() {
             // Ganti tempId dengan id asli
             const tIdx = products.findIndex(p => p.id === tempId);
             if (tIdx !== -1) products[tIdx].id = docRef.id;
-            localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+            safeSetProductsCache();
             showToast('Produk berhasil ditambahkan! ✅', 'success');
             return;
         }
