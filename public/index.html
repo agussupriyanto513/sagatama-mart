@@ -6593,9 +6593,14 @@ function loadDataFromFirebase() {
     const checkAdmin = () => currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
 
     try {
-        const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
+        // FIX: orderBy("createdAt","desc") langsung di Firestore diam-diam
+        // MENGELUARKAN dokumen produk yang tidak punya field 'createdAt'
+        // dari hasil query (bukan error, cuma hilang). Sekarang ambil semua
+        // dokumen apa adanya, lalu urutkan di JS dengan fallback aman.
+        const productsQuery = query(collection(db, "products"));
         unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
             products = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            products.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
             localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
             renderProducts();
             renderFeaturedProducts();
@@ -9904,13 +9909,42 @@ window.openProductModal = function(id = null) {
 
 window.previewProductImage = function(input) {
     if (input.files && input.files[0]) {
+        // PERF: foto disimpan langsung sebagai base64 di dalam dokumen
+        // Firestore (bukan link ke file storage). Foto asli dari HP bisa
+        // 2-5MB — kalau ditaruh mentah, SETIAP kali daftar produk dimuat,
+        // semua foto sebesar itu ikut terunduh sekaligus, bikin halaman
+        // Pasar/Beranda lambat. Di sini foto di-resize & dikompres dulu
+        // (maks 800px, kualitas 70%) sebelum disimpan, biasanya turun jadi
+        // puluhan KB saja — jauh lebih ringan tanpa mengubah cara data
+        // disimpan (masih base64, tetap kompatibel dengan kode lama).
         const reader = new FileReader();
         reader.onload = (e) => {
-            tempProductImage = e.target.result;
-            const preview = document.getElementById('productPreview');
-            const placeholder = document.getElementById('productUploadPlaceholder');
-            if (preview) { preview.src = tempProductImage; preview.style.display = 'block'; }
-            if (placeholder) placeholder.style.display = 'none';
+            const img = new Image();
+            img.onload = () => {
+                const MAX_DIM = 800;
+                let { width, height } = img;
+                if (width > MAX_DIM || height > MAX_DIM) {
+                    if (width > height) { height = Math.round(height * MAX_DIM / width); width = MAX_DIM; }
+                    else { width = Math.round(width * MAX_DIM / height); height = MAX_DIM; }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width; canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                tempProductImage = canvas.toDataURL('image/jpeg', 0.7);
+                const preview = document.getElementById('productPreview');
+                const placeholder = document.getElementById('productUploadPlaceholder');
+                if (preview) { preview.src = tempProductImage; preview.style.display = 'block'; }
+                if (placeholder) placeholder.style.display = 'none';
+            };
+            img.onerror = () => {
+                // Fallback: kalau gagal dikompres, pakai gambar asli apa adanya
+                tempProductImage = e.target.result;
+                const preview = document.getElementById('productPreview');
+                const placeholder = document.getElementById('productUploadPlaceholder');
+                if (preview) { preview.src = tempProductImage; preview.style.display = 'block'; }
+                if (placeholder) placeholder.style.display = 'none';
+            };
+            img.src = e.target.result;
         };
         reader.readAsDataURL(input.files[0]);
     }
