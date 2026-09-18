@@ -37,7 +37,7 @@
             'processSGTTransfer','redeemSGT','saveSGTSettings','distributeSGTManual',
             'burnSGT','filterAdminProducts','filterAdminOrders','updateAdminStatus',
             'filterAdminMembers','searchAdminMembers','toggleMemberBlock',
-            'openAddMemberModal','saveNewMember','deleteMember','approveMember','loadMoreAdminMembers','deleteOrderAdmin',
+            'openAddMemberModal','saveNewMember','deleteMember','approveMember','loadMoreAdminMembers',
             'refreshPiBalance','deleteProduct','openEditProduct','saveUserAddress',
             'openExchangeRateModal','updateAdminCalculator','switchCalcMode','closeAndRemoveModal',
             'handleStartShopping','adminLogin','loginAdmin','continueAsGuest',
@@ -6900,35 +6900,37 @@ async function processPiAuthSuccess(authResult) {
         }
     }
 
-    // GERBANG WHITELIST MEMBER — HANYA username yang sudah didaftarkan
-    // admin lewat "Tambah Member" yang boleh login. Kalau usernamenya
-    // belum pernah dimasukkan admin, login DITOLAK TOTAL — tidak ada lagi
-    // pendaftaran otomatis / status "menunggu approval". Admin selalu
-    // dilewatkan dari gerbang ini.
-    //
-    // PENTING: dicek berdasarkan USERNAME (bukan doc ID/UID), karena member
-    // yang didaftarkan admin punya ID dokumen sendiri (mis. manual_budi_...)
-    // yang berbeda dari UID asli Pi Network milik orang itu — baru akan
-    // ketahuan UID aslinya saat dia benar-benar login pertama kali.
+    // GERBANG WHITELIST MEMBER — hanya member yang diizinkan admin yang
+    // boleh login & masuk ke Sagatama Mart. Admin selalu dilewatkan.
     if (currentUser.role !== 'admin' && db) {
         try {
-            const _uname = (currentUser.username || '').toLowerCase();
-            const _memberQuery = query(collection(db, 'users'), where('username', '==', _uname), limit(1));
-            const _memberQuerySnap = await getDocs(_memberQuery);
+            const _memberRef = doc(db, 'users', piUid);
+            const _memberSnap = await getDoc(_memberRef);
 
-            if (_memberQuerySnap.empty) {
-                // Username TIDAK ADA di daftar member yang didaftarkan admin.
-                // Tolak login total — tidak ada akun yang dibuat sama sekali.
-                showToast('Username Anda belum didaftarkan oleh admin. Hubungi admin untuk didaftarkan sebagai member.', 'error');
-                logDebug('[AUTH-v3] Login ditolak: username tidak terdaftar admin (' + _uname + ')');
+            if (!_memberSnap.exists()) {
+                // Member baru — belum pernah terdaftar sama sekali.
+                // Buat dokumen berstatus "pending" lalu TOLAK login sampai
+                // admin menyetujuinya lewat panel Kelola Member.
+                await setDoc(_memberRef, {
+                    uid: piUid,
+                    username: currentUser.username,
+                    role: 'buyer',
+                    authType: 'pi',
+                    allowed: false,
+                    blocked: false,
+                    pendingApproval: true,
+                    createdAt: serverTimestamp(),
+                    requestedAt: serverTimestamp()
+                });
+                showToast('Pendaftaran terkirim. Akun Anda menunggu persetujuan admin sebelum bisa login.', 'info');
+                logDebug('[AUTH-v3] Login ditolak: member baru menunggu approval (' + piUid + ')');
                 currentUser = null;
                 isPiAuthenticated = false;
                 restorePiLoginButton();
                 return;
             }
 
-            const _memberDocSnap = _memberQuerySnap.docs[0];
-            const _memberData = _memberDocSnap.data();
+            const _memberData = _memberSnap.data();
 
             if (_memberData.blocked === true) {
                 showToast('Akun Anda diblokir oleh admin. Hubungi admin untuk info lebih lanjut.', 'error');
@@ -6939,34 +6941,26 @@ async function processPiAuthSuccess(authResult) {
                 return;
             }
 
-            // allowed === false secara eksplisit berarti admin menonaktifkan
-            // izin login member ini (di luar blokir biasa).
+            // allowed === false secara eksplisit berarti belum disetujui admin.
+            // Dokumen LAMA yang tidak punya field 'allowed' dianggap sudah
+            // diizinkan (grandfathered) supaya member lama tidak terkunci.
             if (_memberData.allowed === false) {
                 showToast('Akun Anda belum diizinkan admin untuk login. Hubungi admin untuk persetujuan.', 'error');
-                logDebug('[AUTH-v3] Login ditolak: allowed=false (' + piUid + ')');
+                logDebug('[AUTH-v3] Login ditolak: belum di-approve admin (' + piUid + ')');
                 currentUser = null;
                 isPiAuthenticated = false;
                 restorePiLoginButton();
                 return;
             }
-
-            // Username lolos whitelist. Kalau dokumen member ini dibuat
-            // admin dengan ID dokumen custom (bukan UID Pi asli), pindahkan
-            // datanya ke dokumen ber-ID UID Pi yang sebenarnya SEKARANG,
-            // supaya fitur lain yang mengacu ke piUid (saldo SGT, listener
-            // realtime, dsb) tetap konsisten sejak login pertama ini.
-            if (_memberDocSnap.id !== piUid) {
-                await setDoc(doc(db, 'users', piUid), {
-                    ..._memberData,
-                    uid: piUid,
-                    username: _uname
-                }, { merge: true });
-                try { await deleteDoc(doc(db, 'users', _memberDocSnap.id)); } catch (_delErr) { /* non-kritis */ }
-                logDebug('[AUTH-v3] Member migrasi dari doc "' + _memberDocSnap.id + '" ke UID asli "' + piUid + '"');
-            }
         } catch (_memberCheckErr) {
-            // Gagal verifikasi = TOLAK login (fail-closed), tampilkan error
-            // supaya kelihatan penyebabnya, bukan diam-diam meloloskan login.
+            // FIX: sebelumnya error di sini (mis. permission-denied, offline,
+            // dsb) HANYA di-log (tidak tampil di production) lalu login tetap
+            // DILANJUTKAN begitu saja — akibatnya: (1) member baru "lolos"
+            // tanpa data pendaftarannya pernah benar-benar tersimpan ke
+            // Firestore ("member belum bisa disimpan"), dan (2) gerbang
+            // whitelist bisa dilewati begitu saja kalau terjadi error apapun.
+            // Sekarang: gagal di sini = TOLAK login (fail-closed) dan
+            // tampilkan pesan errornya supaya kelihatan penyebabnya.
             logDebug('[AUTH-v3] Member check error: ' + _memberCheckErr.message);
             showToast('Gagal memverifikasi akun member: ' + _memberCheckErr.message, 'error');
             currentUser = null;
@@ -7167,12 +7161,22 @@ window.manualPiLogin = async function() {
                 return;
             }
         } else {
-            // Username TIDAK ADA di daftar member yang didaftarkan admin.
-            // Tolak login total — tidak ada lagi akun "pending" yang dibuat
-            // otomatis. Hanya username yang sudah dimasukkan admin lewat
-            // "Tambah Member" yang boleh login.
-            showToast('Username Anda belum didaftarkan oleh admin. Hubungi admin untuk didaftarkan sebagai member.', 'error');
-            logDebug('[MANUAL] Login ditolak: username tidak terdaftar admin (' + username + ')');
+            // Member baru — belum pernah terdaftar. Buat dokumen "pending"
+            // lalu TOLAK login sampai admin menyetujuinya secara manual.
+            targetUid = 'pi_manual_' + Date.now();
+            logDebug(`[MANUAL] User baru: @${username} | UID: ${targetUid} — menunggu approval`);
+            await setDoc(doc(db, 'users', targetUid), {
+                uid: targetUid,
+                username: username,
+                role: 'buyer',
+                authType: 'pi_manual',
+                allowed: false,
+                blocked: false,
+                pendingApproval: true,
+                createdAt: serverTimestamp(),
+                requestedAt: serverTimestamp()
+            });
+            showToast('Pendaftaran terkirim. Akun Anda menunggu persetujuan admin sebelum bisa login.', 'info');
             return;
         }
         
@@ -9091,25 +9095,9 @@ function renderAdminOrders() {
                 ${o.status === 'processing' ? `<button onclick="updateOrderStatus('${o.id}','shipped')" style="flex:1;background:#3B82F6;color:white;border:none;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Kirim Pesanan</button>` : ''}
                 ${o.status === 'shipped' ? `<button onclick="updateOrderStatus('${o.id}','completed')" style="flex:1;background:#059669;color:white;border:none;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Selesaikan</button>` : ''}
                 <button onclick="showOrderDetail('${o.id}')" style="background:#F3F4F6;color:#6B7280;border:none;padding:10px 16px;border-radius:8px;font-size:13px;cursor:pointer;"><i class="fas fa-eye"></i></button>
-                <button onclick="deleteOrderAdmin('${o.id}')" style="background:#FEE2E2;color:#DC2626;border:none;padding:10px 16px;border-radius:8px;font-size:13px;cursor:pointer;"><i class="fas fa-trash"></i></button>
             </div>
         </div>`).join('');
 }
-
-window.deleteOrderAdmin = async function(orderId) {
-    if (!db) { showToast('Koneksi database belum siap', 'error'); return; }
-    if (!confirm('Hapus pesanan ini secara permanen? Tindakan ini tidak bisa dibatalkan.')) return;
-    try {
-        await deleteDoc(doc(db, 'orders', orderId));
-        orders = orders.filter(o => o.id !== orderId);
-        renderAdminOrders();
-        renderAdminRecentOrders();
-        updateAdminStats();
-        showToast('Pesanan berhasil dihapus', 'success');
-    } catch (e) {
-        showToast('Gagal menghapus pesanan: ' + e.message, 'error');
-    }
-};
 
 // ==================== ADMIN: KELOLA MEMBER ====================
 async function renderAdminMembers() {
@@ -11797,7 +11785,7 @@ if (typeof window._registerReal === 'function') {
         toggleMemberBlock: window.toggleMemberBlock,
         openAddMemberModal: window.openAddMemberModal, saveNewMember: window.saveNewMember,
         deleteMember: window.deleteMember, approveMember: window.approveMember,
-        loadMoreAdminMembers: window.loadMoreAdminMembers, deleteOrderAdmin: window.deleteOrderAdmin,
+        loadMoreAdminMembers: window.loadMoreAdminMembers,
         refreshPiBalance: window.refreshPiBalance, deleteProduct: window.deleteProduct,
         saveUserAddress: window.saveUserAddress, openExchangeRateModal: window.openExchangeRateModal,
         updateAdminCalculator: window.updateAdminCalculator, switchCalcMode: window.switchCalcMode, closeAndRemoveModal: window.closeAndRemoveModal,
