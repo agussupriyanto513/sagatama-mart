@@ -37,7 +37,7 @@
             'processSGTTransfer','redeemSGT','saveSGTSettings','distributeSGTManual',
             'burnSGT','filterAdminProducts','filterAdminOrders','updateAdminStatus',
             'filterAdminMembers','searchAdminMembers','toggleMemberBlock',
-            'openAddMemberModal','saveNewMember','deleteMember','approveMember','loadMoreAdminMembers',
+            'openAddMemberModal','saveNewMember','deleteMember','approveMember','loadMoreAdminMembers','deleteOrderAdmin',
             'refreshPiBalance','deleteProduct','openEditProduct','saveUserAddress',
             'openExchangeRateModal','updateAdminCalculator','switchCalcMode','closeAndRemoveModal',
             'handleStartShopping','adminLogin','loginAdmin','continueAsGuest',
@@ -9091,9 +9091,25 @@ function renderAdminOrders() {
                 ${o.status === 'processing' ? `<button onclick="updateOrderStatus('${o.id}','shipped')" style="flex:1;background:#3B82F6;color:white;border:none;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Kirim Pesanan</button>` : ''}
                 ${o.status === 'shipped' ? `<button onclick="updateOrderStatus('${o.id}','completed')" style="flex:1;background:#059669;color:white;border:none;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Selesaikan</button>` : ''}
                 <button onclick="showOrderDetail('${o.id}')" style="background:#F3F4F6;color:#6B7280;border:none;padding:10px 16px;border-radius:8px;font-size:13px;cursor:pointer;"><i class="fas fa-eye"></i></button>
+                <button onclick="deleteOrderAdmin('${o.id}')" style="background:#FEE2E2;color:#DC2626;border:none;padding:10px 16px;border-radius:8px;font-size:13px;cursor:pointer;"><i class="fas fa-trash"></i></button>
             </div>
         </div>`).join('');
 }
+
+window.deleteOrderAdmin = async function(orderId) {
+    if (!db) { showToast('Koneksi database belum siap', 'error'); return; }
+    if (!confirm('Hapus pesanan ini secara permanen? Tindakan ini tidak bisa dibatalkan.')) return;
+    try {
+        await deleteDoc(doc(db, 'orders', orderId));
+        orders = orders.filter(o => o.id !== orderId);
+        renderAdminOrders();
+        renderAdminRecentOrders();
+        updateAdminStats();
+        showToast('Pesanan berhasil dihapus', 'success');
+    } catch (e) {
+        showToast('Gagal menghapus pesanan: ' + e.message, 'error');
+    }
+};
 
 // ==================== ADMIN: KELOLA MEMBER ====================
 async function renderAdminMembers() {
@@ -11781,7 +11797,7 @@ if (typeof window._registerReal === 'function') {
         toggleMemberBlock: window.toggleMemberBlock,
         openAddMemberModal: window.openAddMemberModal, saveNewMember: window.saveNewMember,
         deleteMember: window.deleteMember, approveMember: window.approveMember,
-        loadMoreAdminMembers: window.loadMoreAdminMembers,
+        loadMoreAdminMembers: window.loadMoreAdminMembers, deleteOrderAdmin: window.deleteOrderAdmin,
         refreshPiBalance: window.refreshPiBalance, deleteProduct: window.deleteProduct,
         saveUserAddress: window.saveUserAddress, openExchangeRateModal: window.openExchangeRateModal,
         updateAdminCalculator: window.updateAdminCalculator, switchCalcMode: window.switchCalcMode, closeAndRemoveModal: window.closeAndRemoveModal,
