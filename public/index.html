@@ -3890,7 +3890,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit, documentId, startAfter, getCountFromServer, getAggregateFromServer, sum } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit, documentId, startAfter, getCountFromServer } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 // ERROR HANDLER GLOBAL
 let isHandlingError = false;
@@ -4054,21 +4054,6 @@ const firebaseConfig = {
 
 let app, auth, db;
 let products = [];
-// FIX: localStorage.setItem('sagatama_products_cache', ...) dipakai di banyak
-// tempat TANPA try/catch — kalau total ukuran `products` (termasuk foto
-// base64) melebihi kuota localStorage (~5-10MB), ini melempar
-// QuotaExceededError yang menghentikan kode setelahnya (termasuk render)
-// di tengah jalan. Helper ini dipakai menggantikan semua panggilan
-// localStorage.setItem('sagatama_products_cache', ...) langsung supaya
-// gagal simpan cache TIDAK PERNAH merusak render produk.
-function safeSetProductsCache() {
-    try {
-        localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
-    } catch (e) {
-        console.error('[Sagatama][Products cache] Gagal simpan cache (kemungkinan quota localStorage penuh): ' + e.message);
-        try { localStorage.removeItem('sagatama_products_cache'); } catch (e2) {}
-    }
-}
 let orders = [];
 let myOrders = [];
 let cart = JSON.parse(localStorage.getItem('sagatama_cart') || '[]');
@@ -5998,7 +5983,7 @@ window.savePiRatePedoman = async function() {
     }
 
     if (sukses > 0) {
-        safeSetProductsCache();
+        localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
         renderAdminProducts?.();
         renderProducts?.();
     }
@@ -6040,7 +6025,7 @@ window.bulkRecalcFromIdr = async function() {
             gagal++;
         }
     }
-    safeSetProductsCache();
+    localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
     renderAdminProducts?.();
     renderProducts?.();
     showToast(`✅ ${sukses} produk diupdate dari IDR masing-masing!${gagal > 0 ? ' ' + gagal + ' gagal.' : ''}`, sukses > 0 ? 'success' : 'error');
@@ -6077,7 +6062,7 @@ window.bulkUpdateAllPrices = async function() {
         }
     }
 
-    safeSetProductsCache();
+    localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
     adminExchangeRate = rate;
     renderAdminProducts?.();
     renderProducts?.();
@@ -6204,11 +6189,6 @@ window.quickFilter = function(category) {
 async function init() {
     logDebug("Starting initialization...");
     renderBannerCarousel();
-
-    // PERF FIX: tampilkan produk dari cache localStorage PALING AWAL,
-    // sebelum Pi SDK / Firebase / SSO mulai — ini tidak butuh network
-    // sama sekali, jadi tidak ada alasan untuk menunggu apapun.
-    paintProductsFromCache();
 
     // Restore cart dari localStorage dulu (instant, tidak perlu tunggu DB)
     try {
@@ -6592,33 +6572,24 @@ window.saveUserAddress = async function() {
 };
 
 // CACHE & DATA LOADING
-// PERF FIX: sebelumnya fungsi ini nunggu `db` siap dulu SEBELUM menampilkan
-// cache localStorage — padahal baca localStorage sama sekali tidak butuh
-// Firebase. Karena `db` baru siap setelah Pi SDK init + Firebase auth +
-// SSO selesai (semua di init(), berurutan), produk dari cache jadi ikut
-// telat muncul walau datanya sudah ada di HP. Sekarang dipisah:
-// paintProductsFromCache() jalan PALING AWAL (tidak butuh db sama sekali),
-// loadDataWithCache() cuma menunggu db untuk memulai listener LIVE.
-function paintProductsFromCache() {
-    const cachedProducts = localStorage.getItem('sagatama_products_cache');
-    if (!cachedProducts) return;
-    try {
-        products = JSON.parse(cachedProducts);
-        renderProducts();
-        renderFeaturedProducts();
-        renderHomeCategories();
-        renderFlashSale();
-        logDebug('[Cache] Produk dari cache langsung ditampilkan (' + products.length + ')');
-    } catch (e) {
-        logDebug("Cache parse error: " + e.message);
-    }
-}
-
 async function loadDataWithCache() {
     if (!db) {
         logDebug("DB belum siap, retry...");
         setTimeout(loadDataWithCache, 1000);
         return;
+    }
+
+    const cachedProducts = localStorage.getItem('sagatama_products_cache');
+    if (cachedProducts) {
+        try {
+            products = JSON.parse(cachedProducts);
+            renderProducts();
+            renderFeaturedProducts();
+            renderHomeCategories();
+            renderFlashSale();
+        } catch (e) {
+            logDebug("Cache parse error: " + e.message);
+        }
     }
     loadDataFromFirebase();
 }
@@ -6635,48 +6606,20 @@ function loadDataFromFirebase() {
         // MENGELUARKAN dokumen produk yang tidak punya field 'createdAt'
         // dari hasil query (bukan error, cuma hilang). Sekarang ambil semua
         // dokumen apa adanya, lalu urutkan di JS dengan fallback aman.
-        // PERF FIX: sebelumnya query ini TANPA limit() — setiap listener
-        // aktif (login, buka admin, dst) menarik SELURUH koleksi 'products'
-        // sekaligus, termasuk field 'image' base64 di tiap dokumen. Untuk
-        // katalog kecil dampaknya kecil, tapi begitu produk bertambah ini
-        // jadi penyebab utama Pasar/Beranda/Admin lambat dimuat. Sekarang
-        // dibatasi 300 dokumen terbaru — cukup untuk semua kebutuhan UI
-        // saat ini, dan statTotalProducts TIDAK lagi bergantung pada
-        // jumlah ini (lihat refreshAdminDashboardStatsFromServer, yang
-        // menghitung total asli via getCountFromServer tanpa unduh dokumen).
-        const productsQuery = query(collection(db, "products"), limit(300));
+        const productsQuery = query(collection(db, "products"));
         unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
             products = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             products.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-            // FIX KRITIS: localStorage.setItem bisa gagal (QuotaExceededError)
-            // kalau total ukuran produk (termasuk foto base64 yang belum
-            // dikompres) melebihi kuota localStorage (~5-10MB). Sebelumnya
-            // panggilan ini TIDAK dibungkus try/catch dan ditaruh SEBELUM
-            // semua fungsi render — begitu quota kelampaui, error ini
-            // menghentikan seluruh callback di tengah jalan, jadi
-            // renderProducts/renderFeaturedProducts/dst di bawahnya TIDAK
-            // PERNAH jalan sama sekali. Ini penyebab Pasar/Beranda kosong
-            // padahal data produk sebenarnya berhasil ditarik dari Firestore
-            // (makanya hitungan Total Produk tetap benar — query itu terpisah).
-            // Sekarang: render DULU (harus selalu jalan), baru simpan cache
-            // dengan try/catch supaya kalau gagal pun tidak merusak apapun.
+            localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
             renderProducts();
             renderFeaturedProducts();
             renderHomeCategories();
             renderFlashSale();
             updateAdminStats();
             if (checkAdmin()) renderAdminProducts();
-            safeSetProductsCache();
-        }, (err) => {
-            logDebug("Products error: " + err.message + " | code: " + err.code);
-            // DIAGNOSTIK: logDebug dimatikan total di production (lihat definisinya),
-            // jadi error Firestore selama ini tidak pernah terlihat di console.
-            // console.error TIDAK terpengaruh logDebug, jadi ini akan selalu tampil.
-            console.error('[Sagatama][Products listener] ' + err.code + ' — ' + err.message);
-        });
+        }, (err) => logDebug("Products error: " + err.message + " | code: " + err.code));
     } catch (e) {
         logDebug("Products query error: " + e.message);
-        console.error('[Sagatama][Products query] ' + e.message);
     }
 
     // Helper: filter myOrders dari semua field kepemilikan
@@ -6725,10 +6668,7 @@ function loadDataFromFirebase() {
             // urutan diatur di _handleOrdersSnapshot (client-side).
             ordersQuery = query(collection(db, "orders"), limit(500));
             unsubscribers.orders = onSnapshot(ordersQuery, _handleOrdersSnapshot,
-                (err) => {
-                    logDebug("Orders error: " + err.message + " | code: " + err.code);
-                    console.error('[Sagatama][Orders listener/admin] ' + err.code + ' — ' + err.message);
-                });
+                (err) => logDebug("Orders error: " + err.message + " | code: " + err.code));
         } else {
             const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid || null;
 
@@ -6752,7 +6692,6 @@ function loadDataFromFirebase() {
 
             unsubscribers.orders = onSnapshot(ordersQuery, _handleOrdersSnapshot, async (err) => {
                 logDebug("Orders error: " + err.message + " | code: " + err.code);
-                console.error('[Sagatama][Orders listener/user] ' + err.code + ' — ' + err.message);
 
                 // FALLBACK: jika index belum siap (failed-precondition), query tanpa orderBy
                 // lalu sort di sisi client
@@ -7930,7 +7869,7 @@ async function finalizeOrderSideEffects({ paymentId, txid, orderData, finalItems
                       console.error('[stok] Gagal update stok produk ' + r.productId + ':', r.reason);
                   }
               });
-              safeSetProductsCache();
+              localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
               renderAdminProducts?.();
               renderProducts?.();
           }).catch(e => {
@@ -8906,65 +8845,17 @@ function renderAccount() {
 
 function renderAdminDashboard() {
     if (!(currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin')) { switchView('home'); return; }
-    // Tampilkan dulu apa yang sudah ada di memori (instan, dari listener/cache lama)
     updateAdminStats();
     updateSGTAdminStats();
     renderAdminRecentOrders();
-    // Total Produk: aggregate query ke server, aman & cepat (rule 'products' publik)
-    refreshAdminDashboardStatsFromServer();
-    // Menunggu/Selesai/Pi Terjual: dihitung dari array 'orders' lokal (lihat
-    // catatan di refreshAdminDashboardStatsFromServer soal kenapa TIDAK
-    // pakai aggregate). Array ini diisi oleh listener real-time yang baru
-    // saja disubscribe, jadi mungkin belum terisi di percobaan pertama —
-    // retry beberapa kali dengan jeda naik, berhenti begitu ada data.
-    let _dashRetry = 0;
-    const _dashRetryTimer = setInterval(() => {
-        _dashRetry++;
-        updateAdminStats();
-        renderAdminRecentOrders();
-        if (orders.length > 0 || _dashRetry >= 6) clearInterval(_dashRetryTimer);
-    }, 1500);
-}
-
-// PERF: Total Produk dihitung LANGSUNG di server Firestore (count aggregate,
-// hanya mengembalikan angka, tidak mengunduh dokumen) — koleksi 'products'
-// rule-nya "allow read: if true" jadi aman untuk aggregation query.
-// CATATAN PENTING: statistik order (Menunggu/Selesai/Pi Terjual) SENGAJA
-// TIDAK pakai aggregate query. Rule koleksi 'orders' pakai isDocOwner()
-// yang membaca resource.data — begitu ADA referensi resource.data di rule
-// suatu koleksi, Firestore menolak SEMUA aggregation query (count/sum) ke
-// koleksi itu, walau secara logika admin harusnya lolos duluan (isAdmin()
-// dievaluasi lebih dulu di rule, tapi aggregation query tidak pernah decek
-// per-dokumen sama sekali jadi tetap ditolak). Makanya statistik order tetap
-// dihitung dari array 'orders' lokal (data listener real-time yang sudah
-// jalan) lewat updateAdminStats() — bukan bug, ini batasan resmi Firestore.
-async function refreshAdminDashboardStatsFromServer() {
-    if (!db) return;
-    try {
-        const productsCountSnap = await getCountFromServer(collection(db, 'products'));
-        const el = document.getElementById('statTotalProducts');
-        if (el) el.innerText = productsCountSnap.data().count;
-        logDebug('[Dashboard] Total Produk server-side OK: ' + productsCountSnap.data().count);
-    } catch (e) {
-        logDebug('[Dashboard] Products count gagal (' + e.message + ') — fallback ke updateAdminStats()');
-        console.error('[Sagatama][Dashboard products count] ' + (e.code || '') + ' — ' + e.message);
-        // Fallback: tetap pakai products.length dari array lokal
-        const el = document.getElementById('statTotalProducts');
-        if (el) el.innerText = products.length;
-    }
+    // Retry setelah Firebase kirim data (antisipasi race condition saat pertama login)
+    setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); }, 2000);
 }
 
 function updateAdminStats() {
     const totalRevenue = orders.filter(o => ['completed','shipped','paid'].includes(o.status)).reduce((s, o) => s + (o.amount || 0), 0);
     const upd = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
-    // FIX: statTotalProducts SENGAJA TIDAK ditulis di sini lagi. Sumber
-    // kebenarannya sekarang cuma refreshAdminDashboardStatsFromServer()
-    // (aggregate count ke server). Sebelumnya baris ini ikut menimpa balik
-    // ke products.length dari array lokal setiap kali updateAdminStats()
-    // dipanggil (termasuk dari retry loop tiap 1.5 detik) — kalau array
-    // lokal itu masih kosong/belum lengkap saat retry jalan, angka yang
-    // sudah benar dari server ketimpa jadi 0 lagi. Ini penyebab "produk
-    // muncul sebentar lalu balik ke 0".
+    upd('statTotalProducts', products.length);
     upd('statPendingOrders', orders.filter(o => ['pending','paid','processing'].includes(o.status)).length);
     upd('statCompletedOrders', orders.filter(o => ['completed','shipped'].includes(o.status)).length);
     upd('statTotalRevenue', totalRevenue.toFixed(8));
@@ -10220,7 +10111,7 @@ window.saveProduct = async function() {
             const localIdx = products.findIndex(p => p.id === editingProductId);
             if (localIdx !== -1) {
                 products[localIdx] = { ...products[localIdx], ...data, updatedAt: { seconds: Date.now()/1000 } };
-                safeSetProductsCache();
+                localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
                 renderAdminProducts(); // Render langsung tanpa tunggu Firestore
             }
             await updateDoc(doc(db, 'products', editingProductId), data);
@@ -10230,7 +10121,7 @@ window.saveProduct = async function() {
             const tempId = 'temp_' + Date.now();
             const newProduct = { id: tempId, ...data, createdAt: { seconds: Date.now()/1000 } };
             products.unshift(newProduct);
-            safeSetProductsCache();
+            localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
             renderAdminProducts();
             closeModal('productFormModal');
             editingProductId = null;
@@ -10241,7 +10132,7 @@ window.saveProduct = async function() {
             // Ganti tempId dengan id asli
             const tIdx = products.findIndex(p => p.id === tempId);
             if (tIdx !== -1) products[tIdx].id = docRef.id;
-            safeSetProductsCache();
+            localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
             showToast('Produk berhasil ditambahkan! ✅', 'success');
             return;
         }
