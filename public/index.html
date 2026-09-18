@@ -6190,6 +6190,11 @@ async function init() {
     logDebug("Starting initialization...");
     renderBannerCarousel();
 
+    // PERF FIX: tampilkan produk dari cache localStorage PALING AWAL,
+    // sebelum Pi SDK / Firebase / SSO mulai — ini tidak butuh network
+    // sama sekali, jadi tidak ada alasan untuk menunggu apapun.
+    paintProductsFromCache();
+
     // Restore cart dari localStorage dulu (instant, tidak perlu tunggu DB)
     try {
         cart = JSON.parse(localStorage.getItem('sagatama_cart') || '[]');
@@ -6572,24 +6577,33 @@ window.saveUserAddress = async function() {
 };
 
 // CACHE & DATA LOADING
+// PERF FIX: sebelumnya fungsi ini nunggu `db` siap dulu SEBELUM menampilkan
+// cache localStorage — padahal baca localStorage sama sekali tidak butuh
+// Firebase. Karena `db` baru siap setelah Pi SDK init + Firebase auth +
+// SSO selesai (semua di init(), berurutan), produk dari cache jadi ikut
+// telat muncul walau datanya sudah ada di HP. Sekarang dipisah:
+// paintProductsFromCache() jalan PALING AWAL (tidak butuh db sama sekali),
+// loadDataWithCache() cuma menunggu db untuk memulai listener LIVE.
+function paintProductsFromCache() {
+    const cachedProducts = localStorage.getItem('sagatama_products_cache');
+    if (!cachedProducts) return;
+    try {
+        products = JSON.parse(cachedProducts);
+        renderProducts();
+        renderFeaturedProducts();
+        renderHomeCategories();
+        renderFlashSale();
+        logDebug('[Cache] Produk dari cache langsung ditampilkan (' + products.length + ')');
+    } catch (e) {
+        logDebug("Cache parse error: " + e.message);
+    }
+}
+
 async function loadDataWithCache() {
     if (!db) {
         logDebug("DB belum siap, retry...");
         setTimeout(loadDataWithCache, 1000);
         return;
-    }
-
-    const cachedProducts = localStorage.getItem('sagatama_products_cache');
-    if (cachedProducts) {
-        try {
-            products = JSON.parse(cachedProducts);
-            renderProducts();
-            renderFeaturedProducts();
-            renderHomeCategories();
-            renderFlashSale();
-        } catch (e) {
-            logDebug("Cache parse error: " + e.message);
-        }
     }
     loadDataFromFirebase();
 }
