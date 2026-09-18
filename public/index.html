@@ -8883,49 +8883,47 @@ function renderAdminDashboard() {
     updateAdminStats();
     updateSGTAdminStats();
     renderAdminRecentOrders();
-    // PERF FIX: angka akurat (Total Produk, Menunggu, Selesai, Pi Terjual)
-    // sekarang diambil lewat aggregation query (getCountFromServer /
-    // getAggregateFromServer) — server Firestore yang menghitung, browser
-    // cuma terima satu angka per stat. Jauh lebih cepat & lebih ringan
-    // daripada cara lama (updateAdminStats) yang harus menunggu SELURUH
-    // dokumen 'orders' (sampai 500, lengkap dengan field items/metadata)
-    // terunduh dulu baru dijumlah di JS.
+    // Total Produk: aggregate query ke server, aman & cepat (rule 'products' publik)
     refreshAdminDashboardStatsFromServer();
-    // Retry setelah Firebase kirim data (antisipasi race condition saat pertama login)
-    setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); }, 2000);
+    // Menunggu/Selesai/Pi Terjual: dihitung dari array 'orders' lokal (lihat
+    // catatan di refreshAdminDashboardStatsFromServer soal kenapa TIDAK
+    // pakai aggregate). Array ini diisi oleh listener real-time yang baru
+    // saja disubscribe, jadi mungkin belum terisi di percobaan pertama —
+    // retry beberapa kali dengan jeda naik, berhenti begitu ada data.
+    let _dashRetry = 0;
+    const _dashRetryTimer = setInterval(() => {
+        _dashRetry++;
+        updateAdminStats();
+        renderAdminRecentOrders();
+        if (orders.length > 0 || _dashRetry >= 6) clearInterval(_dashRetryTimer);
+    }, 1500);
 }
 
-// PERF: hitung statistik dashboard admin LANGSUNG di server Firestore
-// (count/sum aggregate), bukan dengan mengunduh dokumen order satu-satu.
-// Kalau aggregate query gagal (mis. SDK/region belum support), diam-diam
-// fallback ke updateAdminStats() yang sudah ada (hitung dari array lokal),
-// jadi angka tetap muncul walau lebih lambat.
+// PERF: Total Produk dihitung LANGSUNG di server Firestore (count aggregate,
+// hanya mengembalikan angka, tidak mengunduh dokumen) — koleksi 'products'
+// rule-nya "allow read: if true" jadi aman untuk aggregation query.
+// CATATAN PENTING: statistik order (Menunggu/Selesai/Pi Terjual) SENGAJA
+// TIDAK pakai aggregate query. Rule koleksi 'orders' pakai isDocOwner()
+// yang membaca resource.data — begitu ADA referensi resource.data di rule
+// suatu koleksi, Firestore menolak SEMUA aggregation query (count/sum) ke
+// koleksi itu, walau secara logika admin harusnya lolos duluan (isAdmin()
+// dievaluasi lebih dulu di rule, tapi aggregation query tidak pernah decek
+// per-dokumen sama sekali jadi tetap ditolak). Makanya statistik order tetap
+// dihitung dari array 'orders' lokal (data listener real-time yang sudah
+// jalan) lewat updateAdminStats() — bukan bug, ini batasan resmi Firestore.
 async function refreshAdminDashboardStatsFromServer() {
     if (!db) return;
     try {
-        const productsCol = collection(db, 'products');
-        const ordersCol = collection(db, 'orders');
-        const pendingQuery = query(ordersCol, where('status', 'in', ['pending', 'paid', 'processing']));
-        const completedQuery = query(ordersCol, where('status', 'in', ['completed', 'shipped']));
-        const revenueQuery = query(ordersCol, where('status', 'in', ['completed', 'shipped', 'paid']));
-
-        const [productsCountSnap, pendingSnap, completedSnap, revenueSnap] = await Promise.all([
-            getCountFromServer(productsCol),
-            getCountFromServer(pendingQuery),
-            getCountFromServer(completedQuery),
-            getAggregateFromServer(revenueQuery, { totalRevenue: sum('amount') })
-        ]);
-
-        const upd = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
-        upd('statTotalProducts', productsCountSnap.data().count);
-        upd('statPendingOrders', pendingSnap.data().count);
-        upd('statCompletedOrders', completedSnap.data().count);
-        upd('statTotalRevenue', (revenueSnap.data().totalRevenue || 0).toFixed(8));
-        logDebug('[Dashboard] Stats server-side OK (count/sum aggregate)');
+        const productsCountSnap = await getCountFromServer(collection(db, 'products'));
+        const el = document.getElementById('statTotalProducts');
+        if (el) el.innerText = productsCountSnap.data().count;
+        logDebug('[Dashboard] Total Produk server-side OK: ' + productsCountSnap.data().count);
     } catch (e) {
-        logDebug('[Dashboard] Aggregate stats gagal (' + e.message + ') — fallback ke updateAdminStats()');
-        console.error('[Sagatama][Dashboard aggregate] ' + (e.code || '') + ' — ' + e.message);
-        updateAdminStats();
+        logDebug('[Dashboard] Products count gagal (' + e.message + ') — fallback ke updateAdminStats()');
+        console.error('[Sagatama][Dashboard products count] ' + (e.code || '') + ' — ' + e.message);
+        // Fallback: tetap pakai products.length dari array lokal
+        const el = document.getElementById('statTotalProducts');
+        if (el) el.innerText = products.length;
     }
 }
 
