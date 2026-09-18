@@ -6638,6 +6638,9 @@ function loadDataFromFirebase() {
     // Helper: snapshot handler yang sama untuk semua query variant
     function _handleOrdersSnapshot(snapshot) {
         const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Urutkan di JS (bukan andalkan orderBy Firestore) supaya pesanan
+        // yang tidak punya field createdAt tetap ikut terhitung.
+        docs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         if (checkAdmin()) {
             orders = docs;
             myOrders = docs;
@@ -6659,7 +6662,11 @@ function loadDataFromFirebase() {
         // Query WAJIB menggunakan firebaseUid agar cocok dengan rule Firestore
         let ordersQuery;
         if (checkAdmin()) {
-            ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(500));
+            // FIX: orderBy("createdAt","desc") diam-diam mengeluarkan pesanan
+            // yang tidak punya field createdAt dari hasil query — sama
+            // seperti bug produk sebelumnya. Sekarang ambil semua pesanan,
+            // urutan diatur di _handleOrdersSnapshot (client-side).
+            ordersQuery = query(collection(db, "orders"), limit(500));
             unsubscribers.orders = onSnapshot(ordersQuery, _handleOrdersSnapshot,
                 (err) => logDebug("Orders error: " + err.message + " | code: " + err.code));
         } else {
@@ -8833,6 +8840,7 @@ function renderAccount() {
 function renderAdminDashboard() {
     if (!(currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin')) { switchView('home'); return; }
     updateAdminStats();
+    updateSGTAdminStats();
     renderAdminRecentOrders();
     // Retry setelah Firebase kirim data (antisipasi race condition saat pertama login)
     setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); }, 2000);
@@ -8845,8 +8853,14 @@ function updateAdminStats() {
     upd('statPendingOrders', orders.filter(o => ['pending','paid','processing'].includes(o.status)).length);
     upd('statCompletedOrders', orders.filter(o => ['completed','shipped'].includes(o.status)).length);
     upd('statTotalRevenue', totalRevenue.toFixed(8));
-    // Update SGT stats dari Firestore secara async
-    updateSGTAdminStats();
+    // PERF: updateSGTAdminStats() DIHAPUS dari sini — sebelumnya fungsi
+    // berat ini (baca ULANG SELURUH koleksi 'users' + 'sgt_logs') ikut
+    // jalan setiap kali ADA SAJA perubahan di produk/pesanan (karena
+    // updateAdminStats dipanggil dari listener produk & pesanan), padahal
+    // data SGT-nya sendiri sudah ada listener real-time terpisah
+    // (unsubscribers.users di atas) yang meng-update elemen yang sama.
+    // Sekarang updateSGTAdminStats() cuma dipanggil sekali saat dashboard
+    // admin pertama dibuka (lihat renderAdminDashboard), jauh lebih ringan.
 }
 
 let _sgtAdminStatsLastRun = 0;
