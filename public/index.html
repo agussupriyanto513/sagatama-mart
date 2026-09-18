@@ -3890,7 +3890,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit, documentId, startAfter, getCountFromServer } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit, documentId, startAfter, getCountFromServer, getAggregateFromServer, sum } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 // ERROR HANDLER GLOBAL
 let isHandlingError = false;
@@ -6606,7 +6606,16 @@ function loadDataFromFirebase() {
         // MENGELUARKAN dokumen produk yang tidak punya field 'createdAt'
         // dari hasil query (bukan error, cuma hilang). Sekarang ambil semua
         // dokumen apa adanya, lalu urutkan di JS dengan fallback aman.
-        const productsQuery = query(collection(db, "products"));
+        // PERF FIX: sebelumnya query ini TANPA limit() — setiap listener
+        // aktif (login, buka admin, dst) menarik SELURUH koleksi 'products'
+        // sekaligus, termasuk field 'image' base64 di tiap dokumen. Untuk
+        // katalog kecil dampaknya kecil, tapi begitu produk bertambah ini
+        // jadi penyebab utama Pasar/Beranda/Admin lambat dimuat. Sekarang
+        // dibatasi 300 dokumen terbaru — cukup untuk semua kebutuhan UI
+        // saat ini, dan statTotalProducts TIDAK lagi bergantung pada
+        // jumlah ini (lihat refreshAdminDashboardStatsFromServer, yang
+        // menghitung total asli via getCountFromServer tanpa unduh dokumen).
+        const productsQuery = query(collection(db, "products"), limit(300));
         unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
             products = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             products.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -8845,11 +8854,53 @@ function renderAccount() {
 
 function renderAdminDashboard() {
     if (!(currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin')) { switchView('home'); return; }
+    // Tampilkan dulu apa yang sudah ada di memori (instan, dari listener/cache lama)
     updateAdminStats();
     updateSGTAdminStats();
     renderAdminRecentOrders();
+    // PERF FIX: angka akurat (Total Produk, Menunggu, Selesai, Pi Terjual)
+    // sekarang diambil lewat aggregation query (getCountFromServer /
+    // getAggregateFromServer) — server Firestore yang menghitung, browser
+    // cuma terima satu angka per stat. Jauh lebih cepat & lebih ringan
+    // daripada cara lama (updateAdminStats) yang harus menunggu SELURUH
+    // dokumen 'orders' (sampai 500, lengkap dengan field items/metadata)
+    // terunduh dulu baru dijumlah di JS.
+    refreshAdminDashboardStatsFromServer();
     // Retry setelah Firebase kirim data (antisipasi race condition saat pertama login)
     setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); }, 2000);
+}
+
+// PERF: hitung statistik dashboard admin LANGSUNG di server Firestore
+// (count/sum aggregate), bukan dengan mengunduh dokumen order satu-satu.
+// Kalau aggregate query gagal (mis. SDK/region belum support), diam-diam
+// fallback ke updateAdminStats() yang sudah ada (hitung dari array lokal),
+// jadi angka tetap muncul walau lebih lambat.
+async function refreshAdminDashboardStatsFromServer() {
+    if (!db) return;
+    try {
+        const productsCol = collection(db, 'products');
+        const ordersCol = collection(db, 'orders');
+        const pendingQuery = query(ordersCol, where('status', 'in', ['pending', 'paid', 'processing']));
+        const completedQuery = query(ordersCol, where('status', 'in', ['completed', 'shipped']));
+        const revenueQuery = query(ordersCol, where('status', 'in', ['completed', 'shipped', 'paid']));
+
+        const [productsCountSnap, pendingSnap, completedSnap, revenueSnap] = await Promise.all([
+            getCountFromServer(productsCol),
+            getCountFromServer(pendingQuery),
+            getCountFromServer(completedQuery),
+            getAggregateFromServer(revenueQuery, { totalRevenue: sum('amount') })
+        ]);
+
+        const upd = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+        upd('statTotalProducts', productsCountSnap.data().count);
+        upd('statPendingOrders', pendingSnap.data().count);
+        upd('statCompletedOrders', completedSnap.data().count);
+        upd('statTotalRevenue', (revenueSnap.data().totalRevenue || 0).toFixed(8));
+        logDebug('[Dashboard] Stats server-side OK (count/sum aggregate)');
+    } catch (e) {
+        logDebug('[Dashboard] Aggregate stats gagal (' + e.message + ') — fallback ke updateAdminStats()');
+        updateAdminStats();
+    }
 }
 
 function updateAdminStats() {
