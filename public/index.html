@@ -37,7 +37,7 @@
             'processSGTTransfer','redeemSGT','saveSGTSettings','distributeSGTManual',
             'burnSGT','filterAdminProducts','filterAdminOrders','updateAdminStatus',
             'filterAdminMembers','searchAdminMembers','toggleMemberBlock',
-            'openAddMemberModal','saveNewMember','deleteMember','approveMember',
+            'openAddMemberModal','saveNewMember','deleteMember','approveMember','loadMoreAdminMembers',
             'refreshPiBalance','deleteProduct','openEditProduct','saveUserAddress',
             'openExchangeRateModal','updateAdminCalculator','switchCalcMode','closeAndRemoveModal',
             'handleStartShopping','adminLogin','loginAdmin','continueAsGuest',
@@ -3890,7 +3890,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit, documentId, startAfter, getCountFromServer } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 // ERROR HANDLER GLOBAL
 let isHandlingError = false;
@@ -4084,6 +4084,15 @@ let currentAdminProductFilter = 'all';
 let currentAdminOrderFilter = 'all';
 let currentAdminMemberFilter = 'all';
 let adminMembersCache = [];
+// PERF: dulu panel Kelola Member menarik SEMUA member sekaligus
+// (limit 500) — tiap dokumen bisa membawa sampai 200 riwayat transaksi
+// SGT tertanam di dalamnya, jadi data yang ditarik bisa jadi puluhan MB
+// sekaligus dan bikin panel "muter" lama. Sekarang dimuat bertahap
+// (halaman kecil dulu) supaya panel langsung tampil cepat.
+const ADMIN_MEMBERS_PAGE_SIZE = 40;
+let _adminMembersLastDoc = null;
+let _adminMembersHasMore = false;
+let _adminMembersLoadingMore = false;
 let adminMemberSearchQuery = '';
 let pendingPayment = null;
 let paymentTimeout = null;
@@ -9077,39 +9086,82 @@ async function renderAdminMembers() {
     </div>`;
 
     try {
-        const snap = await getDocs(query(collection(db, 'users'), limit(500)));
+        // Halaman pertama saja dulu (bukan orderBy field seperti lastLogin,
+        // karena dokumen yang belum punya field itu akan hilang dari hasil
+        // — sama seperti bug orderBy createdAt di produk. orderBy(documentId())
+        // aman karena semua dokumen pasti punya ID).
+        const q = query(collection(db, 'users'), orderBy(documentId()), limit(ADMIN_MEMBERS_PAGE_SIZE));
+        const snap = await getDocs(q);
         adminMembersCache = [];
-        snap.forEach(docSnap => {
-            const d = docSnap.data();
-            adminMembersCache.push({
-                id: docSnap.id,
-                uid: d.uid || docSnap.id,
-                username: d.username || '(tanpa nama)',
-                role: d.role || (docSnap.id === 'sagatama_admin' || d.username === 'sagatama_admin' ? 'admin' : 'buyer'),
-                authType: d.authType || 'pi',
-                sgtBalance: d.sgtBalance || 0,
-                blocked: d.blocked === true,
-                allowed: d.allowed !== false,
-                pending: d.allowed === false,
-                createdAt: d.createdAt || null,
-                lastLogin: d.lastLogin || null
-            });
-        });
-        // Terbaru login duluan
-        adminMembersCache.sort((a, b) => (b.lastLogin?.seconds || 0) - (a.lastLogin?.seconds || 0));
+        _mapMemberDocsInto(snap);
 
-        updateMemberStats();
+        _adminMembersLastDoc = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null;
+        _adminMembersHasMore = snap.docs.length === ADMIN_MEMBERS_PAGE_SIZE;
+
+        refreshMemberStatsFromServer();
         applyAdminMemberFilters();
     } catch (e) {
-        logDebug('[Members] Gagal load: ' + e.message);
         container.innerHTML = `<div class="empty-state" style="text-align:center;padding:60px 20px;">
             <i class="fas fa-triangle-exclamation" style="font-size:48px;color:#D1D5DB;"></i>
             <p style="margin-top:16px;color:#6B7280;">Gagal memuat daftar member</p>
+            <p style="margin-top:4px;color:#9CA3AF;font-size:12px;">${e.message}</p>
         </div>`;
     }
 }
 
+function _mapMemberDocsInto(snap) {
+    snap.forEach(docSnap => {
+        const d = docSnap.data();
+        adminMembersCache.push({
+            id: docSnap.id,
+            uid: d.uid || docSnap.id,
+            username: d.username || '(tanpa nama)',
+            role: d.role || (docSnap.id === 'sagatama_admin' || d.username === 'sagatama_admin' ? 'admin' : 'buyer'),
+            authType: d.authType || 'pi',
+            sgtBalance: d.sgtBalance || 0,
+            blocked: d.blocked === true,
+            allowed: d.allowed !== false,
+            pending: d.allowed === false,
+            createdAt: d.createdAt || null,
+            lastLogin: d.lastLogin || null
+        });
+    });
+    // Terbaru login duluan (dihitung di JS, bukan di query, supaya member
+    // yang belum pernah login tetap ikut muncul)
+    adminMembersCache.sort((a, b) => (b.lastLogin?.seconds || 0) - (a.lastLogin?.seconds || 0));
+}
+
+window.loadMoreAdminMembers = async function() {
+    if (!db || _adminMembersLoadingMore || !_adminMembersHasMore) return;
+    _adminMembersLoadingMore = true;
+    const btn = document.getElementById('loadMoreMembersBtn');
+    if (btn) { btn.disabled = true; btn.innerText = 'Memuat...'; }
+
+    try {
+        const q = query(
+            collection(db, 'users'),
+            orderBy(documentId()),
+            startAfter(_adminMembersLastDoc),
+            limit(ADMIN_MEMBERS_PAGE_SIZE)
+        );
+        const snap = await getDocs(q);
+        _mapMemberDocsInto(snap);
+
+        if (snap.docs.length > 0) _adminMembersLastDoc = snap.docs[snap.docs.length - 1];
+        _adminMembersHasMore = snap.docs.length === ADMIN_MEMBERS_PAGE_SIZE;
+
+        updateMemberStats();
+        applyAdminMemberFilters();
+    } catch (e) {
+        showToast('Gagal memuat member berikutnya: ' + e.message, 'error');
+    } finally {
+        _adminMembersLoadingMore = false;
+    }
+};
+
 function updateMemberStats() {
+    // Fallback: hitung dari cache lokal (cuma mewakili halaman yang sudah
+    // dimuat, dipakai kalau getCountFromServer gagal/belum didukung).
     const total = adminMembersCache.length;
     const blocked = adminMembersCache.filter(m => m.blocked).length;
     const pending = adminMembersCache.filter(m => m.pending).length;
@@ -9119,6 +9171,34 @@ function updateMemberStats() {
     set('memberStatActive', active);
     set('memberStatBlocked', blocked);
     set('memberStatPending', pending);
+}
+
+// PERF: statistik total/aktif/diblokir/menunggu dihitung LANGSUNG di server
+// Firestore (getCountFromServer) — ini cuma mengembalikan angka, TIDAK
+// mengunduh isi dokumennya. Jadi tetap akurat untuk SEMUA member walau
+// daftar yang ditampilkan cuma dimuat bertahap (pagination) di panel.
+async function refreshMemberStatsFromServer() {
+    if (!db) return;
+    try {
+        const usersCol = collection(db, 'users');
+        const [totalSnap, blockedSnap, pendingSnap] = await Promise.all([
+            getCountFromServer(usersCol),
+            getCountFromServer(query(usersCol, where('blocked', '==', true))),
+            getCountFromServer(query(usersCol, where('allowed', '==', false)))
+        ]);
+        const total = totalSnap.data().count;
+        const blocked = blockedSnap.data().count;
+        const pending = pendingSnap.data().count;
+        const active = Math.max(0, total - blocked - pending);
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+        set('memberStatTotal', total);
+        set('memberStatActive', active);
+        set('memberStatBlocked', blocked);
+        set('memberStatPending', pending);
+    } catch (e) {
+        // Fallback ke hitungan dari cache lokal kalau count query gagal
+        updateMemberStats();
+    }
 }
 
 window.filterAdminMembers = function(filter, btn) {
@@ -9217,7 +9297,13 @@ function renderMembersList(list) {
             </div>`;
             })()}
         </div>`;
-    }).join('');
+    }).join('') + (_adminMembersHasMore ? `
+        <div style="text-align:center;margin-top:8px;">
+            <button id="loadMoreMembersBtn" onclick="loadMoreAdminMembers()"
+                style="background:#F3F4F6;border:none;padding:12px 24px;border-radius:12px;color:#374151;font-weight:700;font-size:13px;cursor:pointer;">
+                Muat Lebih Banyak Member
+            </button>
+        </div>` : '');
 }
 
 window.toggleMemberBlock = async function(memberId, isCurrentlyBlocked) {
@@ -9238,6 +9324,7 @@ window.toggleMemberBlock = async function(memberId, isCurrentlyBlocked) {
         if (idx > -1) adminMembersCache[idx].blocked = willBlock;
 
         updateMemberStats();
+        refreshMemberStatsFromServer();
         applyAdminMemberFilters();
         showToast(willBlock ? 'Member berhasil diblokir' : 'Blokir member dibuka', 'success');
     } catch (e) {
@@ -9284,6 +9371,7 @@ window.approveMember = async function(memberId) {
         }
 
         updateMemberStats();
+        refreshMemberStatsFromServer();
         applyAdminMemberFilters();
         showToast('Member berhasil disetujui, sekarang bisa login', 'success');
     } catch (e) {
@@ -9301,6 +9389,7 @@ window.deleteMember = async function(memberId, username) {
 
         adminMembersCache = adminMembersCache.filter(m => m.id !== memberId);
         updateMemberStats();
+        refreshMemberStatsFromServer();
         applyAdminMemberFilters();
         showToast('Member "@' + username + '" berhasil dihapus', 'success');
     } catch (e) {
@@ -11672,6 +11761,7 @@ if (typeof window._registerReal === 'function') {
         toggleMemberBlock: window.toggleMemberBlock,
         openAddMemberModal: window.openAddMemberModal, saveNewMember: window.saveNewMember,
         deleteMember: window.deleteMember, approveMember: window.approveMember,
+        loadMoreAdminMembers: window.loadMoreAdminMembers,
         refreshPiBalance: window.refreshPiBalance, deleteProduct: window.deleteProduct,
         saveUserAddress: window.saveUserAddress, openExchangeRateModal: window.openExchangeRateModal,
         updateAdminCalculator: window.updateAdminCalculator, switchCalcMode: window.switchCalcMode, closeAndRemoveModal: window.closeAndRemoveModal,
