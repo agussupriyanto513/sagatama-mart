@@ -8930,7 +8930,14 @@ async function refreshAdminDashboardStatsFromServer() {
 function updateAdminStats() {
     const totalRevenue = orders.filter(o => ['completed','shipped','paid'].includes(o.status)).reduce((s, o) => s + (o.amount || 0), 0);
     const upd = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
-    upd('statTotalProducts', products.length);
+    // FIX: statTotalProducts SENGAJA TIDAK ditulis di sini lagi. Sumber
+    // kebenarannya sekarang cuma refreshAdminDashboardStatsFromServer()
+    // (aggregate count ke server). Sebelumnya baris ini ikut menimpa balik
+    // ke products.length dari array lokal setiap kali updateAdminStats()
+    // dipanggil (termasuk dari retry loop tiap 1.5 detik) — kalau array
+    // lokal itu masih kosong/belum lengkap saat retry jalan, angka yang
+    // sudah benar dari server ketimpa jadi 0 lagi. Ini penyebab "produk
+    // muncul sebentar lalu balik ke 0".
     upd('statPendingOrders', orders.filter(o => ['pending','paid','processing'].includes(o.status)).length);
     upd('statCompletedOrders', orders.filter(o => ['completed','shipped'].includes(o.status)).length);
     upd('statTotalRevenue', totalRevenue.toFixed(8));
