@@ -6640,9 +6640,16 @@ function loadDataFromFirebase() {
             renderFlashSale();
             updateAdminStats();
             if (checkAdmin()) renderAdminProducts();
-        }, (err) => logDebug("Products error: " + err.message + " | code: " + err.code));
+        }, (err) => {
+            logDebug("Products error: " + err.message + " | code: " + err.code);
+            // DIAGNOSTIK: logDebug dimatikan total di production (lihat definisinya),
+            // jadi error Firestore selama ini tidak pernah terlihat di console.
+            // console.error TIDAK terpengaruh logDebug, jadi ini akan selalu tampil.
+            console.error('[Sagatama][Products listener] ' + err.code + ' — ' + err.message);
+        });
     } catch (e) {
         logDebug("Products query error: " + e.message);
+        console.error('[Sagatama][Products query] ' + e.message);
     }
 
     // Helper: filter myOrders dari semua field kepemilikan
@@ -6691,7 +6698,10 @@ function loadDataFromFirebase() {
             // urutan diatur di _handleOrdersSnapshot (client-side).
             ordersQuery = query(collection(db, "orders"), limit(500));
             unsubscribers.orders = onSnapshot(ordersQuery, _handleOrdersSnapshot,
-                (err) => logDebug("Orders error: " + err.message + " | code: " + err.code));
+                (err) => {
+                    logDebug("Orders error: " + err.message + " | code: " + err.code);
+                    console.error('[Sagatama][Orders listener/admin] ' + err.code + ' — ' + err.message);
+                });
         } else {
             const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid || null;
 
@@ -6715,6 +6725,7 @@ function loadDataFromFirebase() {
 
             unsubscribers.orders = onSnapshot(ordersQuery, _handleOrdersSnapshot, async (err) => {
                 logDebug("Orders error: " + err.message + " | code: " + err.code);
+                console.error('[Sagatama][Orders listener/user] ' + err.code + ' — ' + err.message);
 
                 // FALLBACK: jika index belum siap (failed-precondition), query tanpa orderBy
                 // lalu sort di sisi client
@@ -8913,6 +8924,7 @@ async function refreshAdminDashboardStatsFromServer() {
         logDebug('[Dashboard] Stats server-side OK (count/sum aggregate)');
     } catch (e) {
         logDebug('[Dashboard] Aggregate stats gagal (' + e.message + ') — fallback ke updateAdminStats()');
+        console.error('[Sagatama][Dashboard aggregate] ' + (e.code || '') + ' — ' + e.message);
         updateAdminStats();
     }
 }
