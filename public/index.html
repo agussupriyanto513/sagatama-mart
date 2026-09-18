@@ -37,7 +37,7 @@
             'processSGTTransfer','redeemSGT','saveSGTSettings','distributeSGTManual',
             'burnSGT','filterAdminProducts','filterAdminOrders','updateAdminStatus',
             'filterAdminMembers','searchAdminMembers','toggleMemberBlock',
-            'openAddMemberModal','saveNewMember','deleteMember','approveMember','loadMoreAdminMembers',
+            'openAddMemberModal','saveNewMember','deleteMember','approveMember',
             'refreshPiBalance','deleteProduct','openEditProduct','saveUserAddress',
             'openExchangeRateModal','updateAdminCalculator','switchCalcMode','closeAndRemoveModal',
             'handleStartShopping','adminLogin','loginAdmin','continueAsGuest',
@@ -1935,7 +1935,7 @@
                     <div style="width:40px;height:40px;background:linear-gradient(135deg,#FCD34D,#F59E0B);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#1A0533;font-weight:900;font-size:16px;">₴</div>
                     <div>
                         <p style="font-weight:800;color:#1F2937;font-size:15px;margin:0;">SGT Tokenomics</p>
-                        <p style="font-size:11px;color:#64748B;margin:0;">Sagatama Token · Hard Cap 1 Miliar</p>
+                        <p style="font-size:11px;color:#64748B;margin:0;">Sagatama Token · Hard Cap 100 Juta</p>
                     </div>
                     <button onclick="loadSupplyStats()" style="margin-left:auto;background:#F3F4F6;border:none;width:34px;height:34px;border-radius:9px;cursor:pointer;color:#6B7280;font-size:13px;">
                         <i class="fas fa-sync-alt"></i>
@@ -1953,7 +1953,7 @@
                     </div>
                     <div style="display:flex;justify-content:space-between;margin-top:3px;">
                         <span style="font-size:9px;color:#9CA3AF;">0 SGT</span>
-                        <span style="font-size:9px;color:#9CA3AF;">Hard Cap: 1,000,000,000 SGT</span>
+                        <span style="font-size:9px;color:#9CA3AF;">Hard Cap: 100,000,000 SGT</span>
                     </div>
                 </div>
 
@@ -2198,7 +2198,7 @@
                     </div>
                     <div style="display:flex;justify-content:space-between;">
                         <span style="font-size:10px;color:rgba(255,255,255,0.5);">Circulating: <span id="supplyCirculating" style="color:#6EE7B7;">0</span></span>
-                        <span style="font-size:10px;color:rgba(255,255,255,0.5);">Hard Cap: <span id="supplyHardCap" style="color:#FCD34D;">1B</span></span>
+                        <span style="font-size:10px;color:rgba(255,255,255,0.5);">Hard Cap: <span id="supplyHardCap" style="color:#FCD34D;">100M</span></span>
                     </div>
                 </div>
                 
@@ -3245,7 +3245,7 @@
                         <p style="font-size:10px;opacity:0.6;margin:4px 0 0;">Circulating</p>
                     </div>
                     <div style="background:rgba(252,211,77,0.15);border:1px solid rgba(252,211,77,0.2);border-radius:12px;padding:12px;text-align:center;">
-                        <p id="analyticsHardCap" style="font-size:18px;font-weight:800;color:#FCD34D;margin:0;">1B</p>
+                        <p id="analyticsHardCap" style="font-size:18px;font-weight:800;color:#FCD34D;margin:0;">100M</p>
                         <p style="font-size:10px;opacity:0.6;margin:4px 0 0;">Hard Cap</p>
                     </div>
                     <div style="background:rgba(252,165,165,0.15);border:1px solid rgba(252,165,165,0.2);border-radius:12px;padding:12px;text-align:center;">
@@ -3867,8 +3867,8 @@
                 <p style="font-size:11px;color:rgba(255,255,255,0.65);margin-bottom:12px;">Reset statistik supply dari awal. Saldo SGT user TIDAK terpengaruh.</p>
                 <div class="form-group">
                     <label class="form-label" style="color:rgba(255,255,255,0.8);">Hard Cap Baru (SGT)</label>
-                    <input type="number" id="resetSupplyCap" class="form-input" placeholder="Default: 1000000000" min="1000" style="background:rgba(255,255,255,0.1);color:white;border-color:rgba(255,255,255,0.2);">
-                    <p style="font-size:10px;color:rgba(255,255,255,0.5);margin:4px 0 0;">Kosongkan untuk pakai cap saat ini (1 Miliar)</p>
+                    <input type="number" id="resetSupplyCap" class="form-input" placeholder="Default: 100000000" min="1000" style="background:rgba(255,255,255,0.1);color:white;border-color:rgba(255,255,255,0.2);">
+                    <p style="font-size:10px;color:rgba(255,255,255,0.5);margin:4px 0 0;">Kosongkan untuk pakai cap saat ini (100 Juta)</p>
                 </div>
                 <div class="form-group">
                     <label class="form-label" style="color:rgba(255,255,255,0.8);">Circulating Supply Awal (SGT)</label>
@@ -3890,7 +3890,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit, documentId, startAfter, getCountFromServer } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where, writeBatch, getDoc, setDoc, limit } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 // ERROR HANDLER GLOBAL
 let isHandlingError = false;
@@ -4084,15 +4084,6 @@ let currentAdminProductFilter = 'all';
 let currentAdminOrderFilter = 'all';
 let currentAdminMemberFilter = 'all';
 let adminMembersCache = [];
-// PERF: dulu panel Kelola Member menarik SEMUA member sekaligus
-// (limit 500) — tiap dokumen bisa membawa sampai 200 riwayat transaksi
-// SGT tertanam di dalamnya, jadi data yang ditarik bisa jadi puluhan MB
-// sekaligus dan bikin panel "muter" lama. Sekarang dimuat bertahap
-// (halaman kecil dulu) supaya panel langsung tampil cepat.
-const ADMIN_MEMBERS_PAGE_SIZE = 40;
-let _adminMembersLastDoc = null;
-let _adminMembersHasMore = false;
-let _adminMembersLoadingMore = false;
 let adminMemberSearchQuery = '';
 let pendingPayment = null;
 let paymentTimeout = null;
@@ -4102,7 +4093,7 @@ let paymentTimeout = null;
 
 // SGT TOKENOMICS ENGINE v2.0
 // Hard cap & genesis allocation
-const SGT_HARD_CAP        = 1_000_000_000; // 1 miliar SGT maksimum
+const SGT_HARD_CAP        = 100_000_000; // 100 juta SGT maksimum
 const SGT_GENESIS_ALLOC   = {
     komunitas : 0.70, // 70% reward user
     treasury  : 0.15, // 15% operasional
@@ -5449,7 +5440,7 @@ window.loadSupplyStats = async function loadSupplyStats() {
 
         // Also update wallet view panel
         const fmt = n => n >= 1e6 ? (n/1e6).toFixed(2)+'jt' : n.toLocaleString('id-ID');
-        upd('walletCirculating', fmt(sgtCirculatingSupply) + ' / ' + fmt(SGT_HARD_CAP) + ' SGT');
+        upd('walletCirculating', fmt(sgtCirculatingSupply) + ' / 100jt SGT');
         upd('walletBurned',   fmt(sgtTotalBurned));
         upd('walletFeePool',  fmt(sgtFeePool));
         const wbar = document.getElementById('walletSupplyBar');
@@ -6307,44 +6298,17 @@ async function init() {
 }
 
 // Verifikasi sesi user masih valid di Firestore (background check)
-// GERBANG WHITELIST (sesi tersimpan): sebelumnya fungsi ini cuma sinkron
-// address/fullName dan TIDAK PERNAH mengecek ulang status blocked/allowed.
-// Akibatnya member yang sesinya tersimpan di localStorage (sagatama_user)
-// tetap bisa terus pakai app selamanya walau admin baru saja memblokirnya
-// atau member itu sebenarnya belum/tidak pernah disetujui — inilah sebabnya
-// "semua member bisa login". Sekarang setiap kali app dibuka, status member
-// di Firestore dicek ulang dan sesi dipaksa logout kalau sudah tidak valid.
 async function verifyUserSession() {
     if (!currentUser?.uid || !db) return;
-    // Admin tidak tunduk pada gerbang whitelist member
-    if (currentUser.role === 'admin' || currentUser.username === 'sagatama_admin') return;
     try {
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
         if (userDoc.exists()) {
             const data = userDoc.data();
-
-            if (data.blocked === true) {
-                logDebug('[verifyUserSession] Sesi ditolak: member diblokir (' + currentUser.uid + ')');
-                showToast('Akun Anda diblokir oleh admin. Anda telah dikeluarkan.', 'error');
-                window.logout();
-                return;
-            }
-            if (data.allowed === false) {
-                logDebug('[verifyUserSession] Sesi ditolak: member belum/tidak disetujui admin (' + currentUser.uid + ')');
-                showToast('Akun Anda belum diizinkan admin untuk login. Anda telah dikeluarkan.', 'error');
-                window.logout();
-                return;
-            }
-
             // Update data terbaru ke currentUser
             currentUser.address = data.address || currentUser.address;
             currentUser.fullName = data.fullName || currentUser.fullName;
             localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
             logDebug("User session verified: @" + currentUser.username);
-        } else {
-            // Dokumen user sudah dihapus admin — sesi lokal tidak valid lagi
-            logDebug('[verifyUserSession] Sesi ditolak: dokumen member tidak ditemukan (' + currentUser.uid + ')');
-            window.logout();
         }
     } catch (e) {
         logDebug("verifyUserSession error: " + e.message);
@@ -6382,6 +6346,7 @@ async function initPiSDKRobust() {
         // Tidak perlu retry 5x × 2-10 detik = buang 34 detik percuma
         if (!window.Pi && navigator.userAgent.indexOf('PiBrowser') === -1) {
             logDebug('[AUTH-v3] Bukan Pi Browser — skip Pi SDK init');
+            alert('[DEBUG SEMENTARA] Dianggap BUKAN Pi Browser. UA=' + navigator.userAgent + ' | hostname=' + window.location.hostname); // TODO: hapus baris ini setelah selesai diagnosa
             resolve(false);
             return;
         }
@@ -6396,6 +6361,7 @@ async function initPiSDKRobust() {
                     await delay(1500);
                     // Cek lagi setelah delay — kalau tetap tidak ada, keluar
                     if (!window.Pi) {
+                        alert('[DEBUG SEMENTARA] window.Pi tetap undefined setelah 1.5 detik menunggu. hostname=' + window.location.hostname); // TODO: hapus baris ini setelah selesai diagnosa
                         resolve(false);
                         return;
                     }
@@ -6416,6 +6382,7 @@ async function initPiSDKRobust() {
 
             } catch (err) {
                 logDebug(`[AUTH-v3] Pi SDK init gagal: ${err.message}`);
+                alert('[DEBUG SEMENTARA] Pi.init() gagal: ' + err.message + ' | attempt=' + piInitAttempts + ' | hostname=' + window.location.hostname); // TODO: hapus baris ini setelah selesai diagnosa
                 const waitTime = Math.min(2000 * Math.pow(2, piInitAttempts - 1), 5000);
                 await delay(waitTime);
             }
@@ -6602,14 +6569,9 @@ function loadDataFromFirebase() {
     const checkAdmin = () => currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin';
 
     try {
-        // FIX: orderBy("createdAt","desc") langsung di Firestore diam-diam
-        // MENGELUARKAN dokumen produk yang tidak punya field 'createdAt'
-        // dari hasil query (bukan error, cuma hilang). Sekarang ambil semua
-        // dokumen apa adanya, lalu urutkan di JS dengan fallback aman.
-        const productsQuery = query(collection(db, "products"));
+        const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
         unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
             products = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            products.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
             localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
             renderProducts();
             renderFeaturedProducts();
@@ -6638,9 +6600,6 @@ function loadDataFromFirebase() {
     // Helper: snapshot handler yang sama untuk semua query variant
     function _handleOrdersSnapshot(snapshot) {
         const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        // Urutkan di JS (bukan andalkan orderBy Firestore) supaya pesanan
-        // yang tidak punya field createdAt tetap ikut terhitung.
-        docs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         if (checkAdmin()) {
             orders = docs;
             myOrders = docs;
@@ -6662,11 +6621,7 @@ function loadDataFromFirebase() {
         // Query WAJIB menggunakan firebaseUid agar cocok dengan rule Firestore
         let ordersQuery;
         if (checkAdmin()) {
-            // FIX: orderBy("createdAt","desc") diam-diam mengeluarkan pesanan
-            // yang tidak punya field createdAt dari hasil query — sama
-            // seperti bug produk sebelumnya. Sekarang ambil semua pesanan,
-            // urutan diatur di _handleOrdersSnapshot (client-side).
-            ordersQuery = query(collection(db, "orders"), limit(500));
+            ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(500));
             unsubscribers.orders = onSnapshot(ordersQuery, _handleOrdersSnapshot,
                 (err) => logDebug("Orders error: " + err.message + " | code: " + err.code));
         } else {
@@ -6885,6 +6840,23 @@ async function processPiAuthSuccess(authResult) {
         walletAddress: authResult.user.wallet_address || null,
         authType: 'pi'
     };
+    // PERF: mulai Firebase anonymous sign-in SEKARANG secara paralel (tidak
+    // di-await dulu) — proses ini independen dari pengecekan admin/whitelist
+    // di Firestore, jadi keduanya bisa jalan bersamaan alih-alih berurutan.
+    // Ini menghemat 1 round-trip jaringan penuh dari waktu login total.
+    let _anonSignInPromise = null;
+    if (auth && !auth.currentUser) {
+        _anonSignInPromise = signInAnonymously(auth).catch(fbErr => {
+            logDebug("[AUTH-v3] Firebase anon warning (non-kritis): " + fbErr.message);
+            return null;
+        });
+    }
+
+    // Jika member sudah ditemukan lewat gerbang whitelist di bawah, simpan
+    // snapshot-nya di sini supaya ensureUserDocumentExists() tidak perlu
+    // getDoc() lagi ke dokumen yang sama (hemat 1 round-trip lagi).
+    let _memberSnapForReuse = null;
+
     // Jika terdeteksi sebagai admin via Pi UID, konfirmasi ke Firestore
     if (_piIsAdmin && db) {
         try {
@@ -6906,6 +6878,7 @@ async function processPiAuthSuccess(authResult) {
         try {
             const _memberRef = doc(db, 'users', piUid);
             const _memberSnap = await getDoc(_memberRef);
+            _memberSnapForReuse = _memberSnap;
 
             if (!_memberSnap.exists()) {
                 // Member baru — belum pernah terdaftar sama sekali.
@@ -6953,20 +6926,7 @@ async function processPiAuthSuccess(authResult) {
                 return;
             }
         } catch (_memberCheckErr) {
-            // FIX: sebelumnya error di sini (mis. permission-denied, offline,
-            // dsb) HANYA di-log (tidak tampil di production) lalu login tetap
-            // DILANJUTKAN begitu saja — akibatnya: (1) member baru "lolos"
-            // tanpa data pendaftarannya pernah benar-benar tersimpan ke
-            // Firestore ("member belum bisa disimpan"), dan (2) gerbang
-            // whitelist bisa dilewati begitu saja kalau terjadi error apapun.
-            // Sekarang: gagal di sini = TOLAK login (fail-closed) dan
-            // tampilkan pesan errornya supaya kelihatan penyebabnya.
-            logDebug('[AUTH-v3] Member check error: ' + _memberCheckErr.message);
-            showToast('Gagal memverifikasi akun member: ' + _memberCheckErr.message, 'error');
-            currentUser = null;
-            isPiAuthenticated = false;
-            restorePiLoginButton();
-            return;
+            logDebug('[AUTH-v3] Member check skip: ' + _memberCheckErr.message);
         }
     }
     
@@ -6975,15 +6935,17 @@ async function processPiAuthSuccess(authResult) {
     logDebug(`[AUTH-v3] User authenticated: @${currentUser.username} | UID: ${piUid}`);
     
     // Step 5: Firebase Auth - Anonymous sign in untuk Firestore write permission
+    // (promise-nya sudah dimulai lebih awal secara paralel di atas, di sini
+    // kita tinggal menunggu hasilnya — bukan memulai proses baru)
     let firebaseUid = null;
     try {
         if (auth) {
-            if (!auth.currentUser) {
-                const anonResult = await signInAnonymously(auth);
-                firebaseUid = anonResult.user.uid;
-                logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
+            if (_anonSignInPromise) {
+                const anonResult = await _anonSignInPromise;
+                firebaseUid = anonResult?.user?.uid || auth.currentUser?.uid || null;
+                if (anonResult) logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
             } else {
-                firebaseUid = auth.currentUser.uid;
+                firebaseUid = auth.currentUser?.uid || null;
             }
         }
     } catch (fbErr) {
@@ -6996,38 +6958,35 @@ async function processPiAuthSuccess(authResult) {
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
     }
 
-    // PERF FIX v4: sebelumnya modal login BARU ditutup setelah
-    // ensureUserDocumentExists() + loadSGTDataFixed(true) selesai — padahal
-    // dua request Firestore/API ini tidak wajib selesai duluan sebelum user
-    // boleh melihat dirinya sudah login. Gerbang whitelist + Firebase auth
-    // di atas sudah cukup untuk menganggap login SAH. Sekarang UI "sudah
-    // login" langsung ditampilkan, sementara dokumen user & saldo SGT
-    // dimuat di background — ini komponen utama sisa rasa lambat saat login.
+    // PERF FIX: Step 6 & 7 sebelumnya di-await satu-satu (2 round-trip
+    // berurutan). Untuk user Pi asli, loadSGTDataFixed mengambil saldo dari
+    // ledger pusat (bukan dari dokumen 'users' yang dibuat ensureUserDocumentExists),
+    // jadi keduanya independen dan aman dijalankan paralel.
+    // Step 6: Pastikan dokumen user ada di Firestore dengan UID yang benar
+    // Step 7: Load SGT data dengan strategi multi-fallback
+    await Promise.all([
+        ensureUserDocumentExists(piUid, currentUser.username, firebaseUid, _memberSnapForReuse),
+        loadSGTDataFixed(true)
+    ]);
+    
+    // Step 8: Start realtime listener untuk SGT
+    if (currentUser.uid) {
+        listenUserSGTBalanceFixed(currentUser.uid);
+    }
+    
     showSGTElements(true);
     updateUI();
-
+    
+    // Refresh sosial module after login
+    if (typeof updateSosialUI === 'function') setTimeout(updateSosialUI, 500);
+    if (typeof updateAdminSosialBadge === 'function' && userRole === 'admin') setTimeout(updateAdminSosialBadge, 600);
+    
     closeModal('piAuthModal');
     closeModal('loginOptionsModal');
     showToast(`Selamat datang, @${currentUser.username}! 🎉`, 'success');
     logDebug("[AUTH-v3] Auth sukses: @" + currentUser.username);
-
+    
     loadDataFromFirebase();
-
-    // Step 6, 7 & 8 (background, tidak diblokir): pastikan dokumen user ada,
-    // muat saldo SGT dari ledger pusat, lalu nyalakan listener realtime.
-    Promise.all([
-        ensureUserDocumentExists(piUid, currentUser.username, firebaseUid),
-        loadSGTDataFixed(true)
-    ]).then(() => {
-        if (currentUser && currentUser.uid) {
-            listenUserSGTBalanceFixed(currentUser.uid);
-        }
-        updateUI();
-    }).catch(e => logDebug('[AUTH-v3] Background post-login load error: ' + e.message));
-
-    // Refresh sosial module after login
-    if (typeof updateSosialUI === 'function') setTimeout(updateSosialUI, 500);
-    if (typeof updateAdminSosialBadge === 'function' && userRole === 'admin') setTimeout(updateAdminSosialBadge, 600);
     
     // Re-filter myOrders setelah login berhasil — cover semua field ownership
     if (orders.length > 0) {
@@ -7187,19 +7146,22 @@ window.manualPiLogin = async function() {
             authType: 'pi_manual'
         };
         
-        await setDoc(doc(db, 'users', targetUid), {
-            username: username,
-            uid: targetUid,
-            authType: 'pi_manual',
-            createdAt: existingData.createdAt || serverTimestamp(),
-            lastLogin: serverTimestamp(),
-            sgtBalance: existingData.sgtBalance || 0,
-            sgtTransactions: existingData.sgtTransactions || []
-        }, { merge: true });
-        
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
         
-        await loadSGTDataFixed(true);
+        // PERF: update lastLogin & load data SGT dijalankan BERSAMAAN
+        // (keduanya independen) alih-alih menunggu satu per satu.
+        await Promise.all([
+            setDoc(doc(db, 'users', targetUid), {
+                username: username,
+                uid: targetUid,
+                authType: 'pi_manual',
+                createdAt: existingData.createdAt || serverTimestamp(),
+                lastLogin: serverTimestamp(),
+                sgtBalance: existingData.sgtBalance || 0,
+                sgtTransactions: existingData.sgtTransactions || []
+            }, { merge: true }),
+            loadSGTDataFixed(true)
+        ]);
         listenUserSGTBalanceFixed(targetUid);
 
         // Flush SGT offline queue jika ada reward yang belum tersimpan
@@ -7219,14 +7181,17 @@ window.manualPiLogin = async function() {
 };
 
 // SECTION D: ENSURE USER DOCUMENT EXISTS - v3
-async function ensureUserDocumentExists(piUid, username, firebaseUid) {
+async function ensureUserDocumentExists(piUid, username, firebaseUid, preFetchedSnap) {
     if (!db) return;
     
     logDebug(`[SGT-v3] Ensure user doc: piUid=${piUid}, username=${username}`);
     
     try {
         const userRef = doc(db, 'users', piUid);
-        const userSnap = await getDoc(userRef);
+        // PERF: jika snapshot dokumen ini sudah pernah diambil sebelumnya
+        // (misalnya oleh gerbang whitelist member saat login), pakai ulang
+        // hasilnya di sini alih-alih getDoc() lagi ke dokumen yang sama.
+        const userSnap = preFetchedSnap || await getDoc(userRef);
         
         if (!userSnap.exists()) {
             logDebug(`[SGT-v3] Dokumen baru: ${piUid}`);
@@ -7777,17 +7742,7 @@ async function completePaymentOnServer(paymentId, txid, cartSnapshot) {
     }
 
     const finalAmount = pendingPayment?.amount || 0;
-    const _rawItems   = cartSnapshot || pendingPayment?.items || [];
-    // FIX: item keranjang membawa field 'image' (foto produk base64 —
-    // bisa puluhan-ratusan KB per item) yang HANYA dipakai untuk tampilan
-    // halaman Keranjang, TIDAK PERNAH dipakai lagi di halaman riwayat
-    // pesanan mana pun. Tapi field itu ikut tersimpan PERMANEN ke setiap
-    // dokumen order kalau tidak dibuang di sini — akibatnya koleksi
-    // 'orders' membengkak dan bikin dashboard admin (Pi Terjual, dll)
-    // lambat setiap kali menarik ratusan pesanan sekaligus.
-    const finalItems  = _rawItems.map(i => ({
-        id: i.id, name: i.name, qty: i.qty, pricePi: parseFloat(i.pricePi) || 0
-    }));
+    const finalItems  = cartSnapshot || pendingPayment?.items || [];
     const sgtEarned   = calculateSGTReward(finalAmount);
 
     // Langkah 2: Simpan order ke Firestore (baik server berhasil maupun tidak)
@@ -8850,7 +8805,6 @@ function renderAccount() {
 function renderAdminDashboard() {
     if (!(currentUser?.role === 'admin' || currentUser?.username === 'sagatama_admin')) { switchView('home'); return; }
     updateAdminStats();
-    updateSGTAdminStats();
     renderAdminRecentOrders();
     // Retry setelah Firebase kirim data (antisipasi race condition saat pertama login)
     setTimeout(() => { updateAdminStats(); renderAdminRecentOrders(); }, 2000);
@@ -8863,14 +8817,8 @@ function updateAdminStats() {
     upd('statPendingOrders', orders.filter(o => ['pending','paid','processing'].includes(o.status)).length);
     upd('statCompletedOrders', orders.filter(o => ['completed','shipped'].includes(o.status)).length);
     upd('statTotalRevenue', totalRevenue.toFixed(8));
-    // PERF: updateSGTAdminStats() DIHAPUS dari sini — sebelumnya fungsi
-    // berat ini (baca ULANG SELURUH koleksi 'users' + 'sgt_logs') ikut
-    // jalan setiap kali ADA SAJA perubahan di produk/pesanan (karena
-    // updateAdminStats dipanggil dari listener produk & pesanan), padahal
-    // data SGT-nya sendiri sudah ada listener real-time terpisah
-    // (unsubscribers.users di atas) yang meng-update elemen yang sama.
-    // Sekarang updateSGTAdminStats() cuma dipanggil sekali saat dashboard
-    // admin pertama dibuka (lihat renderAdminDashboard), jauh lebih ringan.
+    // Update SGT stats dari Firestore secara async
+    updateSGTAdminStats();
 }
 
 let _sgtAdminStatsLastRun = 0;
@@ -9110,82 +9058,39 @@ async function renderAdminMembers() {
     </div>`;
 
     try {
-        // Halaman pertama saja dulu (bukan orderBy field seperti lastLogin,
-        // karena dokumen yang belum punya field itu akan hilang dari hasil
-        // — sama seperti bug orderBy createdAt di produk. orderBy(documentId())
-        // aman karena semua dokumen pasti punya ID).
-        const q = query(collection(db, 'users'), orderBy(documentId()), limit(ADMIN_MEMBERS_PAGE_SIZE));
-        const snap = await getDocs(q);
+        const snap = await getDocs(query(collection(db, 'users'), limit(500)));
         adminMembersCache = [];
-        _mapMemberDocsInto(snap);
-
-        _adminMembersLastDoc = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null;
-        _adminMembersHasMore = snap.docs.length === ADMIN_MEMBERS_PAGE_SIZE;
-
-        refreshMemberStatsFromServer();
-        applyAdminMemberFilters();
-    } catch (e) {
-        container.innerHTML = `<div class="empty-state" style="text-align:center;padding:60px 20px;">
-            <i class="fas fa-triangle-exclamation" style="font-size:48px;color:#D1D5DB;"></i>
-            <p style="margin-top:16px;color:#6B7280;">Gagal memuat daftar member</p>
-            <p style="margin-top:4px;color:#9CA3AF;font-size:12px;">${e.message}</p>
-        </div>`;
-    }
-}
-
-function _mapMemberDocsInto(snap) {
-    snap.forEach(docSnap => {
-        const d = docSnap.data();
-        adminMembersCache.push({
-            id: docSnap.id,
-            uid: d.uid || docSnap.id,
-            username: d.username || '(tanpa nama)',
-            role: d.role || (docSnap.id === 'sagatama_admin' || d.username === 'sagatama_admin' ? 'admin' : 'buyer'),
-            authType: d.authType || 'pi',
-            sgtBalance: d.sgtBalance || 0,
-            blocked: d.blocked === true,
-            allowed: d.allowed !== false,
-            pending: d.allowed === false,
-            createdAt: d.createdAt || null,
-            lastLogin: d.lastLogin || null
+        snap.forEach(docSnap => {
+            const d = docSnap.data();
+            adminMembersCache.push({
+                id: docSnap.id,
+                uid: d.uid || docSnap.id,
+                username: d.username || '(tanpa nama)',
+                role: d.role || (docSnap.id === 'sagatama_admin' || d.username === 'sagatama_admin' ? 'admin' : 'buyer'),
+                authType: d.authType || 'pi',
+                sgtBalance: d.sgtBalance || 0,
+                blocked: d.blocked === true,
+                allowed: d.allowed !== false,
+                pending: d.allowed === false,
+                createdAt: d.createdAt || null,
+                lastLogin: d.lastLogin || null
+            });
         });
-    });
-    // Terbaru login duluan (dihitung di JS, bukan di query, supaya member
-    // yang belum pernah login tetap ikut muncul)
-    adminMembersCache.sort((a, b) => (b.lastLogin?.seconds || 0) - (a.lastLogin?.seconds || 0));
-}
-
-window.loadMoreAdminMembers = async function() {
-    if (!db || _adminMembersLoadingMore || !_adminMembersHasMore) return;
-    _adminMembersLoadingMore = true;
-    const btn = document.getElementById('loadMoreMembersBtn');
-    if (btn) { btn.disabled = true; btn.innerText = 'Memuat...'; }
-
-    try {
-        const q = query(
-            collection(db, 'users'),
-            orderBy(documentId()),
-            startAfter(_adminMembersLastDoc),
-            limit(ADMIN_MEMBERS_PAGE_SIZE)
-        );
-        const snap = await getDocs(q);
-        _mapMemberDocsInto(snap);
-
-        if (snap.docs.length > 0) _adminMembersLastDoc = snap.docs[snap.docs.length - 1];
-        _adminMembersHasMore = snap.docs.length === ADMIN_MEMBERS_PAGE_SIZE;
+        // Terbaru login duluan
+        adminMembersCache.sort((a, b) => (b.lastLogin?.seconds || 0) - (a.lastLogin?.seconds || 0));
 
         updateMemberStats();
         applyAdminMemberFilters();
     } catch (e) {
-        showToast('Gagal memuat member berikutnya: ' + e.message, 'error');
-    } finally {
-        _adminMembersLoadingMore = false;
+        logDebug('[Members] Gagal load: ' + e.message);
+        container.innerHTML = `<div class="empty-state" style="text-align:center;padding:60px 20px;">
+            <i class="fas fa-triangle-exclamation" style="font-size:48px;color:#D1D5DB;"></i>
+            <p style="margin-top:16px;color:#6B7280;">Gagal memuat daftar member</p>
+        </div>`;
     }
-};
+}
 
 function updateMemberStats() {
-    // Fallback: hitung dari cache lokal (cuma mewakili halaman yang sudah
-    // dimuat, dipakai kalau getCountFromServer gagal/belum didukung).
     const total = adminMembersCache.length;
     const blocked = adminMembersCache.filter(m => m.blocked).length;
     const pending = adminMembersCache.filter(m => m.pending).length;
@@ -9195,34 +9100,6 @@ function updateMemberStats() {
     set('memberStatActive', active);
     set('memberStatBlocked', blocked);
     set('memberStatPending', pending);
-}
-
-// PERF: statistik total/aktif/diblokir/menunggu dihitung LANGSUNG di server
-// Firestore (getCountFromServer) — ini cuma mengembalikan angka, TIDAK
-// mengunduh isi dokumennya. Jadi tetap akurat untuk SEMUA member walau
-// daftar yang ditampilkan cuma dimuat bertahap (pagination) di panel.
-async function refreshMemberStatsFromServer() {
-    if (!db) return;
-    try {
-        const usersCol = collection(db, 'users');
-        const [totalSnap, blockedSnap, pendingSnap] = await Promise.all([
-            getCountFromServer(usersCol),
-            getCountFromServer(query(usersCol, where('blocked', '==', true))),
-            getCountFromServer(query(usersCol, where('allowed', '==', false)))
-        ]);
-        const total = totalSnap.data().count;
-        const blocked = blockedSnap.data().count;
-        const pending = pendingSnap.data().count;
-        const active = Math.max(0, total - blocked - pending);
-        const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
-        set('memberStatTotal', total);
-        set('memberStatActive', active);
-        set('memberStatBlocked', blocked);
-        set('memberStatPending', pending);
-    } catch (e) {
-        // Fallback ke hitungan dari cache lokal kalau count query gagal
-        updateMemberStats();
-    }
 }
 
 window.filterAdminMembers = function(filter, btn) {
@@ -9321,13 +9198,7 @@ function renderMembersList(list) {
             </div>`;
             })()}
         </div>`;
-    }).join('') + (_adminMembersHasMore ? `
-        <div style="text-align:center;margin-top:8px;">
-            <button id="loadMoreMembersBtn" onclick="loadMoreAdminMembers()"
-                style="background:#F3F4F6;border:none;padding:12px 24px;border-radius:12px;color:#374151;font-weight:700;font-size:13px;cursor:pointer;">
-                Muat Lebih Banyak Member
-            </button>
-        </div>` : '');
+    }).join('');
 }
 
 window.toggleMemberBlock = async function(memberId, isCurrentlyBlocked) {
@@ -9348,7 +9219,6 @@ window.toggleMemberBlock = async function(memberId, isCurrentlyBlocked) {
         if (idx > -1) adminMembersCache[idx].blocked = willBlock;
 
         updateMemberStats();
-        refreshMemberStatsFromServer();
         applyAdminMemberFilters();
         showToast(willBlock ? 'Member berhasil diblokir' : 'Blokir member dibuka', 'success');
     } catch (e) {
@@ -9395,7 +9265,6 @@ window.approveMember = async function(memberId) {
         }
 
         updateMemberStats();
-        refreshMemberStatsFromServer();
         applyAdminMemberFilters();
         showToast('Member berhasil disetujui, sekarang bisa login', 'success');
     } catch (e) {
@@ -9413,7 +9282,6 @@ window.deleteMember = async function(memberId, username) {
 
         adminMembersCache = adminMembersCache.filter(m => m.id !== memberId);
         updateMemberStats();
-        refreshMemberStatsFromServer();
         applyAdminMemberFilters();
         showToast('Member "@' + username + '" berhasil dihapus', 'success');
     } catch (e) {
@@ -9527,19 +9395,13 @@ async function updateAnalyticsSupplyStats() {
             const data = supplySnap.data();
             const circulating = data.circulating || 0;
             const burned = data.totalBurned || 0;
-            // FIX: sebelumnya pakai `data.hardCap || SGT_HARD_CAP` — karena
-            // dokumen Firestore lama masih menyimpan hardCap 100 juta (nilai
-            // lama, bukan 0/kosong), fallback ke konstanta baru TIDAK PERNAH
-            // kepakai sampai ada mint baru yang menimpanya. Sekarang hard cap
-            // SELALU mengikuti konstanta kode (SGT_HARD_CAP = 1 miliar),
-            // yang memang jadi sumber kebenarannya.
-            const hardCap = SGT_HARD_CAP;
+            const hardCap = data.hardCap || SGT_HARD_CAP;
             const pct = hardCap > 0 ? ((circulating / hardCap) * 100).toFixed(2) : 0;
             
             if (circEl) circEl.textContent = circulating.toLocaleString('id-ID');
             if (burnedEl) burnedEl.textContent = burned.toLocaleString('id-ID');
             if (pctEl) pctEl.textContent = pct + '%';
-            if (hardCapEl) hardCapEl.textContent = hardCap >= 1000000000 ? (hardCap / 1000000000).toFixed(0) + 'B' : (hardCap / 1000000).toFixed(0) + 'M';
+            if (hardCapEl) hardCapEl.textContent = (hardCap / 1000000).toFixed(0) + 'M';
         }
     } catch (e) {
         logDebug('updateAnalyticsSupplyStats error: ' + e.message);
@@ -10022,42 +9884,13 @@ window.openProductModal = function(id = null) {
 
 window.previewProductImage = function(input) {
     if (input.files && input.files[0]) {
-        // PERF: foto disimpan langsung sebagai base64 di dalam dokumen
-        // Firestore (bukan link ke file storage). Foto asli dari HP bisa
-        // 2-5MB — kalau ditaruh mentah, SETIAP kali daftar produk dimuat,
-        // semua foto sebesar itu ikut terunduh sekaligus, bikin halaman
-        // Pasar/Beranda lambat. Di sini foto di-resize & dikompres dulu
-        // (maks 800px, kualitas 70%) sebelum disimpan, biasanya turun jadi
-        // puluhan KB saja — jauh lebih ringan tanpa mengubah cara data
-        // disimpan (masih base64, tetap kompatibel dengan kode lama).
         const reader = new FileReader();
         reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                const MAX_DIM = 800;
-                let { width, height } = img;
-                if (width > MAX_DIM || height > MAX_DIM) {
-                    if (width > height) { height = Math.round(height * MAX_DIM / width); width = MAX_DIM; }
-                    else { width = Math.round(width * MAX_DIM / height); height = MAX_DIM; }
-                }
-                const canvas = document.createElement('canvas');
-                canvas.width = width; canvas.height = height;
-                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-                tempProductImage = canvas.toDataURL('image/jpeg', 0.7);
-                const preview = document.getElementById('productPreview');
-                const placeholder = document.getElementById('productUploadPlaceholder');
-                if (preview) { preview.src = tempProductImage; preview.style.display = 'block'; }
-                if (placeholder) placeholder.style.display = 'none';
-            };
-            img.onerror = () => {
-                // Fallback: kalau gagal dikompres, pakai gambar asli apa adanya
-                tempProductImage = e.target.result;
-                const preview = document.getElementById('productPreview');
-                const placeholder = document.getElementById('productUploadPlaceholder');
-                if (preview) { preview.src = tempProductImage; preview.style.display = 'block'; }
-                if (placeholder) placeholder.style.display = 'none';
-            };
-            img.src = e.target.result;
+            tempProductImage = e.target.result;
+            const preview = document.getElementById('productPreview');
+            const placeholder = document.getElementById('productUploadPlaceholder');
+            if (preview) { preview.src = tempProductImage; preview.style.display = 'block'; }
+            if (placeholder) placeholder.style.display = 'none';
         };
         reader.readAsDataURL(input.files[0]);
     }
@@ -11785,7 +11618,6 @@ if (typeof window._registerReal === 'function') {
         toggleMemberBlock: window.toggleMemberBlock,
         openAddMemberModal: window.openAddMemberModal, saveNewMember: window.saveNewMember,
         deleteMember: window.deleteMember, approveMember: window.approveMember,
-        loadMoreAdminMembers: window.loadMoreAdminMembers,
         refreshPiBalance: window.refreshPiBalance, deleteProduct: window.deleteProduct,
         saveUserAddress: window.saveUserAddress, openExchangeRateModal: window.openExchangeRateModal,
         updateAdminCalculator: window.updateAdminCalculator, switchCalcMode: window.switchCalcMode, closeAndRemoveModal: window.closeAndRemoveModal,
