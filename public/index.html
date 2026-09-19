@@ -37,7 +37,7 @@
             'processSGTTransfer','redeemSGT','saveSGTSettings','distributeSGTManual',
             'burnSGT','filterAdminProducts','filterAdminOrders','updateAdminStatus',
             'filterAdminMembers','searchAdminMembers','toggleMemberBlock',
-            'openAddMemberModal','saveNewMember','deleteMember','approveMember','loadMoreAdminMembers','deleteOrderAdmin',
+            'openAddMemberModal','saveNewMember','deleteMember','approveMember','loadMoreAdminMembers','deleteOrderAdmin','deleteAllPendingMembers',
             'refreshPiBalance','deleteProduct','openEditProduct','saveUserAddress',
             'openExchangeRateModal','updateAdminCalculator','switchCalcMode','closeAndRemoveModal',
             'handleStartShopping','adminLogin','loginAdmin','continueAsGuest',
@@ -6338,7 +6338,7 @@ async function verifyUserSession() {
                 window.logout();
                 return;
             }
-            if (data.allowed === false) {
+            if (data.allowed !== true) {
                 logDebug('[verifyUserSession] Sesi ditolak: member belum/tidak disetujui admin (' + currentUser.uid + ')');
                 showToast('Akun Anda belum diizinkan admin untuk login. Anda telah dikeluarkan.', 'error');
                 window.logout();
@@ -7043,11 +7043,14 @@ async function processPiAuthSuccess(authResult) {
                 return;
             }
 
-            // allowed === false secara eksplisit berarti admin menonaktifkan
-            // izin login member ini (di luar blokir biasa).
-            if (_memberData.allowed === false) {
+            // PERKETAT: hanya member yang admin daftarkan secara eksplisit
+            // (allowed === true, lewat "Tambah Member") yang boleh login.
+            // Dokumen lama (self-registered sebelum sistem whitelist ini
+            // ada) TIDAK dianggap otomatis diizinkan lagi — admin harus
+            // menyetujuinya dulu lewat panel Kelola Member.
+            if (_memberData.allowed !== true) {
                 showToast('Akun Anda belum diizinkan admin untuk login. Hubungi admin untuk persetujuan.', 'error');
-                logDebug('[AUTH-v3] Login ditolak: allowed=false (' + piUid + ')');
+                logDebug('[AUTH-v3] Login ditolak: belum di-approve admin (' + piUid + ')');
                 currentUser = null;
                 isPiAuthenticated = false;
                 restorePiLoginButton();
@@ -7262,10 +7265,11 @@ window.manualPiLogin = async function() {
                 return;
             }
 
-            // GERBANG WHITELIST: allowed === false berarti belum disetujui
-            // admin. Dokumen lama tanpa field 'allowed' tetap diizinkan
-            // (grandfathered) supaya member lama tidak terkunci.
-            if (existingData.allowed === false && existingData.role !== 'admin') {
+            // PERKETAT: hanya member yang admin daftarkan secara eksplisit
+            // (allowed === true) yang boleh login. Dokumen lama yang
+            // mendaftar sendiri sebelum ada sistem ini TIDAK dianggap
+            // otomatis diizinkan lagi.
+            if (existingData.allowed !== true && existingData.role !== 'admin') {
                 showToast('Akun Anda belum diizinkan admin untuk login. Hubungi admin untuk persetujuan.', 'error');
                 logDebug('[MANUAL] Login ditolak: belum di-approve admin (' + targetUid + ')');
                 return;
@@ -9260,8 +9264,10 @@ function _mapMemberDocsInto(snap) {
             authType: d.authType || 'pi',
             sgtBalance: d.sgtBalance || 0,
             blocked: d.blocked === true,
-            allowed: d.allowed !== false,
-            pending: d.allowed === false,
+            // PERKETAT: harus allowed===true eksplisit (bukan admin) baru
+            // dianggap "diizinkan". Admin selalu dianggap diizinkan.
+            allowed: d.role === 'admin' || d.allowed === true,
+            pending: d.role !== 'admin' && d.allowed !== true,
             createdAt: d.createdAt || null,
             lastLogin: d.lastLogin || null
         });
@@ -9321,15 +9327,21 @@ async function refreshMemberStatsFromServer() {
     if (!db) return;
     try {
         const usersCol = collection(db, 'users');
-        const [totalSnap, blockedSnap, pendingSnap] = await Promise.all([
+        // PENTING: query `where('allowed','==',false)` TIDAK menghitung
+        // dokumen lama yang bahkan tidak punya field 'allowed' sama sekali
+        // (Firestore mengeluarkan dokumen yang field-nya tidak ada dari
+        // hasil equality/inequality query apa pun) — jadi kita hitung yang
+        // SUDAH diizinkan (allowed==true) saja, lalu pending = total - itu.
+        const [totalSnap, blockedSnap, allowedSnap] = await Promise.all([
             getCountFromServer(usersCol),
             getCountFromServer(query(usersCol, where('blocked', '==', true))),
-            getCountFromServer(query(usersCol, where('allowed', '==', false)))
+            getCountFromServer(query(usersCol, where('allowed', '==', true)))
         ]);
         const total = totalSnap.data().count;
         const blocked = blockedSnap.data().count;
-        const pending = pendingSnap.data().count;
-        const active = Math.max(0, total - blocked - pending);
+        const allowedCount = allowedSnap.data().count;
+        const pending = Math.max(0, total - allowedCount);
+        const active = Math.max(0, allowedCount - blocked);
         const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
         set('memberStatTotal', total);
         set('memberStatActive', active);
@@ -9380,7 +9392,16 @@ function renderMembersList(list) {
 
     const authLabel = { pi: 'Pi Browser', pi_manual: 'Login Manual', admin: 'Admin' };
 
-    container.innerHTML = list.map(m => {
+    const _bulkDeleteBtn = (currentAdminMemberFilter === 'pending')
+        ? `<div style="margin-bottom:12px;">
+            <button onclick="deleteAllPendingMembers()"
+                style="width:100%;background:#FEE2E2;color:#DC2626;border:none;padding:12px;border-radius:12px;font-weight:700;font-size:13px;cursor:pointer;">
+                <i class="fas fa-trash"></i> Hapus SEMUA Member yang Menunggu (Seluruh Database)
+            </button>
+        </div>`
+        : '';
+
+    container.innerHTML = _bulkDeleteBtn + list.map(m => {
         const isAdmin = m.role === 'admin';
         const statusBadge = isAdmin
             ? `<span style="font-size:10px;color:#4338CA;background:#E0E7FF;padding:2px 10px;border-radius:8px;font-weight:700;">Admin</span>`
@@ -9534,6 +9555,44 @@ window.deleteMember = async function(memberId, username) {
         showToast('Member "@' + username + '" berhasil dihapus', 'success');
     } catch (e) {
         showToast('Gagal menghapus member: ' + e.message, 'error');
+    }
+};
+
+window.deleteAllPendingMembers = async function() {
+    if (!db) { showToast('Koneksi database belum siap', 'error'); return; }
+
+    if (!confirm('Hapus SEMUA member berstatus "Menunggu Persetujuan" secara permanen dari seluruh database? Ini termasuk member lama yang mendaftar sendiri sebelum sistem approval ini dibuat. Tindakan ini TIDAK BISA dibatalkan.')) return;
+
+    const btn = document.querySelector('button[onclick="deleteAllPendingMembers()"]');
+    if (btn) { btn.disabled = true; btn.innerText = 'Menghapus...'; }
+
+    try {
+        // Ambil SEMUA member (bukan cuma yang sedang dimuat di halaman),
+        // lalu saring yang belum diizinkan (allowed !== true) & bukan admin.
+        const allSnap = await getDocs(collection(db, 'users'));
+        const toDelete = allSnap.docs.filter(d => {
+            const data = d.data();
+            return data.role !== 'admin' && data.allowed !== true;
+        });
+
+        if (toDelete.length === 0) {
+            showToast('Tidak ada member yang menunggu untuk dihapus', 'info');
+            if (btn) { btn.disabled = false; btn.innerText = 'Hapus SEMUA Member yang Menunggu (Seluruh Database)'; }
+            return;
+        }
+
+        // writeBatch maksimal 500 operasi — kalau lebih, dipecah per 500
+        for (let i = 0; i < toDelete.length; i += 500) {
+            const batch = writeBatch(db);
+            toDelete.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+            await batch.commit();
+        }
+
+        showToast(toDelete.length + ' member menunggu berhasil dihapus', 'success');
+        renderAdminMembers();
+    } catch (e) {
+        showToast('Gagal menghapus member menunggu: ' + e.message, 'error');
+        if (btn) { btn.disabled = false; btn.innerText = 'Hapus SEMUA Member yang Menunggu (Seluruh Database)'; }
     }
 };
 
@@ -11902,6 +11961,7 @@ if (typeof window._registerReal === 'function') {
         openAddMemberModal: window.openAddMemberModal, saveNewMember: window.saveNewMember,
         deleteMember: window.deleteMember, approveMember: window.approveMember,
         loadMoreAdminMembers: window.loadMoreAdminMembers, deleteOrderAdmin: window.deleteOrderAdmin,
+        deleteAllPendingMembers: window.deleteAllPendingMembers,
         refreshPiBalance: window.refreshPiBalance, deleteProduct: window.deleteProduct,
         saveUserAddress: window.saveUserAddress, openExchangeRateModal: window.openExchangeRateModal,
         updateAdminCalculator: window.updateAdminCalculator, switchCalcMode: window.switchCalcMode, closeAndRemoveModal: window.closeAndRemoveModal,
