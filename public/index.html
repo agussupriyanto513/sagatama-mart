@@ -4063,6 +4063,55 @@ const firebaseConfig = {
 
 let app, auth, db;
 let products = [];
+
+// JALUR CADANGAN TERAKHIR: kalau Firestore SDK (baik realtime listener
+// MAUPUN getDocs biasa) sama-sama menggantung karena jaringan memblokir
+// koneksi WebChannel/long-polling milik SDK, ambil data langsung lewat
+// REST API Firestore (fetch() HTTP polos biasa) — jauh lebih jarang
+// diblokir jaringan/proxy dibanding koneksi khusus SDK.
+function _parseFirestoreRestValue(v) {
+    if (!v) return null;
+    if ('stringValue' in v) return v.stringValue;
+    if ('integerValue' in v) return parseInt(v.integerValue, 10);
+    if ('doubleValue' in v) return v.doubleValue;
+    if ('booleanValue' in v) return v.booleanValue;
+    if ('nullValue' in v) return null;
+    if ('timestampValue' in v) return { seconds: Math.floor(new Date(v.timestampValue).getTime() / 1000) };
+    if ('arrayValue' in v) return (v.arrayValue.values || []).map(_parseFirestoreRestValue);
+    if ('mapValue' in v) {
+        const obj = {};
+        for (const [k, vv] of Object.entries(v.mapValue.fields || {})) obj[k] = _parseFirestoreRestValue(vv);
+        return obj;
+    }
+    return null;
+}
+
+async function fetchCollectionViaREST(collectionName) {
+    const projectId = firebaseConfig.projectId;
+    let idToken = null;
+    try { idToken = auth?.currentUser ? await auth.currentUser.getIdToken() : null; } catch (_) { /* non-kritis */ }
+    const headers = idToken ? { Authorization: 'Bearer ' + idToken } : {};
+
+    let allDocs = [];
+    let pageToken = '';
+    do {
+        const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionName}?pageSize=300` +
+            (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '');
+        const res = await fetch(url, { headers });
+        if (!res.ok) throw new Error(`REST ${collectionName} gagal: HTTP ${res.status}`);
+        const data = await res.json();
+        const docs = (data.documents || []).map(d => {
+            const id = d.name.split('/').pop();
+            const fields = {};
+            for (const [k, v] of Object.entries(d.fields || {})) fields[k] = _parseFirestoreRestValue(v);
+            return { id, ...fields };
+        });
+        allDocs = allDocs.concat(docs);
+        pageToken = data.nextPageToken || '';
+    } while (pageToken);
+
+    return allDocs;
+}
 let orders = [];
 let myOrders = [];
 let cart = JSON.parse(localStorage.getItem('sagatama_cart') || '[]');
@@ -6651,24 +6700,42 @@ function loadDataFromFirebase() {
         // tetap tampil. Listener realtime tetap jalan di latar belakang
         // untuk update berikutnya kalau jaringan membaik.
         let _productsGotFirstSnapshot = false;
+        const _applyProductsData = (docs) => {
+            products = docs;
+            products.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+            renderProducts();
+            renderFeaturedProducts();
+            renderHomeCategories();
+            renderFlashSale();
+            updateAdminStats();
+            if (checkAdmin()) renderAdminProducts();
+        };
         const _productsFallbackTimer = setTimeout(async () => {
             if (_productsGotFirstSnapshot) return;
             console.warn('[Sagatama] Listener produk tidak merespons 6 detik — pakai fallback getDocs (bukan realtime)');
             try {
-                const fallbackSnap = await getDocs(productsQuery);
+                // getDocs() SDK biasa pun bisa ikut menggantung kalau
+                // jaringan memblokir semua koneksi Firestore SDK (bukan
+                // cuma yang streaming) — dibungkus race dengan timeout 8
+                // detik supaya tidak menggantung selamanya juga.
+                const fallbackSnap = await Promise.race([
+                    getDocs(productsQuery),
+                    new Promise((_, rej) => setTimeout(() => rej(new Error('getDocs timeout 8 detik')), 8000))
+                ]);
                 if (_productsGotFirstSnapshot) return; // listener sempat nyusul duluan
                 console.log('[Sagatama][DIAG] Fallback getDocs produk:', fallbackSnap.docs.length, 'dokumen');
-                products = fallbackSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                products.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-                localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
-                renderProducts();
-                renderFeaturedProducts();
-                renderHomeCategories();
-                renderFlashSale();
-                updateAdminStats();
-                if (checkAdmin()) renderAdminProducts();
+                _applyProductsData(fallbackSnap.docs.map(d => ({ id: d.id, ...d.data() })));
             } catch (fallbackErr) {
-                console.error('[Sagatama] Fallback getDocs produk juga gagal:', fallbackErr);
+                console.error('[Sagatama] Fallback getDocs produk gagal/timeout, coba REST API...', fallbackErr);
+                try {
+                    const restDocs = await fetchCollectionViaREST('products');
+                    if (_productsGotFirstSnapshot) return;
+                    console.log('[Sagatama][DIAG] Fallback REST produk:', restDocs.length, 'dokumen');
+                    _applyProductsData(restDocs);
+                } catch (restErr) {
+                    console.error('[Sagatama] Fallback REST produk JUGA gagal — kemungkinan jaringan memblokir semua akses ke firestore.googleapis.com:', restErr);
+                }
             }
         }, 6000);
 
@@ -6754,12 +6821,25 @@ function loadDataFromFirebase() {
                 if (_ordersGotFirstSnapshot) return;
                 console.warn('[Sagatama] Listener pesanan tidak merespons 6 detik — pakai fallback getDocs');
                 try {
-                    const fallbackSnap = await getDocs(ordersQuery);
+                    const fallbackSnap = await Promise.race([
+                        getDocs(ordersQuery),
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('getDocs timeout 8 detik')), 8000))
+                    ]);
                     if (_ordersGotFirstSnapshot) return;
                     console.log('[Sagatama][DIAG] Fallback getDocs orders:', fallbackSnap.docs.length, 'dokumen');
                     _handleOrdersSnapshot(fallbackSnap);
                 } catch (fallbackErr) {
-                    console.error('[Sagatama] Fallback getDocs orders juga gagal:', fallbackErr);
+                    console.error('[Sagatama] Fallback getDocs orders gagal/timeout, coba REST API...', fallbackErr);
+                    try {
+                        const restDocs = await fetchCollectionViaREST('orders');
+                        if (_ordersGotFirstSnapshot) return;
+                        console.log('[Sagatama][DIAG] Fallback REST orders:', restDocs.length, 'dokumen');
+                        // Bungkus jadi bentuk mirip snapshot Firestore supaya
+                        // bisa dipakai ulang oleh _handleOrdersSnapshot tanpa diubah
+                        _handleOrdersSnapshot({ docs: restDocs.map(d => ({ id: d.id, data: () => d })) });
+                    } catch (restErr) {
+                        console.error('[Sagatama] Fallback REST orders JUGA gagal:', restErr);
+                    }
                 }
             }, 6000);
 
