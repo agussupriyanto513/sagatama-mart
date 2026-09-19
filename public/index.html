@@ -6640,7 +6640,41 @@ function loadDataFromFirebase() {
         // dari hasil query (bukan error, cuma hilang). Sekarang ambil semua
         // dokumen apa adanya, lalu urutkan di JS dengan fallback aman.
         const productsQuery = query(collection(db, "products"));
+
+        // FIX JARINGAN: di jaringan yang memblokir koneksi streaming/long-
+        // polling (WebChannel 'Listen' transport errored / 400), listener
+        // realtime onSnapshot bisa menggantung TANPA PERNAH memanggil
+        // callback sukses maupun error sama sekali — produk jadi kosong
+        // selamanya walau datanya ada. Sebagai jaring pengaman: kalau dalam
+        // 6 detik belum ada satu snapshot pun yang masuk, ambil datanya
+        // SEKALI lewat cara biasa (getDocs, bukan streaming) supaya produk
+        // tetap tampil. Listener realtime tetap jalan di latar belakang
+        // untuk update berikutnya kalau jaringan membaik.
+        let _productsGotFirstSnapshot = false;
+        const _productsFallbackTimer = setTimeout(async () => {
+            if (_productsGotFirstSnapshot) return;
+            console.warn('[Sagatama] Listener produk tidak merespons 6 detik — pakai fallback getDocs (bukan realtime)');
+            try {
+                const fallbackSnap = await getDocs(productsQuery);
+                if (_productsGotFirstSnapshot) return; // listener sempat nyusul duluan
+                console.log('[Sagatama][DIAG] Fallback getDocs produk:', fallbackSnap.docs.length, 'dokumen');
+                products = fallbackSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                products.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
+                renderProducts();
+                renderFeaturedProducts();
+                renderHomeCategories();
+                renderFlashSale();
+                updateAdminStats();
+                if (checkAdmin()) renderAdminProducts();
+            } catch (fallbackErr) {
+                console.error('[Sagatama] Fallback getDocs produk juga gagal:', fallbackErr);
+            }
+        }, 6000);
+
         unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
+            _productsGotFirstSnapshot = true;
+            clearTimeout(_productsFallbackTimer);
             console.log('[Sagatama][DIAG] Products snapshot diterima:', snapshot.docs.length, 'dokumen');
             products = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             products.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -6710,8 +6744,34 @@ function loadDataFromFirebase() {
             // seperti bug produk sebelumnya. Sekarang ambil semua pesanan,
             // urutan diatur di _handleOrdersSnapshot (client-side).
             ordersQuery = query(collection(db, "orders"), limit(500));
-            unsubscribers.orders = onSnapshot(ordersQuery, _handleOrdersSnapshot,
-                (err) => logDebug("Orders error: " + err.message + " | code: " + err.code));
+
+            // Jaring pengaman sama seperti produk: kalau listener realtime
+            // tidak pernah merespons (jaringan blokir streaming), ambil
+            // sekali lewat getDocs biasa supaya Pi Terjual/Menunggu tetap
+            // terisi.
+            let _ordersGotFirstSnapshot = false;
+            const _ordersFallbackTimer = setTimeout(async () => {
+                if (_ordersGotFirstSnapshot) return;
+                console.warn('[Sagatama] Listener pesanan tidak merespons 6 detik — pakai fallback getDocs');
+                try {
+                    const fallbackSnap = await getDocs(ordersQuery);
+                    if (_ordersGotFirstSnapshot) return;
+                    console.log('[Sagatama][DIAG] Fallback getDocs orders:', fallbackSnap.docs.length, 'dokumen');
+                    _handleOrdersSnapshot(fallbackSnap);
+                } catch (fallbackErr) {
+                    console.error('[Sagatama] Fallback getDocs orders juga gagal:', fallbackErr);
+                }
+            }, 6000);
+
+            unsubscribers.orders = onSnapshot(ordersQuery, (snapshot) => {
+                _ordersGotFirstSnapshot = true;
+                clearTimeout(_ordersFallbackTimer);
+                _handleOrdersSnapshot(snapshot);
+            },
+                (err) => {
+                    console.error("[Sagatama] Orders listener error:", err.code, err.message);
+                    logDebug("Orders error: " + err.message + " | code: " + err.code);
+                });
         } else {
             const fbUid = currentUser?.firebaseUid || auth?.currentUser?.uid || null;
 
