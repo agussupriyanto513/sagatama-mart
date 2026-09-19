@@ -6623,6 +6623,11 @@ async function loadDataWithCache() {
 }
 
 function loadDataFromFirebase() {
+    // DIAGNOSTIK SEMENTARA: log ini TIDAK memakai logDebug (yang mati di
+    // production) supaya kita bisa pastikan apakah fungsi ini benar-benar
+    // jalan, dan apakah 'db' (koneksi Firestore) sudah siap saat dipanggil.
+    console.log('[Sagatama][DIAG] loadDataFromFirebase() dipanggil. db =', db, '| auth.currentUser =', auth?.currentUser?.uid || 'BELUM LOGIN');
+
     Object.values(unsubscribers).forEach(u => typeof u === 'function' && u());
     unsubscribers = {};
 
@@ -6636,6 +6641,7 @@ function loadDataFromFirebase() {
         // dokumen apa adanya, lalu urutkan di JS dengan fallback aman.
         const productsQuery = query(collection(db, "products"));
         unsubscribers.products = onSnapshot(productsQuery, (snapshot) => {
+            console.log('[Sagatama][DIAG] Products snapshot diterima:', snapshot.docs.length, 'dokumen');
             products = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             products.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
             localStorage.setItem('sagatama_products_cache', JSON.stringify(products));
@@ -6655,6 +6661,7 @@ function loadDataFromFirebase() {
             logDebug("Products error: " + err.message + " | code: " + err.code);
         });
     } catch (e) {
+        console.error("[Sagatama] Products query FATAL error (db mungkin belum siap):", e);
         logDebug("Products query error: " + e.message);
     }
 
@@ -6762,6 +6769,7 @@ function loadDataFromFirebase() {
             });
         }
     } catch (e) {
+        console.error("[Sagatama] Orders query FATAL error (db mungkin belum siap):", e);
         logDebug("Orders query error: " + e.message);
     }
 
