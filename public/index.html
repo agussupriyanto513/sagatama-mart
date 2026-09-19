@@ -6645,7 +6645,15 @@ function loadDataFromFirebase() {
             renderFlashSale();
             updateAdminStats();
             if (checkAdmin()) renderAdminProducts();
-        }, (err) => logDebug("Products error: " + err.message + " | code: " + err.code));
+        }, (err) => {
+            // FIX: logDebug() dimatikan total di production, jadi error
+            // ASLI (mis. permission-denied dari Firestore) sebelumnya
+            // tersembunyi total dan konsol kelihatan "bersih" padahal ada
+            // yang gagal. console.error TIDAK dimatikan, jadi selalu
+            // kelihatan untuk keperluan debug.
+            console.error("[Sagatama] Products listener error:", err.code, err.message);
+            logDebug("Products error: " + err.message + " | code: " + err.code);
+        });
     } catch (e) {
         logDebug("Products query error: " + e.message);
     }
