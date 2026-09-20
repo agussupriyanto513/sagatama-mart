@@ -9323,7 +9323,29 @@ async function renderAdminMembers() {
         // — sama seperti bug orderBy createdAt di produk. orderBy(documentId())
         // aman karena semua dokumen pasti punya ID).
         const q = query(collection(db, 'users'), orderBy(documentId()), limit(ADMIN_MEMBERS_PAGE_SIZE));
-        const snap = await getDocs(q);
+
+        // JARING PENGAMAN sama seperti produk/pesanan: kalau getDocs biasa
+        // menggantung >8 detik (jaringan bermasalah), coba REST API polos.
+        let snap;
+        try {
+            snap = await Promise.race([
+                getDocs(q),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('getDocs timeout 8 detik')), 8000))
+            ]);
+            console.log('[Sagatama][DIAG] Kelola Member getDocs:', snap.docs.length, 'dokumen');
+        } catch (timeoutErr) {
+            console.error('[Sagatama] getDocs member gagal/timeout, coba REST API...', timeoutErr);
+            const restDocs = await fetchCollectionViaREST('users');
+            console.log('[Sagatama][DIAG] Kelola Member REST fallback:', restDocs.length, 'dokumen');
+            // Bungkus jadi bentuk mirip snapshot supaya kompatibel dengan
+            // _mapMemberDocsInto tanpa perlu diubah
+            const restSliced = restDocs.slice(0, ADMIN_MEMBERS_PAGE_SIZE);
+            snap = {
+                docs: restSliced.map(d => ({ id: d.id, data: () => d })),
+                forEach: (fn) => restSliced.forEach(d => fn({ id: d.id, data: () => d }))
+            };
+        }
+
         adminMembersCache = [];
         _mapMemberDocsInto(snap);
 
@@ -9333,6 +9355,7 @@ async function renderAdminMembers() {
         refreshMemberStatsFromServer();
         applyAdminMemberFilters();
     } catch (e) {
+        console.error('[Sagatama] Gagal total memuat member (termasuk fallback REST):', e);
         container.innerHTML = `<div class="empty-state" style="text-align:center;padding:60px 20px;">
             <i class="fas fa-triangle-exclamation" style="font-size:48px;color:#D1D5DB;"></i>
             <p style="margin-top:16px;color:#6B7280;">Gagal memuat daftar member</p>
