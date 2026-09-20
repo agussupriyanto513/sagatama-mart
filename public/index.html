@@ -7057,6 +7057,30 @@ async function processPiAuthSuccess(authResult) {
     // KRITIS: Gunakan UID dari Pi yang konsisten!
     const piUid = authResult.user.uid || ('pi_' + (authResult.user.username || 'unknown'));
     
+    // Step 5 (DIPINDAH KE SINI): Firebase Auth - Anonymous sign in.
+    // FIX KRITIS: sebelumnya langkah ini ada di BAWAH (setelah cek admin &
+    // whitelist), padahal cek admin/whitelist itu sendiri butuh BACA
+    // Firestore. Kalau security rules Firestore mensyaratkan
+    // "request.auth != null", maka SEMUA baca sebelum sign-in ini pasti
+    // ditolak dengan "Missing or insufficient permissions" — inilah yang
+    // bikin member ASLI (bukan admin) gagal login terus dengan pesan itu.
+    // Sekarang: pastikan Firebase sudah ter-autentikasi (anonim) DULU,
+    // baru lakukan pengecekan admin & whitelist yang butuh akses Firestore.
+    let firebaseUid = null;
+    try {
+        if (auth) {
+            if (!auth.currentUser) {
+                const anonResult = await signInAnonymously(auth);
+                firebaseUid = anonResult.user.uid;
+                logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
+            } else {
+                firebaseUid = auth.currentUser.uid;
+            }
+        }
+    } catch (fbErr) {
+        logDebug("[AUTH-v3] Firebase anon warning (non-kritis): " + fbErr.message);
+    }
+
     // Deteksi admin via Pi UID — verifikasi server-side via Firestore
     // Admin Pi UID harus terdaftar di koleksi 'admins' di Firestore
     const _piIsAdmin = (piUid === ADMIN_FIREBASE_UID) ||
@@ -7166,22 +7190,6 @@ async function processPiAuthSuccess(authResult) {
     localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
     window._currentUser = currentUser; // Expose untuk game script
     logDebug(`[AUTH-v3] User authenticated: @${currentUser.username} | UID: ${piUid}`);
-    
-    // Step 5: Firebase Auth - Anonymous sign in untuk Firestore write permission
-    let firebaseUid = null;
-    try {
-        if (auth) {
-            if (!auth.currentUser) {
-                const anonResult = await signInAnonymously(auth);
-                firebaseUid = anonResult.user.uid;
-                logDebug(`[AUTH-v3] Firebase anonymous: ${firebaseUid}`);
-            } else {
-                firebaseUid = auth.currentUser.uid;
-            }
-        }
-    } catch (fbErr) {
-        logDebug("[AUTH-v3] Firebase anon warning (non-kritis): " + fbErr.message);
-    }
 
     // KRITIS: simpan firebaseUid ke currentUser agar query Firestore bisa pakai
     if (firebaseUid) {
@@ -9686,8 +9694,21 @@ window.openAddMemberModal = function() {
     openModal('addMemberModal');
 };
 
+let _savingNewMember = false; // proteksi anti-double-klik/double-tap
+
 window.saveNewMember = async function() {
     if (!db) { showToast('Koneksi database belum siap', 'error'); return; }
+
+    // FIX: sebelumnya tombol "Simpan Member" bisa ke-klik/ke-tap 2x hampir
+    // bersamaan (biasa terjadi di layar sentuh) dan fungsi ini jalan 2x
+    // sebelum modal sempat tertutup, menghasilkan 2 dokumen member yang
+    // hampir identik (UID beda cuma di angka milidetik terakhir). Sekarang
+    // dikunci: kalau proses simpan masih berjalan, klik berikutnya diabaikan.
+    if (_savingNewMember) return;
+    _savingNewMember = true;
+
+    const saveBtn = document.querySelector('#addMemberModal button[onclick="saveNewMember()"]');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.style.opacity = '0.6'; }
 
     const usernameRaw = (document.getElementById('newMemberUsername')?.value || '').trim();
     const role = document.getElementById('newMemberRole')?.value || 'buyer';
@@ -9697,6 +9718,8 @@ window.saveNewMember = async function() {
     const username = usernameRaw.replace(/\s+/g, '_').toLowerCase();
     if (!/^[a-z0-9_]{3,30}$/.test(username)) {
         showToast('Username tidak valid (huruf/angka/underscore, 3-30 karakter)', 'error');
+        _savingNewMember = false;
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.style.opacity = '1'; }
         return;
     }
 
@@ -9729,6 +9752,9 @@ window.saveNewMember = async function() {
         renderAdminMembers();
     } catch (e) {
         showToast('Gagal menambah member: ' + e.message, 'error');
+    } finally {
+        _savingNewMember = false;
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.style.opacity = '1'; }
     }
 };
 
