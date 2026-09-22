@@ -6398,6 +6398,11 @@ async function init() {
         // Re-detect setelah Pi SDK selesai init
         detectPiEnv();
 
+        // FIX: pulihkan scope 'payments' di background (lihat komentar di
+        // definisi silentReauthPi) — tidak diblokir (tidak di-await panjang)
+        // supaya tidak menunda render awal, cukup ditembak lalu lanjut.
+        silentReauthPi();
+
         // Tangani SSO setelah Firebase siap
         await handleSSO();
 
@@ -7075,6 +7080,48 @@ async function withPiTimeout(promise, timeoutMs = 30000, operationName = 'Pi ope
 
 // AUTHENTICATION
 
+// FIX: setelah reload, currentUser dipulihkan dari localStorage (tampilan
+// langsung "sudah login"), tapi window.Pi SDK sendiri belum tentu masih
+// punya scope 'payments' — Pi.authenticate() perlu dijalankan ulang di
+// sesi baru ini. Tanpa ini, checkout diam-diam gagal mulai (guard di
+// createPiPayment nolak dengan toast "Silakan login dengan Pi terlebih
+// dahulu") dan donasi langsung kena error mentah dari SDK Pi:
+// "Cannot create a payment without 'payments' scope". Dipanggil sekali
+// dari init(), hanya untuk user yang login pakai Pi asli (authType 'pi'),
+// dan gagal secara diam-diam (fallback: user klik "Login dengan Pi" manual).
+async function silentReauthPi() {
+    if (!currentUser || currentUser.authType !== 'pi') return;
+    if (!isPiBrowser || !window.Pi) return;
+    if (isPiAuthenticated && piAuth) return;
+
+    try {
+        logDebug('[AUTH-v3] Re-auth Pi diam-diam (pulihkan scope payments setelah reload)...');
+        const scopes = ['username', 'payments'];
+        const onIncompletePaymentFound = async (payment) => {
+            try { await handleIncompletePayment(payment); } catch (err) {
+                logDebug("[AUTH-v3] Handle incomplete error (silent): " + err.message);
+            }
+        };
+        const authResult = await Promise.race([
+            window.Pi.authenticate(scopes, onIncompletePaymentFound),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout: silent re-auth terlalu lama')), 15000))
+        ]);
+        if (authResult?.user) {
+            await processPiAuthSuccess(authResult, { silent: true });
+            logDebug('[AUTH-v3] Re-auth Pi diam-diam berhasil');
+        }
+    } catch (err) {
+        // Wajar gagal (mis. sesi Pi Browser memang sudah benar-benar habis).
+        // Jangan ganggu user dengan toast — biarkan guard di createPiPayment/
+        // submitDonasi yang mengarahkan mereka ke login manual saat mereka
+        // benar-benar mencoba bayar.
+        logDebug('[AUTH-v3] Re-auth Pi diam-diam gagal, fallback ke login manual: ' + err.message);
+        isPiAuthenticated = false;
+        piAuth = null;
+    }
+}
+
 window.authenticatePi = async function() {
     logDebug("[AUTH-v3] authenticatePi dipanggil");
     
@@ -7153,7 +7200,7 @@ function restorePiLoginButton() {
     }
 }
 
-async function processPiAuthSuccess(authResult) {
+async function processPiAuthSuccess(authResult, opts = {}) {
     piAuth = authResult;
     isPiAuthenticated = true;
     
@@ -7310,9 +7357,11 @@ async function processPiAuthSuccess(authResult) {
     showSGTElements(true);
     updateUI();
 
-    closeModal('piAuthModal');
-    closeModal('loginOptionsModal');
-    showToast(`Selamat datang, @${currentUser.username}! 🎉`, 'success');
+    if (!opts.silent) {
+        closeModal('piAuthModal');
+        closeModal('loginOptionsModal');
+        showToast(`Selamat datang, @${currentUser.username}! 🎉`, 'success');
+    }
     logDebug("[AUTH-v3] Auth sukses: @" + currentUser.username);
 
     loadDataFromFirebase();
@@ -11135,6 +11184,17 @@ window.submitDonasi = async function() {
     if (!amount || isNaN(amount) || amount <= 0) { showToast('Masukkan jumlah donasi yang valid', 'error'); return; }
     if (amount > DONASI_MAX_PI) { showToast('Donasi maksimal ' + DONASI_MAX_PI + ' Pi per transaksi', 'error'); return; }
     if (!window.Pi || !isPiBrowser) { showToast('Fitur ini hanya tersedia di Pi Browser', 'error'); return; }
+    // FIX: sesi Pi (isPiAuthenticated/piAuth) bisa ke-reset setelah reload —
+    // currentUser dipulihkan dari localStorage, tapi Pi.authenticate() belum
+    // dijalankan ulang sehingga SDK belum punya scope 'payments'. Tanpa cek
+    // ini, window.Pi.createPayment() di bawah langsung gagal dengan error
+    // SDK "Cannot create a payment without 'payments' scope" yang membingungkan.
+    if (!isPiAuthenticated || !piAuth) {
+        showToast('Sesi Pi kamu sudah tidak aktif, silakan login Pi ulang', 'warning');
+        closeModal('donasiModal');
+        openModal('loginOptionsModal');
+        return;
+    }
 
     const btn = document.getElementById('btnSubmitDonasi');
     const restoreBtn = () => { if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-hand-holding-heart" style="margin-right:8px;"></i>Donasi Sekarang'; } };
