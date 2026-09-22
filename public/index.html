@@ -45,6 +45,7 @@
             'openProductModal','previewProductImage','saveProduct','searchProducts','showToast','updateSGTAdminStats',
             'logDebug','showOrderDetail','resetSupplyToken',
             'submitBeasiswa','submitBantuan','switchSosialTab','switchAdminSosialTab',
+            'openDonasiModal','submitDonasi','loadMyDonasiHistory',
             'approveApplication','rejectApplication','adminDistribusiSGT',
             'selectStaking','submitStaking','calcStakingPreview',
             'convertIdrToPiInForm','convertPiToIdrInForm','savePiRatePedoman','bulkRecalcFromIdr',
@@ -2475,8 +2476,57 @@
                 <button class="active" onclick="switchSosialTab('rewards',this)">Rewards</button>
                 <button onclick="switchSosialTab('beasiswa',this)">Beasiswa</button>
                 <button onclick="switchSosialTab('bansos',this)">Bantuan Sosial</button>
+                <button onclick="switchSosialTab('donasi',this)">Donasi</button>
                 <button onclick="switchSosialTab('staking',this)">Staking</button>
                 <button onclick="switchSosialTab('zakat',this)">Zakat</button>
+            </div>
+
+            <!-- TAB: DONASI (Kesehatan / Pendidikan / Bencana Alam) -->
+            <div id="sosial-tab-donasi" style="display:none;">
+                <div style="background:linear-gradient(135deg,#DC2626,#991B1B);border-radius:16px;padding:16px;margin-bottom:16px;color:white;">
+                    <p style="font-weight:800;font-size:15px;margin:0 0 6px;"><i class="fas fa-hand-holding-heart"></i> Donasi Pi Langsung</p>
+                    <p style="font-size:12px;opacity:0.9;line-height:1.5;">Donasi memakai Pi asli (bukan SGT), maksimal <b>0.5 Pi per donasi</b>. 100% tersalurkan lewat program resmi Sagatama.</p>
+                </div>
+
+                <div class="sosial-program-card" onclick="openDonasiModal('kesehatan')" style="cursor:pointer;">
+                    <div style="width:44px;height:44px;background:#FEE2E2;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#DC2626;font-size:18px;flex-shrink:0;">
+                        <i class="fas fa-heart-pulse"></i>
+                    </div>
+                    <div style="flex:1;">
+                        <p style="font-weight:700;color:#1F2937;font-size:13px;margin:0;">Kesehatan</p>
+                        <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Bantuan biaya berobat & obat-obatan</p>
+                    </div>
+                    <i class="fas fa-chevron-right" style="color:#D1D5DB;"></i>
+                </div>
+
+                <div class="sosial-program-card" onclick="openDonasiModal('pendidikan')" style="cursor:pointer;margin-top:10px;">
+                    <div style="width:44px;height:44px;background:#DBEAFE;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#1D4ED8;font-size:18px;flex-shrink:0;">
+                        <i class="fas fa-graduation-cap"></i>
+                    </div>
+                    <div style="flex:1;">
+                        <p style="font-weight:700;color:#1F2937;font-size:13px;margin:0;">Pendidikan</p>
+                        <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Dukungan sekolah anak kurang mampu</p>
+                    </div>
+                    <i class="fas fa-chevron-right" style="color:#D1D5DB;"></i>
+                </div>
+
+                <div class="sosial-program-card" onclick="openDonasiModal('bencana')" style="cursor:pointer;margin-top:10px;">
+                    <div style="width:44px;height:44px;background:#FEF3C7;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#D97706;font-size:18px;flex-shrink:0;">
+                        <i class="fas fa-house-crack"></i>
+                    </div>
+                    <div style="flex:1;">
+                        <p style="font-weight:700;color:#1F2937;font-size:13px;margin:0;">Bencana Alam</p>
+                        <p style="font-size:11px;color:#6B7280;margin:2px 0 0;">Bantuan darurat korban bencana</p>
+                    </div>
+                    <i class="fas fa-chevron-right" style="color:#D1D5DB;"></i>
+                </div>
+
+                <div style="margin-top:16px;">
+                    <p style="font-weight:800;color:#1F2937;font-size:13px;margin-bottom:10px;"><i class="fas fa-clock-rotate-left" style="color:#6B7280;margin-right:6px;"></i>Riwayat Donasi Saya</p>
+                    <div id="myDonasiHistory">
+                        <div class="empty-state" style="padding:20px;"><p style="color:#9CA3AF;font-size:12px;">Belum ada riwayat donasi</p></div>
+                    </div>
+                </div>
             </div>
 
             <!-- TAB: REWARDS BELANJA -->
@@ -2750,8 +2800,31 @@
             <div class="tab-sosial">
                 <button class="active" onclick="switchAdminSosialTab('beasiswa',this)">Beasiswa</button>
                 <button onclick="switchAdminSosialTab('bansos',this)">Bantuan Sosial</button>
+                <button onclick="switchAdminSosialTab('donasi',this)">Donasi</button>
                 <button onclick="switchAdminSosialTab('staking',this)">Staking</button>
                 <button onclick="switchAdminSosialTab('distribute',this)">Distribusi</button>
+            </div>
+
+            <!-- Admin: Donasi Pi -->
+            <div id="admin-sosial-donasi" style="display:none;">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+                    <div style="background:#FEE2E2;border-radius:12px;padding:12px;text-align:center;">
+                        <p id="adminDonasiKesehatan" style="font-weight:900;color:#DC2626;font-size:16px;margin:0;">0.00</p>
+                        <p style="font-size:10px;color:#991B1B;margin-top:2px;">π Kesehatan</p>
+                    </div>
+                    <div style="background:#DBEAFE;border-radius:12px;padding:12px;text-align:center;">
+                        <p id="adminDonasiPendidikan" style="font-weight:900;color:#1D4ED8;font-size:16px;margin:0;">0.00</p>
+                        <p style="font-size:10px;color:#1E40AF;margin-top:2px;">π Pendidikan</p>
+                    </div>
+                    <div style="background:#FEF3C7;border-radius:12px;padding:12px;text-align:center;">
+                        <p id="adminDonasiBencana" style="font-weight:900;color:#D97706;font-size:16px;margin:0;">0.00</p>
+                        <p style="font-size:10px;color:#92400E;margin-top:2px;">π Bencana Alam</p>
+                    </div>
+                </div>
+                <h4 style="font-weight:700;color:#1F2937;margin-bottom:10px;font-size:13px;">Riwayat Donasi Masuk</h4>
+                <div id="adminDonasiList">
+                    <div class="empty-state" style="padding:30px;"><i class="fas fa-hand-holding-heart" style="font-size:36px;"></i><p>Belum ada donasi masuk</p></div>
+                </div>
             </div>
 
             <!-- Admin: Beasiswa -->
@@ -3347,6 +3420,36 @@
             </div>
             <button id="btnSubmitBeasiswa" onclick="submitBeasiswa()" class="btn-primary" style="background:linear-gradient(135deg,#1D4ED8,#3B82F6);">
                 <i class="fas fa-paper-plane" style="margin-right:8px;"></i>Kirim Pengajuan
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL: DONASI PI (Kesehatan/Pendidikan/Bencana Alam) -->
+    <div id="donasiModal" class="modal">
+        <div class="modal-content">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                <div id="donasiModalIcon" style="width:52px;height:52px;background:linear-gradient(135deg,#DC2626,#991B1B);border-radius:14px;display:flex;align-items:center;justify-content:center;color:white;font-size:22px;"><i class="fas fa-hand-holding-heart"></i></div>
+                <div><h3 id="donasiModalTitle" style="font-size:18px;font-weight:800;color:#1F2937;margin:0;">Donasi Kesehatan</h3><p style="font-size:12px;color:#6B7280;margin:0;">Bayar langsung pakai Pi</p></div>
+                <button onclick="closeModal('donasiModal')" style="margin-left:auto;background:#F3F4F6;border:none;width:36px;height:36px;border-radius:10px;cursor:pointer;color:#6B7280;"><i class="fas fa-times"></i></button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Jumlah Donasi (Pi)</label>
+                <input type="number" id="donasiAmount" class="form-input" placeholder="Maks 0.5 Pi" min="0.01" max="0.5" step="0.01">
+                <p style="font-size:11px;color:#9CA3AF;margin-top:4px;">Minimal 0.01 Pi, maksimal <b>0.5 Pi</b> per donasi.</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Pesan (opsional)</label>
+                <input type="text" id="donasiPesan" class="form-input" placeholder="Doa/harapan untuk penerima manfaat" maxlength="100">
+            </div>
+
+            <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:10px;padding:12px;margin-bottom:16px;">
+                <p style="font-size:12px;color:#92400E;"><i class="fas fa-info-circle" style="margin-right:6px;"></i>Donasi memakai saldo Pi asli lewat Pi Network — bukan SGT. Transaksi tidak bisa dibatalkan setelah dikonfirmasi.</p>
+            </div>
+
+            <button id="btnSubmitDonasi" onclick="submitDonasi()" class="btn-primary" style="background:linear-gradient(135deg,#DC2626,#991B1B);">
+                <i class="fas fa-hand-holding-heart" style="margin-right:8px;"></i>Donasi Sekarang
             </button>
         </div>
     </div>
@@ -10608,7 +10711,7 @@ function renderRewardHistory() {
 
 // Sosial Tab Switching (User) - FIXED: tambah semua tab yang ada
 window.switchSosialTab = function(tab, btn) {
-    const allTabs = ['rewards','beasiswa','bansos','staking','zakat','referral','voting','badges'];
+    const allTabs = ['rewards','beasiswa','bansos','donasi','staking','zakat','referral','voting','badges'];
     allTabs.forEach(t => {
         const el = document.getElementById('sosial-tab-'+t);
         if (el) el.style.display = t===tab ? 'block' : 'none';
@@ -10620,6 +10723,7 @@ window.switchSosialTab = function(tab, btn) {
     if (tab==='staking') { loadBaitulStats(); loadActiveStaking(); }
     if (tab==='beasiswa') loadBeasiswaStatus();
     if (tab==='bansos')   loadBansosStatus();
+    if (tab==='donasi')   { if (typeof loadMyDonasiHistory === 'function') loadMyDonasiHistory(); }
     if (tab==='referral') {
         if (typeof loadReferralData === 'function') loadReferralData();
     }
@@ -10647,7 +10751,7 @@ window.switchSosialTab = function(tab, btn) {
 
 // Admin Sosial Tab Switching
 window.switchAdminSosialTab = function(tab, btn) {
-    ['beasiswa','bansos','staking','distribute'].forEach(t => {
+    ['beasiswa','bansos','donasi','staking','distribute'].forEach(t => {
         const el = document.getElementById('admin-sosial-'+t);
         if (el) el.style.display = t===tab ? 'block' : 'none';
     });
@@ -10655,6 +10759,7 @@ window.switchAdminSosialTab = function(tab, btn) {
     if (btn) btn.classList.add('active');
     if (tab==='beasiswa') loadAdminBeasiswa();
     if (tab==='bansos')   loadAdminBansos();
+    if (tab==='donasi')   { if (typeof loadAdminDonasi === 'function') loadAdminDonasi(); }
     if (tab==='staking')  loadAdminStaking();
     if (tab==='distribute') { loadAdminDistLog(); updateSGTAdminStats(); }
 };
@@ -10983,6 +11088,149 @@ window.submitBeasiswa = async function() {
     }
 };
 
+// ══════════════════════════════════════════════════════════════
+//  DONASI PI (Kesehatan / Pendidikan / Bencana Alam)
+//  Donasi pakai Pi ASLI (bukan SGT), maks 0.5 Pi per transaksi.
+//  Alur pembayaran memakai jalur Pi SDK yang sama dengan checkout
+//  belanja (approvePaymentOnServer & /api/payments/complete — kedua
+//  endpoint itu generik, tidak spesifik ke 'orders'), tapi hasil
+//  akhirnya disimpan ke koleksi 'donations', bukan 'orders'.
+// ══════════════════════════════════════════════════════════════
+
+const DONASI_MAX_PI = 0.5;
+const DONASI_LABELS = {
+    kesehatan:  { title: 'Donasi Kesehatan',     icon: 'fa-heart-pulse',   color: 'linear-gradient(135deg,#DC2626,#991B1B)' },
+    pendidikan: { title: 'Donasi Pendidikan',    icon: 'fa-graduation-cap',color: 'linear-gradient(135deg,#1D4ED8,#3B82F6)' },
+    bencana:    { title: 'Donasi Bencana Alam',  icon: 'fa-house-crack',   color: 'linear-gradient(135deg,#D97706,#F59E0B)' }
+};
+let _donasiSelectedCategory = null;
+
+window.openDonasiModal = function(category) {
+    if (!currentUser) {
+        showToast('Silakan login terlebih dahulu untuk berdonasi', 'warning');
+        setTimeout(() => openModal('loginOptionsModal'), 300);
+        return;
+    }
+    if (!isPiBrowser || !window.Pi) {
+        showToast('Donasi Pi hanya bisa dilakukan lewat Pi Browser', 'error');
+        return;
+    }
+    _donasiSelectedCategory = category;
+    const label = DONASI_LABELS[category] || DONASI_LABELS.kesehatan;
+    const titleEl = document.getElementById('donasiModalTitle');
+    const iconEl  = document.getElementById('donasiModalIcon');
+    if (titleEl) titleEl.innerText = label.title;
+    if (iconEl) { iconEl.style.background = label.color; iconEl.innerHTML = '<i class="fas ' + label.icon + '"></i>'; }
+    const amountEl = document.getElementById('donasiAmount'); if (amountEl) amountEl.value = '';
+    const pesanEl  = document.getElementById('donasiPesan');  if (pesanEl) pesanEl.value = '';
+    openModal('donasiModal');
+};
+
+window.submitDonasi = async function() {
+    const amount   = parseFloat(document.getElementById('donasiAmount')?.value);
+    const pesan    = (document.getElementById('donasiPesan')?.value || '').trim();
+    const category = _donasiSelectedCategory;
+
+    if (!category) { showToast('Pilih kategori donasi dulu', 'error'); return; }
+    if (!amount || isNaN(amount) || amount <= 0) { showToast('Masukkan jumlah donasi yang valid', 'error'); return; }
+    if (amount > DONASI_MAX_PI) { showToast('Donasi maksimal ' + DONASI_MAX_PI + ' Pi per transaksi', 'error'); return; }
+    if (!window.Pi || !isPiBrowser) { showToast('Fitur ini hanya tersedia di Pi Browser', 'error'); return; }
+
+    const btn = document.getElementById('btnSubmitDonasi');
+    const restoreBtn = () => { if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-hand-holding-heart" style="margin-right:8px;"></i>Donasi Sekarang'; } };
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px;"></i>Memproses...'; }
+
+    const label = DONASI_LABELS[category] || DONASI_LABELS.kesehatan;
+    const donasiMetadata = {
+        type: 'donation', category,
+        username: currentUser?.username || 'guest',
+        uid: currentUser?.uid || null,
+        pesan: pesan || null,
+        timestamp: new Date().toISOString()
+    };
+
+    try {
+        window.Pi.createPayment({
+            amount: parseFloat(amount.toFixed(8)),
+            memo: `Donasi ${label.title} - Sagatama Mart`,
+            metadata: donasiMetadata
+        }, {
+            onReadyForServerApproval: async (paymentId) => {
+                try {
+                    const res = await approvePaymentOnServer(paymentId);
+                    if (!res || res.error) throw new Error(res?.error || 'Approve gagal');
+                } catch (err) {
+                    showToast(err.message || 'Gagal verifikasi donasi', 'error');
+                    restoreBtn();
+                }
+            },
+            onReadyForServerCompletion: async (paymentId, txid) => {
+                try {
+                    try {
+                        await fetch(API_BASE_URL + '/api/payments/complete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ paymentId, txid, network: USE_SANDBOX ? 'testnet' : 'mainnet' })
+                        });
+                    } catch (confirmErr) {
+                        logDebug('[donasi] Server complete tidak terjangkau, tetap simpan lokal: ' + confirmErr.message);
+                    }
+
+                    if (db) {
+                        await addDoc(collection(db, 'donations'), {
+                            category, amount, pesan: pesan || null,
+                            paymentId, txid,
+                            uid: currentUser?.uid || null,
+                            firebaseUid: currentUser?.firebaseUid || auth?.currentUser?.uid || null,
+                            username: currentUser?.username || 'guest',
+                            status: 'completed',
+                            createdAt: serverTimestamp()
+                        });
+                    }
+
+                    closeModal('donasiModal');
+                    showToast('🙏 Terima kasih! Donasi Anda berhasil.', 'success');
+                    if (typeof loadMyDonasiHistory === 'function') loadMyDonasiHistory();
+                } catch (err) {
+                    showToast('Donasi terkirim tapi gagal dicatat: ' + err.message, 'error');
+                } finally {
+                    restoreBtn();
+                }
+            },
+            onCancel: () => { showToast('Donasi dibatalkan', 'warning'); restoreBtn(); },
+            onError: (error) => { showToast('Gagal memproses donasi: ' + (error?.message || 'error'), 'error'); restoreBtn(); }
+        });
+    } catch (e) {
+        showToast('Gagal membuat pembayaran donasi: ' + e.message, 'error');
+        restoreBtn();
+    }
+};
+
+window.loadMyDonasiHistory = async function() {
+    const container = document.getElementById('myDonasiHistory');
+    if (!container || !db || !currentUser) return;
+    try {
+        const snap = await getDocs(query(collection(db, 'donations'), where('uid', '==', currentUser.uid), limit(20)));
+        if (snap.empty) {
+            container.innerHTML = '<div class="empty-state" style="padding:20px;"><p style="color:#9CA3AF;font-size:12px;">Belum ada riwayat donasi</p></div>';
+            return;
+        }
+        const catLabel = { kesehatan: 'Kesehatan', pendidikan: 'Pendidikan', bencana: 'Bencana Alam' };
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        container.innerHTML = docs.map(d => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #F3F4F6;">
+                <div>
+                    <p style="font-weight:700;color:#1F2937;font-size:13px;margin:0;">${catLabel[d.category] || d.category}</p>
+                    <p style="font-size:11px;color:#9CA3AF;margin:2px 0 0;">${formatDate(d.createdAt)}</p>
+                </div>
+                <span style="font-weight:800;color:#DC2626;font-size:13px;">${(d.amount || 0).toFixed(2)} π</span>
+            </div>`).join('');
+    } catch (e) {
+        logDebug('[donasi] loadMyDonasiHistory error: ' + e.message);
+    }
+};
+
 async function loadBeasiswaStatus() {
     if (!currentUser||!db) return;
     const c = document.getElementById('beasiswaUserStatus');
@@ -11087,6 +11335,43 @@ async function loadBansosStatus() {
 }
 
 // ---- ADMIN: BEASISWA ----
+async function loadAdminDonasi() {
+    const listEl = document.getElementById('adminDonasiList');
+    if (!listEl || !db) return;
+    listEl.innerHTML = `<div style="text-align:center;padding:30px;"><div class="loading-spinner" style="margin:0 auto 12px;"></div><p style="color:#6B7280;font-size:13px;">Memuat donasi...</p></div>`;
+    try {
+        const snap = await getDocs(query(collection(db, 'donations'), limit(300)));
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+        const totals = { kesehatan: 0, pendidikan: 0, bencana: 0 };
+        docs.forEach(d => { if (totals[d.category] !== undefined) totals[d.category] += (d.amount || 0); });
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v.toFixed(2); };
+        set('adminDonasiKesehatan', totals.kesehatan);
+        set('adminDonasiPendidikan', totals.pendidikan);
+        set('adminDonasiBencana', totals.bencana);
+
+        if (docs.length === 0) {
+            listEl.innerHTML = `<div class="empty-state" style="padding:30px;"><i class="fas fa-hand-holding-heart" style="font-size:36px;"></i><p>Belum ada donasi masuk</p></div>`;
+            return;
+        }
+
+        const catLabel = { kesehatan: 'Kesehatan', pendidikan: 'Pendidikan', bencana: 'Bencana Alam' };
+        const catColor = { kesehatan: '#DC2626', pendidikan: '#1D4ED8', bencana: '#D97706' };
+        listEl.innerHTML = docs.map(d => `
+            <div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding:12px;">
+                <div>
+                    <p style="font-weight:700;color:#1F2937;font-size:13px;margin:0;">@${d.username || 'guest'}</p>
+                    <p style="font-size:11px;color:${catColor[d.category] || '#6B7280'};margin:2px 0 0;font-weight:600;">${catLabel[d.category] || d.category}</p>
+                    <p style="font-size:10px;color:#9CA3AF;margin:2px 0 0;">${formatDate(d.createdAt)}${d.pesan ? ' · "' + d.pesan + '"' : ''}</p>
+                </div>
+                <span style="font-weight:800;color:#1F2937;font-size:14px;">${(d.amount || 0).toFixed(2)} π</span>
+            </div>`).join('');
+    } catch (e) {
+        listEl.innerHTML = `<div class="empty-state" style="padding:30px;"><i class="fas fa-triangle-exclamation" style="font-size:36px;color:#D1D5DB;"></i><p style="color:#6B7280;">Gagal memuat donasi</p><p style="font-size:11px;color:#9CA3AF;">${e.message}</p></div>`;
+    }
+}
+
 async function loadAdminBeasiswa() {
     const c = document.getElementById('adminBeasiswaList');
     if (!c||!db) return;
@@ -12102,6 +12387,8 @@ if (typeof window._registerReal === 'function') {
         updateSGTAdminStats: typeof updateSGTAdminStats !== 'undefined' ? updateSGTAdminStats : function(){},
         // SGT Sosial Module
         switchSosialTab: window.switchSosialTab,
+        openDonasiModal: window.openDonasiModal, submitDonasi: window.submitDonasi,
+        loadMyDonasiHistory: window.loadMyDonasiHistory,
         switchAdminSosialTab: window.switchAdminSosialTab,
         selectStaking: window.selectStaking,
         calcStakingPreview: window.calcStakingPreview,
