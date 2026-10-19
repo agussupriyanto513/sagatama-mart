@@ -8854,7 +8854,13 @@ async function renderSGTSosialHistory() {
 function formatDate(timestamp) {
     if (!timestamp) return '-';
     try {
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        let date;
+        if (timestamp.toDate) date = timestamp.toDate();
+        else if (typeof timestamp.seconds === 'number') date = new Date(timestamp.seconds * 1000);
+        else if (typeof timestamp._seconds === 'number') date = new Date(timestamp._seconds * 1000);
+        else if (timestamp.timestampValue) date = new Date(timestamp.timestampValue);
+        else date = new Date(timestamp);
+        if (isNaN(date.getTime())) return '-';
         return date.toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'});
     } catch (e) { return '-'; }
 }
@@ -9550,7 +9556,8 @@ window.loadMoreAdminMembers = async function() {
         const q = query(
             collection(db, 'users'),
             orderBy(documentId()),
-            startAfter(_adminMembersLastDoc),
+            // orderBy(documentId()) -> startAfter harus berupa STRING ID, bukan objek dokumen
+            startAfter(_adminMembersLastDoc && _adminMembersLastDoc.id ? _adminMembersLastDoc.id : _adminMembersLastDoc),
             limit(ADMIN_MEMBERS_PAGE_SIZE)
         );
         const snap = await getDocs(q);
