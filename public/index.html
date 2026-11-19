@@ -6495,22 +6495,14 @@ async function verifyUserSession() {
                 window.logout();
                 return;
             }
-            if (data.allowed !== true) {
-                logDebug('[verifyUserSession] Sesi ditolak: member belum/tidak disetujui admin (' + currentUser.uid + ')');
-                showToast('Akun Anda belum diizinkan admin untuk login. Anda telah dikeluarkan.', 'error');
-                window.logout();
-                return;
-            }
-
             // Update data terbaru ke currentUser
             currentUser.address = data.address || currentUser.address;
             currentUser.fullName = data.fullName || currentUser.fullName;
             localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
             logDebug("User session verified: @" + currentUser.username);
         } else {
-            // Dokumen user sudah dihapus admin — sesi lokal tidak valid lagi
-            logDebug('[verifyUserSession] Sesi ditolak: dokumen member tidak ditemukan (' + currentUser.uid + ')');
-            window.logout();
+            // Tanpa pembatasan member: dokumen belum ada bukan alasan logout.
+            logDebug('[verifyUserSession] Dokumen member belum ada, sesi tetap dipertahankan (' + currentUser.uid + ')');
         }
     } catch (e) {
         logDebug("verifyUserSession error: " + e.message);
@@ -7258,82 +7250,48 @@ async function processPiAuthSuccess(authResult, opts = {}) {
         }
     }
 
-    // GERBANG WHITELIST MEMBER — HANYA username yang sudah didaftarkan
-    // admin lewat "Tambah Member" yang boleh login. Kalau usernamenya
-    // belum pernah dimasukkan admin, login DITOLAK TOTAL — tidak ada lagi
-    // pendaftaran otomatis / status "menunggu approval". Admin selalu
-    // dilewatkan dari gerbang ini.
-    //
-    // PENTING: dicek berdasarkan USERNAME (bukan doc ID/UID), karena member
-    // yang didaftarkan admin punya ID dokumen sendiri (mis. manual_budi_...)
-    // yang berbeda dari UID asli Pi Network milik orang itu — baru akan
-    // ketahuan UID aslinya saat dia benar-benar login pertama kali.
+    // TANPA PEMBATAS MEMBER: siapa pun yang berhasil login lewat Pi boleh
+    // masuk, tidak perlu didaftarkan/disetujui admin dulu. Satu-satunya
+    // pengecekan yang dipertahankan adalah status diblokir (moderasi).
+    // Kalau sudah ada dokumen dengan username sama (mis. dibuat admin lewat
+    // "Tambah Member"), datanya tetap dimigrasikan ke UID Pi asli.
     if (currentUser.role !== 'admin' && db) {
         try {
             const _uname = (currentUser.username || '').toLowerCase();
-            const _memberQuery = query(collection(db, 'users'), where('username', '==', _uname), limit(1));
-            const _memberQuerySnap = await getDocs(_memberQuery);
+            const _memberQuerySnap = await getDocs(query(collection(db, 'users'), where('username', '==', _uname), limit(1)));
 
-            if (_memberQuerySnap.empty) {
-                // Username TIDAK ADA di daftar member yang didaftarkan admin.
-                // Tolak login total — tidak ada akun yang dibuat sama sekali.
-                showToast('Username Anda belum didaftarkan oleh admin. Hubungi admin untuk didaftarkan sebagai member.', 'error');
-                logDebug('[AUTH-v3] Login ditolak: username tidak terdaftar admin (' + _uname + ')');
-                currentUser = null;
-                isPiAuthenticated = false;
-                restorePiLoginButton();
-                return;
+            if (!_memberQuerySnap.empty) {
+                const _memberDocSnap = _memberQuerySnap.docs[0];
+                const _memberData = _memberDocSnap.data();
+
+                if (_memberData.blocked === true) {
+                    showToast('Akun Anda diblokir oleh admin. Hubungi admin untuk info lebih lanjut.', 'error');
+                    logDebug('[AUTH-v3] Login ditolak: user diblokir (' + piUid + ')');
+                    currentUser = null;
+                    isPiAuthenticated = false;
+                    restorePiLoginButton();
+                    return;
+                }
+
+                if (_memberDocSnap.id !== piUid) {
+                    try {
+                        await setDoc(doc(db, 'users', piUid), {
+                            ..._memberData,
+                            uid: piUid,
+                            username: _uname
+                        }, { merge: true });
+                        try { await deleteDoc(doc(db, 'users', _memberDocSnap.id)); } catch (_delErr) { /* non-kritis */ }
+                        logDebug('[AUTH-v3] Member migrasi dari doc "' + _memberDocSnap.id + '" ke UID asli "' + piUid + '"');
+                    } catch (_migErr) {
+                        logDebug('[AUTH-v3] Migrasi dokumen member dilewati: ' + _migErr.message);
+                    }
+                }
             }
-
-            const _memberDocSnap = _memberQuerySnap.docs[0];
-            const _memberData = _memberDocSnap.data();
-
-            if (_memberData.blocked === true) {
-                showToast('Akun Anda diblokir oleh admin. Hubungi admin untuk info lebih lanjut.', 'error');
-                logDebug('[AUTH-v3] Login ditolak: user diblokir (' + piUid + ')');
-                currentUser = null;
-                isPiAuthenticated = false;
-                restorePiLoginButton();
-                return;
-            }
-
-            // PERKETAT: hanya member yang admin daftarkan secara eksplisit
-            // (allowed === true, lewat "Tambah Member") yang boleh login.
-            // Dokumen lama (self-registered sebelum sistem whitelist ini
-            // ada) TIDAK dianggap otomatis diizinkan lagi — admin harus
-            // menyetujuinya dulu lewat panel Kelola Member.
-            if (_memberData.allowed !== true) {
-                showToast('Akun Anda belum diizinkan admin untuk login. Hubungi admin untuk persetujuan.', 'error');
-                logDebug('[AUTH-v3] Login ditolak: belum di-approve admin (' + piUid + ')');
-                currentUser = null;
-                isPiAuthenticated = false;
-                restorePiLoginButton();
-                return;
-            }
-
-            // Username lolos whitelist. Kalau dokumen member ini dibuat
-            // admin dengan ID dokumen custom (bukan UID Pi asli), pindahkan
-            // datanya ke dokumen ber-ID UID Pi yang sebenarnya SEKARANG,
-            // supaya fitur lain yang mengacu ke piUid (saldo SGT, listener
-            // realtime, dsb) tetap konsisten sejak login pertama ini.
-            if (_memberDocSnap.id !== piUid) {
-                await setDoc(doc(db, 'users', piUid), {
-                    ..._memberData,
-                    uid: piUid,
-                    username: _uname
-                }, { merge: true });
-                try { await deleteDoc(doc(db, 'users', _memberDocSnap.id)); } catch (_delErr) { /* non-kritis */ }
-                logDebug('[AUTH-v3] Member migrasi dari doc "' + _memberDocSnap.id + '" ke UID asli "' + piUid + '"');
-            }
+            // Dokumen tidak ditemukan = member baru -> dibuat otomatis oleh
+            // ensureUserDocumentExists() di bawah. Tidak ada penolakan.
         } catch (_memberCheckErr) {
-            // Gagal verifikasi = TOLAK login (fail-closed), tampilkan error
-            // supaya kelihatan penyebabnya, bukan diam-diam meloloskan login.
-            logDebug('[AUTH-v3] Member check error: ' + _memberCheckErr.message);
-            showToast('Gagal memverifikasi akun member: ' + _memberCheckErr.message, 'error');
-            currentUser = null;
-            isPiAuthenticated = false;
-            restorePiLoginButton();
-            return;
+            // Gagal membaca data member bukan alasan menolak login lagi.
+            logDebug('[AUTH-v3] Member check dilewati (non-kritis): ' + _memberCheckErr.message);
         }
     }
     
@@ -7498,30 +7456,16 @@ window.manualPiLogin = async function() {
             targetUid = existingData.uid || userDoc.id;
             logDebug(`[MANUAL] User ditemukan: @${username} | UID: ${targetUid}`);
 
-            // Cek status blokir member
+            // Hanya status blokir yang dipertahankan (moderasi admin)
             if (existingData.blocked === true && existingData.role !== 'admin') {
                 showToast('Akun ini diblokir oleh admin. Hubungi admin untuk info lebih lanjut.', 'error');
                 logDebug('[MANUAL] Login ditolak: user diblokir (' + targetUid + ')');
                 return;
             }
-
-            // PERKETAT: hanya member yang admin daftarkan secara eksplisit
-            // (allowed === true) yang boleh login. Dokumen lama yang
-            // mendaftar sendiri sebelum ada sistem ini TIDAK dianggap
-            // otomatis diizinkan lagi.
-            if (existingData.allowed !== true && existingData.role !== 'admin') {
-                showToast('Akun Anda belum diizinkan admin untuk login. Hubungi admin untuk persetujuan.', 'error');
-                logDebug('[MANUAL] Login ditolak: belum di-approve admin (' + targetUid + ')');
-                return;
-            }
         } else {
-            // Username TIDAK ADA di daftar member yang didaftarkan admin.
-            // Tolak login total — tidak ada lagi akun "pending" yang dibuat
-            // otomatis. Hanya username yang sudah dimasukkan admin lewat
-            // "Tambah Member" yang boleh login.
-            showToast('Username Anda belum didaftarkan oleh admin. Hubungi admin untuk didaftarkan sebagai member.', 'error');
-            logDebug('[MANUAL] Login ditolak: username tidak terdaftar admin (' + username + ')');
-            return;
+            // Tanpa pembatas member: username baru langsung dibuatkan akun.
+            targetUid = 'pi_' + username;
+            logDebug(`[MANUAL] Username baru, akun dibuat otomatis: @${username} | UID: ${targetUid}`);
         }
         
         currentUser = {
@@ -7531,15 +7475,20 @@ window.manualPiLogin = async function() {
             authType: 'pi_manual'
         };
         
-        await setDoc(doc(db, 'users', targetUid), {
-            username: username,
-            uid: targetUid,
-            authType: 'pi_manual',
-            createdAt: existingData.createdAt || serverTimestamp(),
-            lastLogin: serverTimestamp(),
-            sgtBalance: existingData.sgtBalance || 0,
-            sgtTransactions: existingData.sgtTransactions || []
-        }, { merge: true });
+        try {
+            await setDoc(doc(db, 'users', targetUid), {
+                username: username,
+                uid: targetUid,
+                authType: 'pi_manual',
+                createdAt: existingData.createdAt || serverTimestamp(),
+                lastLogin: serverTimestamp(),
+                sgtBalance: existingData.sgtBalance || 0,
+                sgtTransactions: existingData.sgtTransactions || []
+            }, { merge: true });
+        } catch (_saveErr) {
+            // Non-kritis: login tetap lanjut walau penyimpanan dokumen ditolak rules
+            logDebug('[MANUAL] Simpan dokumen user dilewati: ' + _saveErr.message);
+        }
         
         localStorage.setItem('sagatama_user', JSON.stringify(currentUser));
         
@@ -9535,8 +9484,8 @@ function _mapMemberDocsInto(snap) {
             blocked: d.blocked === true,
             // PERKETAT: harus allowed===true eksplisit (bukan admin) baru
             // dianggap "diizinkan". Admin selalu dianggap diizinkan.
-            allowed: d.role === 'admin' || d.allowed === true,
-            pending: d.role !== 'admin' && d.allowed !== true,
+            allowed: true,
+            pending: false,
             createdAt: d.createdAt || null,
             lastLogin: d.lastLogin || null
         });
@@ -9610,8 +9559,8 @@ async function refreshMemberStatsFromServer() {
         const total = totalSnap.data().count;
         const blocked = blockedSnap.data().count;
         const allowedCount = allowedSnap.data().count;
-        const pending = Math.max(0, total - allowedCount);
-        const active = Math.max(0, allowedCount - blocked);
+        const pending = 0; // tanpa pembatas member, tidak ada lagi status menunggu
+        const active = Math.max(0, total - blocked);
         const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
         set('memberStatTotal', total);
         set('memberStatActive', active);
@@ -9829,6 +9778,13 @@ window.deleteMember = async function(memberId, username) {
 };
 
 window.deleteAllPendingMembers = async function() {
+    // DINONAKTIFKAN: tanpa pembatas member, tidak ada lagi status "menunggu".
+    // Fungsi lama menghapus semua member tanpa allowed===true, yang kini
+    // berarti SEMUA member baru — jadi sengaja dimatikan demi keamanan data.
+    showToast('Fitur ini dinonaktifkan karena tidak ada lagi pembatas member.', 'info');
+    return;
+};
+window._deleteAllPendingMembersLegacy = async function() {
     if (!db) { showToast('Koneksi database belum siap', 'error'); return; }
 
     if (!confirm('Hapus SEMUA member berstatus "Menunggu Persetujuan" secara permanen dari seluruh database? Ini termasuk member lama yang mendaftar sendiri sebelum sistem approval ini dibuat. Tindakan ini TIDAK BISA dibatalkan.')) return;
